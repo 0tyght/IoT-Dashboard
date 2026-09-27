@@ -18,14 +18,15 @@ drawChart();document.querySelectorAll('[data-index]').forEach(el=>{el.onclick=()
 // Legacy reference only. Not a plant-approved alarm/trip configuration.
 function drawChart(){
  const ticks=[0,.28,.45,.71,1.12,1.8,2.8,4.5,7.1,11.2,18,28,45];
- const top=63,row=21,left=128,width=216;
+ const motor=motors[selected];
+ const top=63,row=21,left=128,width=464;
  const y=v=>{if(v<=0)return top;if(v>=45)return top+12*row;const i=ticks.findIndex(t=>t>v)-1;return top+row*(i+(v-ticks[i])/(ticks[i+1]-ticks[i]));};
  const fills=['#187952','#b3cd80','#f1c38a','#d85757'];
  const zoneNames=['A · GOOD','B · SATISFACTORY','C · UNSATISFACTORY','D · UNACCEPTABLE'];
  const descriptions=['Small machines','Medium machines','Large · rigid support','Large · flexible support'];
- let svg=`<rect x="0" y="0" width="992" height="${top}" rx="7" fill="#304740"/><text x="62" y="22" text-anchor="middle" fill="#e3efe8" font-size="11">VELOCITY RMS</text><text x="29" y="48" text-anchor="middle" fill="#9eb6aa" font-size="10">in/s</text><text x="91" y="48" text-anchor="middle" fill="#ffffff" font-size="12">mm/s</text>`;
- for(let c=0;c<4;c++){
-  const x=left+c*width,bounds=[0,...limits[c],45];
+ let svg=`<rect x="0" y="0" width="592" height="${top}" rx="7" fill="#304740"/><text x="62" y="22" text-anchor="middle" fill="#e3efe8" font-size="11">VELOCITY RMS</text><text x="29" y="48" text-anchor="middle" fill="#9eb6aa" font-size="10">in/s</text><text x="91" y="48" text-anchor="middle" fill="#ffffff" font-size="12">mm/s</text>`;
+ for(const c of [motor.cls]){
+  const x=left,bounds=[0,...limits[c],45];
   svg+=`<text x="${x+width/2}" y="23" text-anchor="middle" fill="#eef7ad" font-size="15" font-weight="700">Class ${['I','II','III','IV'][c]}</text><text x="${x+width/2}" y="45" text-anchor="middle" fill="#c2d1c8" font-size="11">${descriptions[c]}</text>`;
   for(let z=0;z<4;z++){
    const yy=y(bounds[z]),h=y(bounds[z+1])-yy;
@@ -34,10 +35,13 @@ function drawChart(){
   for(const bound of limits[c])svg+=`<path d="M${x} ${y(bound)}h${width}" stroke="#fff" stroke-opacity=".8" stroke-width="1.3"/><rect x="${x+width-43}" y="${y(bound)-7}" width="40" height="14" rx="3" fill="#13231ee8"/><text x="${x+width-23}" y="${y(bound)+3}" text-anchor="middle" fill="#fff" font-size="9">${bound.toFixed(2)}</text>`;
   svg+=`<path d="M${x} 0V${y(45)}" stroke="#10211a" stroke-width="1"/>`;
  }
- ticks.forEach(v=>{const yy=y(v);svg+=`<path d="M0 ${yy}H992" stroke="#152b22" stroke-opacity=".24"/><text x="48" y="${yy+4}" text-anchor="end" fill="#8fa99b" font-size="10">${(v/25.4).toFixed(3)}</text><text x="113" y="${yy+4}" text-anchor="end" fill="#e5f0e8" font-size="11" font-weight="600">${v.toFixed(2)}</text>`});
- motors.forEach((m,i)=>{const x=left+m.cls*width+32+Math.floor(i/4)*65,yy=y(m.value),active=i===selected;svg+=`<g data-index="${i}" class="chart-point" tabindex="0" role="button" aria-label="${m.id}"><title>${m.id}: ${m.value.toFixed(2)} mm/s RMS · ${states[state(m)]}</title><circle cx="${x}" cy="${yy}" r="11" fill="transparent"/><circle cx="${x}" cy="${yy}" r="${active?7:5}" fill="#f8fffd" stroke="#102b22" stroke-width="2"/>${active?`<circle cx="${x}" cy="${yy}" r="10" fill="none" stroke="#fff"/>`:''}<rect x="${x-23}" y="${yy-24}" width="46" height="14" rx="4" fill="#12251fed"/><text x="${x}" y="${yy-14}" text-anchor="middle" fill="#fff" font-size="8">${m.id}</text></g>`});
- svg+='<text x="128" y="342" fill="#90a99b" font-size="10">ค่าเพิ่มจากบนลงล่าง · ระยะระหว่างแถวเท่ากันตามตารางอ้างอิง · in/s = mm/s ÷ 25.4</text>';
+ ticks.forEach(v=>{const yy=y(v);svg+=`<path d="M0 ${yy}H592" stroke="#152b22" stroke-opacity=".24"/><text x="48" y="${yy+4}" text-anchor="end" fill="#8fa99b" font-size="10">${(v/25.4).toFixed(3)}</text><text x="113" y="${yy+4}" text-anchor="end" fill="#e5f0e8" font-size="11" font-weight="600">${v.toFixed(2)}</text>`});
+ [motor].forEach(m=>{const i=selected,x=left+width*.32,yy=y(m.value),active=true;svg+=`<g data-index="${i}" class="chart-point" tabindex="0" role="button" aria-label="${m.id}"><title>${m.id}: ${m.value.toFixed(2)} mm/s RMS · ${states[state(m)]}</title><circle cx="${x}" cy="${yy}" r="11" fill="transparent"/><circle cx="${x}" cy="${yy}" r="${active?7:5}" fill="#f8fffd" stroke="#102b22" stroke-width="2"/>${active?`<circle cx="${x}" cy="${yy}" r="10" fill="none" stroke="#fff"/>`:''}<rect x="${x-23}" y="${yy-24}" width="46" height="14" rx="4" fill="#12251fed"/><text x="${x}" y="${yy-14}" text-anchor="middle" fill="#fff" font-size="8">${m.id}</text></g>`});
+ svg+='<text x="128" y="342" fill="#90a99b" font-size="9">ค่าเพิ่มจากบนลงล่าง · in/s = mm/s ÷ 25.4</text>';
  $('chart').innerHTML=svg;
+ $('chart').setAttribute('aria-label',`ตารางการสั่น ${motor.id} เฉพาะ Class ${['I','II','III','IV'][motor.cls]}`);
+ $('chart-title').textContent=`Vibration severity · ${motor.id}`;
+ $('chart-subtitle').textContent=`เฉพาะ Class ${['I','II','III','IV'][motor.cls]} · เกณฑ์อ้างอิงเดิม ISO 10816-1`;
  const m=motors[selected];$('chart-selection').textContent=`${m.id} · Class ${['I','II','III','IV'][m.cls]} · ${m.value.toFixed(2)} mm/s RMS · Zone ${'ABCD'[state(m)]} — ข้อมูลจำลอง / เกณฑ์เดิม`;
 }
 function tick(){if(!paused){motors.forEach(m=>{m.value=m.base*(.97+Math.random()*.06);if(!m.history.length)m.history=Array.from({length:29},()=>m.base*(.9+Math.random()*.2));m.history.push(m.value);m.history=m.history.slice(-30)});render()}$('clock').textContent=new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
