@@ -6,7 +6,7 @@ let selected=3,paused=false;const state=m=>limits[m.cls].filter(x=>m.value>=x).l
 function building(x,y,w,d,h,label){return `<g transform="translate(${x} ${y})"><polygon points="0,0 ${w},0 ${w+d*.65},${-d*.4} ${d*.65},${-d*.4}" fill="url(#roof)" stroke="#4e6965" stroke-width="1"/><polygon points="0,0 ${w},0 ${w},${h} 0,${h}" fill="#192c2e" stroke="#35534e"/><polygon points="${w},0 ${w+d*.65},${-d*.4} ${w+d*.65},${h-d*.4} ${w},${h}" fill="#102322" stroke="#35534e"/>${Array.from({length:Math.floor(w/23)},(_,i)=>`<path d="M${13+i*23} 19v12 m0 12v12" stroke="${i%3===0?'#5bdfb9':'#3f7c71'}" stroke-width="8"/><path d="M${13+i*23} -7l${d*.43} ${-d*.27}" stroke="#5d8c82" stroke-width="2"/>`).join('')}<path d="M0 ${h-5}h${w}" stroke="#60d5a466"/><text x="${w/2}" y="${h+23}" fill="#68897e" font-size="10" text-anchor="middle" letter-spacing="3">${label}</text></g>`}
 $('plant').innerHTML=`<defs><pattern id="grid" width="55" height="55" patternUnits="userSpaceOnUse" patternTransform="matrix(1 0 -.65 .4 0 0)"><path d="M55 0H0V55" fill="none" stroke="#42685d" stroke-opacity=".22"/></pattern><linearGradient id="roof" x2=".8" y2="1"><stop stop-color="#3b5052"/><stop offset="1" stop-color="#213936"/></linearGradient><radialGradient id="glow"><stop stop-color="#43e6a0" stop-opacity=".19"/><stop offset="1" stop-color="#43e6a0" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="950" fill="url(#grid)"/><ellipse cx="760" cy="430" rx="570" ry="360" fill="url(#glow)"/><path d="M100 315L1330 35M170 795L1490 490" stroke="#111c22" stroke-width="64"/><path d="M100 315L1330 35M170 795L1490 490" stroke="#9ac2b4" stroke-dasharray="20 22" stroke-opacity=".3" stroke-width="2"/>${building(430,300,250,200,85,'ASSEMBLY / A')}${building(820,210,200,180,95,'UTILITIES / C')}${building(705,485,310,230,90,'PRODUCTION / B')}${building(285,565,230,190,75,'PACKAGING / D')}${building(1000,640,200,170,75,'WAREHOUSE')}<g id="pins"></g>`;
 const positions=[[455,260],[550,222],[632,290],[700,270],[738,453],[825,405],[916,442],[1002,403],[849,159],[945,178],[345,530],[1110,602]];
-function select(i){selected=i;render()}
+function select(i){selected=i;$('motor-inspector').hidden=false;render()}
 function render(){const counts=[0,0,0,0];motors.forEach(m=>counts[state(m)]++);$('healthy-count').textContent=String(counts[0]).padStart(2,'0');$('healthy-pct').innerHTML=Math.round(counts[0]/12*100)+'<span>%</span>';
 document.querySelector('.gauge').style.background=`conic-gradient(from 225deg,#51e29b 0deg,#74fbc0 ${counts[0]/12*270}deg,#35483f ${counts[0]/12*270}deg 270deg,transparent 270deg)`;
 $('breakdown').innerHTML=states.map((s,i)=>`<div class="break-row"><i class="dot" style="background:${colors[i]}"></i>${s}<b>${String(counts[i]).padStart(2,'0')}</b></div><div class="bar"><span style="width:${counts[i]/12*100}%;background:${colors[i]}"></span></div>`).join('');
@@ -14,19 +14,18 @@ $('pins').innerHTML=motors.map((m,i)=>{const [x,y]=positions[i],c=colors[state(m
 const m=motors[selected],s=state(m);$('motor-name').textContent=m.id;$('motor-zone').textContent=`PRODUCTION LINE ${m.zone}`;$('motor-desc').textContent=`${m.name} · Class ${['I','II','III','IV'][m.cls]}`;$('motor-value').textContent=m.value.toFixed(2);$('motor-status').textContent=states[s].toUpperCase();$('motor-status').style.color=colors[s];$('received').textContent=new Date().toLocaleTimeString('en-GB');
 const points=m.history.map((v,i)=>`${i*300/29},${55-v/Math.max(m.base*1.5,1)*45}`).join(' ');$('spark').innerHTML=`<path d="M0 55H300M0 25H300" stroke="#ffffff08"/><polyline points="${points}" fill="none" stroke="${colors[s]}" stroke-width="1.6"/>`;
 const alerts=motors.map((m,i)=>({...m,index:i})).filter(m=>state(m)>=2).sort((a,b)=>b.value-a.value);$('watch-count').textContent=String(alerts.length).padStart(2,'0');$('alert-count').textContent=alerts.length;$('alerts').innerHTML=alerts.length?alerts.slice(0,3).map(m=>`<button class="alert-row" data-index="${m.index}"><span class="alert-symbol" style="color:${colors[state(m)]}">⌁</span><span><strong>${m.id}</strong><small>Line ${m.zone} · ${states[state(m)]}</small></span><span class="alert-value" style="color:${colors[state(m)]}">${m.value.toFixed(2)}<small>mm/s RMS</small></span></button>`).join(''):'<p class="good">All motors within range</p>';
-drawChart();document.querySelectorAll('[data-index]').forEach(el=>{el.onclick=()=>select(+el.dataset.index);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(+el.dataset.index)}}});}
+drawChart();drawMotorInspector();document.querySelectorAll('[data-index]').forEach(el=>{el.onclick=()=>select(+el.dataset.index);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(+el.dataset.index)}}});}
 // Legacy reference only. Not a plant-approved alarm/trip configuration.
 function drawChart(){
  const ticks=[0,.28,.45,.71,1.12,1.8,2.8,4.5,7.1,11.2,18,28,45];
- const motor=motors[selected];
- const top=63,row=21,left=128,width=464;
+ const top=63,row=21,left=128,width=216;
  const y=v=>{if(v<=0)return top;if(v>=45)return top+12*row;const i=ticks.findIndex(t=>t>v)-1;return top+row*(i+(v-ticks[i])/(ticks[i+1]-ticks[i]));};
  const fills=['#187952','#b3cd80','#f1c38a','#d85757'];
  const zoneNames=['A · GOOD','B · SATISFACTORY','C · UNSATISFACTORY','D · UNACCEPTABLE'];
  const descriptions=['Small machines','Medium machines','Large · rigid support','Large · flexible support'];
- let svg=`<rect x="0" y="0" width="592" height="${top}" rx="7" fill="#304740"/><text x="62" y="22" text-anchor="middle" fill="#e3efe8" font-size="11">VELOCITY RMS</text><text x="29" y="48" text-anchor="middle" fill="#9eb6aa" font-size="10">in/s</text><text x="91" y="48" text-anchor="middle" fill="#ffffff" font-size="12">mm/s</text>`;
- for(const c of [motor.cls]){
-  const x=left,bounds=[0,...limits[c],45];
+ let svg=`<rect x="0" y="0" width="992" height="${top}" rx="7" fill="#304740"/><text x="62" y="22" text-anchor="middle" fill="#e3efe8" font-size="11">VELOCITY RMS</text><text x="29" y="48" text-anchor="middle" fill="#9eb6aa" font-size="10">in/s</text><text x="91" y="48" text-anchor="middle" fill="#ffffff" font-size="12">mm/s</text>`;
+ for(let c=0;c<4;c++){
+  const x=left+c*width,bounds=[0,...limits[c],45];
   svg+=`<text x="${x+width/2}" y="23" text-anchor="middle" fill="#eef7ad" font-size="15" font-weight="700">Class ${['I','II','III','IV'][c]}</text><text x="${x+width/2}" y="45" text-anchor="middle" fill="#c2d1c8" font-size="11">${descriptions[c]}</text>`;
   for(let z=0;z<4;z++){
    const yy=y(bounds[z]),h=y(bounds[z+1])-yy;
@@ -35,13 +34,10 @@ function drawChart(){
   for(const bound of limits[c])svg+=`<path d="M${x} ${y(bound)}h${width}" stroke="#fff" stroke-opacity=".8" stroke-width="1.3"/><rect x="${x+width-43}" y="${y(bound)-7}" width="40" height="14" rx="3" fill="#13231ee8"/><text x="${x+width-23}" y="${y(bound)+3}" text-anchor="middle" fill="#fff" font-size="9">${bound.toFixed(2)}</text>`;
   svg+=`<path d="M${x} 0V${y(45)}" stroke="#10211a" stroke-width="1"/>`;
  }
- ticks.forEach(v=>{const yy=y(v);svg+=`<path d="M0 ${yy}H592" stroke="#152b22" stroke-opacity=".24"/><text x="48" y="${yy+4}" text-anchor="end" fill="#8fa99b" font-size="10">${(v/25.4).toFixed(3)}</text><text x="113" y="${yy+4}" text-anchor="end" fill="#e5f0e8" font-size="11" font-weight="600">${v.toFixed(2)}</text>`});
- [motor].forEach(m=>{const i=selected,x=left+width*.32,yy=y(m.value),active=true;svg+=`<g data-index="${i}" class="chart-point" tabindex="0" role="button" aria-label="${m.id}"><title>${m.id}: ${m.value.toFixed(2)} mm/s RMS · ${states[state(m)]}</title><circle cx="${x}" cy="${yy}" r="11" fill="transparent"/><circle cx="${x}" cy="${yy}" r="${active?7:5}" fill="#f8fffd" stroke="#102b22" stroke-width="2"/>${active?`<circle cx="${x}" cy="${yy}" r="10" fill="none" stroke="#fff"/>`:''}<rect x="${x-23}" y="${yy-24}" width="46" height="14" rx="4" fill="#12251fed"/><text x="${x}" y="${yy-14}" text-anchor="middle" fill="#fff" font-size="8">${m.id}</text></g>`});
- svg+='<text x="128" y="342" fill="#90a99b" font-size="9">ค่าเพิ่มจากบนลงล่าง · in/s = mm/s ÷ 25.4</text>';
+ ticks.forEach(v=>{const yy=y(v);svg+=`<path d="M0 ${yy}H992" stroke="#152b22" stroke-opacity=".24"/><text x="48" y="${yy+4}" text-anchor="end" fill="#8fa99b" font-size="10">${(v/25.4).toFixed(3)}</text><text x="113" y="${yy+4}" text-anchor="end" fill="#e5f0e8" font-size="11" font-weight="600">${v.toFixed(2)}</text>`});
+ motors.forEach((m,i)=>{const x=left+m.cls*width+32+Math.floor(i/4)*65,yy=y(m.value),active=i===selected;svg+=`<g data-index="${i}" class="chart-point" tabindex="0" role="button" aria-label="${m.id}"><title>${m.id}: ${m.value.toFixed(2)} mm/s RMS · ${states[state(m)]}</title><circle cx="${x}" cy="${yy}" r="11" fill="transparent"/><circle cx="${x}" cy="${yy}" r="${active?7:5}" fill="#f8fffd" stroke="#102b22" stroke-width="2"/>${active?`<circle cx="${x}" cy="${yy}" r="10" fill="none" stroke="#fff"/>`:''}<rect x="${x-23}" y="${yy-24}" width="46" height="14" rx="4" fill="#12251fed"/><text x="${x}" y="${yy-14}" text-anchor="middle" fill="#fff" font-size="8">${m.id}</text></g>`});
+ svg+='<text x="128" y="342" fill="#90a99b" font-size="10">ค่าเพิ่มจากบนลงล่าง · ระยะระหว่างแถวเท่ากันตามตารางอ้างอิง · in/s = mm/s ÷ 25.4</text>';
  $('chart').innerHTML=svg;
- $('chart').setAttribute('aria-label',`ตารางการสั่น ${motor.id} เฉพาะ Class ${['I','II','III','IV'][motor.cls]}`);
- $('chart-title').textContent=`Vibration severity · ${motor.id}`;
- $('chart-subtitle').textContent=`เฉพาะ Class ${['I','II','III','IV'][motor.cls]} · เกณฑ์อ้างอิงเดิม ISO 10816-1`;
  const m=motors[selected];$('chart-selection').textContent=`${m.id} · Class ${['I','II','III','IV'][m.cls]} · ${m.value.toFixed(2)} mm/s RMS · Zone ${'ABCD'[state(m)]} — ข้อมูลจำลอง / เกณฑ์เดิม`;
 }
 function tick(){if(!paused){motors.forEach(m=>{m.value=m.base*(.97+Math.random()*.06);if(!m.history.length)m.history=Array.from({length:29},()=>m.base*(.9+Math.random()*.2));m.history.push(m.value);m.history=m.history.slice(-30)});render()}$('clock').textContent=new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
@@ -49,3 +45,24 @@ $('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'▶':'Ⅱ'
 
 $('standard-info').onclick=()=>$('standards-dialog').showModal();
 $('close-standard').onclick=()=>$('standards-dialog').close();
+
+// Separate inspector: selection never filters or replaces the overview matrix.
+function drawMotorInspector(){
+ const m=motors[selected],cls=['I','II','III','IV'][m.cls],zone=state(m);
+ $('inspector-title').textContent=m.id;
+ $('inspector-class').textContent=`Class ${cls} · Line ${m.zone}`;
+ $('inspector-reading').textContent=`${m.value.toFixed(2)} mm/s RMS`;
+ $('inspector-status').textContent=`Zone ${'ABCD'[zone]} · ${states[zone]}`;
+ const ticks=[0,.28,.45,.71,1.12,1.8,2.8,4.5,7.1,11.2,18,28,45];
+ const y=v=>{if(v<=0)return 36;if(v>=45)return 288;const i=ticks.findIndex(t=>t>v)-1;return 36+21*(i+(v-ticks[i])/(ticks[i+1]-ticks[i]));};
+ const bounds=[0,...limits[m.cls],45],fills=['#187952','#b3cd80','#f1c38a','#d85757'];
+ let svg=`<text x="4" y="20" fill="#b7ccbf" font-size="11">mm/s</text><text x="175" y="20" text-anchor="middle" fill="#eef7ad" font-size="14" font-weight="600">Class ${cls}</text>`;
+ for(let z=0;z<4;z++){const yy=y(bounds[z]),h=y(bounds[z+1])-yy;svg+=`<rect x="54" y="${yy}" width="240" height="${h}" fill="${fills[z]}"/><text x="230" y="${yy+h/2+4}" text-anchor="middle" font-size="11" fill="${z===0?'#edfff3':'#332c23'}">ZONE ${'ABCD'[z]}</text>`;}
+ ticks.forEach(v=>svg+=`<path d="M54 ${y(v)}H294" stroke="#102b2233"/><text x="46" y="${y(v)+4}" text-anchor="end" fill="#c2d8ca" font-size="10">${v.toFixed(2)}</text>`);
+ for(const v of limits[m.cls])svg+=`<path d="M54 ${y(v)}H294" stroke="#fff9"/>`;
+ const yy=y(m.value);svg+=`<g class="inspector-point"><title>${m.id}: ${m.value.toFixed(2)} mm/s RMS</title><path d="M54 ${yy}H170" stroke="#fff" stroke-dasharray="3 3"/><circle cx="110" cy="${yy}" r="8" fill="#fff" stroke="#142d24" stroke-width="3"/><rect x="76" y="${yy-28}" width="68" height="17" rx="4" fill="#10271f"/><text x="110" y="${yy-16}" text-anchor="middle" fill="#fff" font-size="10">${m.id}</text></g>`;
+ $('inspector-chart').innerHTML=svg;
+ $('inspector-chart').setAttribute('aria-label',`${m.id} เฉพาะ Class ${cls}`);
+}
+$('close-inspector').onclick=()=>{$('motor-inspector').hidden=true;};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('motor-inspector').hidden=true;});
