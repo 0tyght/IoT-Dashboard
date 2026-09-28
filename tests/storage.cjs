@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');const {chromium}=require('playwright');const fs=require('node:fs');const data=require('../motor-data.js');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH});const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8080');await page.locator('[data-view="motors"]').click();
+const downloadPromise=page.waitForEvent('download');await page.locator('#export-motors').click();const download=await downloadPromise;const raw=fs.readFileSync(await download.path(),'utf8');const items=data.parseBackup(raw);assert.equal(items.length,12);
+// Import more motors in the same class; all points must remain in that class's column.
+const many=Array.from({length:24},(_,i)=>({...items[0],key:`stress-${i}`,id:`M-${i}`,label:`Motor ${i}`,cls:0,base:i===23?60:1}));
+await page.locator('#import-file').setInputFiles({name:'many.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,motors:many}))});await page.locator('#confirm-action').click();assert.equal(await page.locator('.motor-pin').count(),24);
+assert.equal(await page.locator('#chart .chart-point').evaluateAll(nodes=>nodes.every(n=>{const x=Number(n.querySelector('circle').getAttribute('cx'));return x>128&&x<344;})),true);
+// Unsaved edits require an explicit discard action.
+await page.locator('#add-motor').click();await page.locator('[name="label"]').fill('Unsaved');await page.locator('[data-close="motor-editor"]').first().click();assert.equal(await page.locator('#confirm-dialog').isVisible(),true);await page.locator('#confirm-action').click();assert.equal(await page.locator('#motor-editor').isVisible(),false);
+// Reject an invalid power factor without modifying the saved registry.
+const malformed=JSON.parse(raw);malformed.motors[0].ratings=[{pf:'1.5'}];assert.throws(()=>data.parseBackup(JSON.stringify(malformed)),/cos/);
+// Storage write failure leaves the form open and original in-memory records intact.
+await page.evaluate(()=>{Storage.prototype.setItem=function(){throw new DOMException('Full','QuotaExceededError')}});await page.locator('#add-motor').click();await page.locator('[name="label"]').fill('Cannot save');await page.locator('#motor-form').getByRole('button',{name:'บันทึกมอเตอร์',exact:true}).click();assert.match(await page.locator('#form-error').innerText(),/บันทึกไม่ได้/);assert.equal(await page.locator('.motor-pin').count(),24);assert.equal(await page.locator('#motor-editor').isVisible(),true);
+assert.deepEqual(errors,[]);await browser.close();console.log('PASS: export roundtrip; 24 same-class points; unsaved-edit confirmation; invalid power factor; storage failure preserves records');})().catch(e=>{console.error(e);process.exit(1)});

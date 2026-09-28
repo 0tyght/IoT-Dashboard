@@ -1,24 +1,35 @@
-# VECTRA — IoT Dashboard
+# VECTRA — Motor monitoring dashboard
 
-Factory motor vibration dashboard. Static HTML/CSS/JavaScript, hosted on GitHub Pages.
+Live site: https://0tyght.github.io/IoT-Dashboard/
 
-## Run locally
+Static HTML/CSS/JavaScript. GitHub Pages deploys `main` from the repository root.
 
-Open `index.html`, or serve this folder with any static web server.
+## Features
 
-## Deployment
+- Interactive factory map with editable motor labels and positions.
+- Complete Class I–IV reference matrix and a separate selected-motor side inspector.
+- Add, edit, delete and undo the last deletion; search by ID, label, area or nameplate details.
+- Nameplate fields: manufacturer, type, model, markings, stated standard, duty, insulation, IP, efficiency class, bearings, product/serial numbers, frame, ambient temperature and weight.
+- Multiple electrical rating rows for voltage, connection, Hz, kW, RPM, current, power factor and efficiency.
+- Map preview for positioning, keyboard-accessible coordinate inputs, confirmation before discarding edits.
+- JSON export/import with validation and explicit replacement confirmation.
 
-GitHub Pages publishes `main` from the repository root. Push changes to `main` to update the site.
+## Data and limitations
 
-## Responsive layout
+All vibration readings and the factory layout are simulated. Nameplate fields start blank; the supplied example plate is not assigned to real equipment automatically. Twelve demo motors appear only when there is no saved registry. An intentionally empty registry stays empty after reload.
 
-- Wide desktop: plant map with side panels.
-- Tablet / iPad: dedicated map, two-column information panels, landscape and portrait support.
-- Narrow screens: stacked panels; the severity table scrolls horizontally rather than shrinking labels.
-- Controls support touch and keyboard; the standard-details dialog scrolls independently.
+Motor definitions are stored in localStorage (`vectra.motors.v1`) on the current browser and origin. They do not sync across devices. Clearing site storage removes these records; export a backup first. The site has no production sensor connection, server database, authentication or shared multi-user editing. Storage failures and conflicting changes from another tab are reported without silently replacing saved data.
 
-## Data and standards
+Class I–IV is a legacy reference, not a plant-approved alarm/trip configuration. Nameplate power alone does not select a vibration standard or class. Follow the in-app standard references and verify equipment and measurement conditions before production use.
 
-All 12 motors and the factory layout are simulated. Readings update every two seconds; pause with the header control. There is no sensor backend or stored production data.
+## Local preview
 
-The Class I–IV severity table is a legacy reference, not an approved plant alarm/trip configuration. The interface links to the ISO status and scope references. Machine specifications and measurement conditions must be verified before selecting production thresholds.
+Serve the repository root with a static web server (for example PHP's local development server). There is no build step.
+
+## Tests
+
+`tests/dashboard.cjs` uses Node.js, Playwright and Node assertions. Install Playwright in a development environment and its Chromium browser, then run `node tests/dashboard.cjs` with a local server on port 8080. Set `TEST_URL` to choose a different **test** site and `CHROME_PATH` to use a local Chrome executable. Tests use isolated browser contexts and do not edit the user's saved registry.
+
+Coverage: stable click targets across updates, full overview plus side inspector, add/edit/delete/undo, duplicate rejection, three electrical rating rows, reload persistence, empty state, invalid import, literal HTML-like labels, and desktop/tablet layouts. Screenshots are written to ignored `.artifacts/`.
+
+When changing runtime assets, update the version query strings in `index.html` to avoid stale GitHub Pages/browser cache combinations.
