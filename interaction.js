@@ -1,0 +1,32 @@
+/* Pointer previews complement selection; touch and keyboard retain explicit actions. */
+(()=>{
+ const tip=document.createElement('div');tip.id='motor-preview';tip.role='tooltip';tip.hidden=true;document.body.append(tip);
+ let target=null,origin=null,point={x:0,y:0},frame=0;
+ const selector='#pins [data-index],#chart [data-index],#alerts [data-index]';
+ function hide(){if(target)target.removeAttribute('aria-describedby');target=null;tip.hidden=true;document.querySelectorAll('.motor-hover').forEach(el=>el.classList.remove('motor-hover'));}
+ function refresh(){
+  if(!target||!target.isConnected||!target.getClientRects().length){hide();return;}
+  const index=Number(target.dataset.index),m=motors[index];if(!m){hide();return;}
+  document.querySelectorAll(selector).forEach(el=>el.classList.toggle('motor-hover',Number(el.dataset.index)===index));
+  tip.replaceChildren();const name=document.createElement('strong'),meta=document.createElement('span'),value=document.createElement('b'),hint=document.createElement('small');
+  name.textContent=m.label;meta.textContent=`${m.id} · Class ${['I','II','III','IV'][m.cls]} · ${m.zone||'ไม่ระบุพื้นที่'}`;
+  value.textContent=`${m.value.toFixed(2)} mm/s RMS · Zone ${'ABCD'[state(m)]}`;value.style.color=colors[state(m)];hint.textContent='ข้อมูลจำลอง · คลิก / Enter เพื่อเปิดด้านข้าง';tip.append(name,meta,value,hint);tip.hidden=false;target.setAttribute('aria-describedby',tip.id);
+  const box=tip.getBoundingClientRect();tip.style.left=`${Math.max(8,Math.min(innerWidth-box.width-8,point.x+16))}px`;tip.style.top=`${Math.max(8,Math.min(innerHeight-box.height-8,point.y+18))}px`;
+ }
+ window.refreshMotorHover=refresh;
+ function show(el,x,y){if(target!==el)hide();target=el;point={x,y};refresh();}
+ document.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const el=e.target.closest(selector);if(el)show(el,e.clientX,e.clientY);});
+ document.addEventListener('pointermove',e=>{if(!target||e.pointerType!=='mouse')return;point={x:e.clientX,y:e.clientY};if(!frame)frame=requestAnimationFrame(()=>{frame=0;refresh();});});
+ document.addEventListener('pointerout',e=>{if(target&&target.contains(e.target)&&!target.contains(e.relatedTarget))hide();});
+ document.addEventListener('focusin',e=>{const el=e.target.closest(selector);if(el){const r=el.getBoundingClientRect();show(el,r.right,r.top);}else hide();});
+ document.addEventListener('focusout',hide);
+ document.addEventListener('click',e=>{const el=e.target.closest(selector);if(el){origin=el;hide();}});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')hide();if(e.key==='Enter'||e.key===' '){const el=e.target.closest(selector);if(el){origin=el;hide();}}});
+ window.addEventListener('scroll',hide,true);window.addEventListener('resize',hide);
+ $('close-inspector').addEventListener('click',()=>{if(origin?.isConnected)origin.focus({preventScroll:true});hide();});
+ document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();setView('overview');window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});});
+ $('pause').setAttribute('aria-label','หยุดข้อมูลจำลอง');$('pause').setAttribute('aria-pressed','false');
+ $('pause').addEventListener('click',()=>{$('pause').setAttribute('aria-pressed',String(paused));document.body.classList.toggle('simulation-paused',paused);});
+ // One delegated listener, no per-card listeners or continuous animation loop.
+ document.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse'||matchMedia('(prefers-reduced-motion: reduce)').matches)return;const panel=e.target.closest('.panel,.motor-card');if(!panel)return;const r=panel.getBoundingClientRect();panel.style.setProperty('--mouse-x',`${e.clientX-r.left}px`);panel.style.setProperty('--mouse-y',`${e.clientY-r.top}px`);});
+})();

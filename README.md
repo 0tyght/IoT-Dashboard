@@ -35,3 +35,5 @@ Coverage: stable click targets across updates, full overview plus side inspector
 When changing runtime assets, update the version query strings in `index.html` to avoid stale GitHub Pages/browser cache combinations.
 
 See [standards and operational review](STANDARDS-REVIEW.md) for findings, corrections and commissioning requirements. Run node tests/standards.cjs for the related regression checks.
+
+Pointer previews link a motor across the map, matrix and attention list. Keyboard and touch selection open the same side inspector. Motion respects prefers-reduced-motion. Run node tests/interaction.cjs for hover, focus, keyboard, touch and navigation regression checks.
