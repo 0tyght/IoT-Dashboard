@@ -30,3 +30,15 @@
  // One delegated listener, no per-card listeners or continuous animation loop.
  document.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse'||matchMedia('(prefers-reduced-motion: reduce)').matches)return;const panel=e.target.closest('.panel,.motor-card');if(!panel)return;const r=panel.getBoundingClientRect();panel.style.setProperty('--mouse-x',`${e.clientX-r.left}px`);panel.style.setProperty('--mouse-y',`${e.clientY-r.top}px`);});
 })();
+/* Local map camera: buttons work with touch/keyboard; drag only the map background. */
+(()=>{
+ const map=$('plant'),host=map.parentElement,bar=document.createElement('div');bar.className='map-controls';bar.setAttribute('aria-label','ปรับมุมมองแปลน');bar.innerHTML='<span>แปลนจำลอง · ลากเพื่อเลื่อน</span><button type="button" data-camera="out" aria-label="ย่อแปลน">−</button><output aria-live="polite">100%</output><button type="button" data-camera="in" aria-label="ขยายแปลน">＋</button><button type="button" data-camera="fit">พอดี</button>';host.append(bar);
+ let camera={x:0,y:0,w:1600,h:950},drag=null;
+ function paint(){map.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);bar.querySelector('output').textContent=`${Math.round(1600/camera.w*100)}%`;bar.querySelector('[data-camera="in"]').disabled=camera.w<=400;bar.querySelector('[data-camera="out"]').disabled=camera.w>=1600;}
+ function clamp(){camera.x=Math.max(0,Math.min(1600-camera.w,camera.x));camera.y=Math.max(0,Math.min(950-camera.h,camera.y));paint();}
+ bar.addEventListener('click',e=>{const action=e.target.closest('[data-camera]')?.dataset.camera;if(!action)return;if(action==='fit'){camera={x:0,y:0,w:1600,h:950};paint();return;}const w=Math.max(400,Math.min(1600,camera.w*(action==='in'?.8:1.25))),h=w*950/1600;camera={x:camera.x+(camera.w-w)/2,y:camera.y+(camera.h-h)/2,w,h};clamp();});
+ map.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('[data-index]')||drag)return;const matrix=map.getScreenCTM();if(!matrix)return;drag={id:e.pointerId,x:e.clientX,y:e.clientY,cx:camera.x,cy:camera.y,scale:matrix.a};map.setPointerCapture(e.pointerId);map.classList.add('dragging');});
+ map.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;camera.x=drag.cx-(e.clientX-drag.x)/drag.scale;camera.y=drag.cy-(e.clientY-drag.y)/drag.scale;clamp();});
+ function end(e){if(drag?.id!==e.pointerId)return;drag=null;map.classList.remove('dragging');}
+ map.addEventListener('pointerup',end);map.addEventListener('pointercancel',end);map.addEventListener('lostpointercapture',end);paint();
+})();
