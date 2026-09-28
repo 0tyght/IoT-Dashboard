@@ -33,3 +33,5 @@ Serve the repository root with a static web server (for example PHP's local deve
 Coverage: stable click targets across updates, full overview plus side inspector, add/edit/delete/undo, duplicate rejection, three electrical rating rows, reload persistence, empty state, invalid import, literal HTML-like labels, and desktop/tablet layouts. Screenshots are written to ignored `.artifacts/`.
 
 When changing runtime assets, update the version query strings in `index.html` to avoid stale GitHub Pages/browser cache combinations.
+
+See [standards and operational review](STANDARDS-REVIEW.md) for findings, corrections and commissioning requirements. Run node tests/standards.cjs for the related regression checks.
