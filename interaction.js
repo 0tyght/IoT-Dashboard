@@ -42,3 +42,8 @@
  function end(e){if(drag?.id!==e.pointerId)return;drag=null;map.classList.remove('dragging');}
  map.addEventListener('pointerup',end);map.addEventListener('pointercancel',end);map.addEventListener('lostpointercapture',end);paint();
 })();
+/* Keep map targets legible as the viewport and camera change. */
+(()=>{
+ window.updateMapPinScale=()=>{const scale=$('plant').getScreenCTM()?.a;if(!scale)return;const size=Math.max(1,Math.min(2.6,.72/scale));const pins=[...document.querySelectorAll('#pins [data-index]')];pins.forEach(el=>{const m=motors[Number(el.dataset.index)];if(m)el.setAttribute('transform',`translate(${m.x*16} ${m.y*9.5}) scale(${size})`);el.removeAttribute('data-compact');});const occupied=[];pins.sort((a,b)=>Number(Number(b.dataset.index)===selected)-Number(Number(a.dataset.index)===selected)).forEach(el=>{const r=el.querySelector('rect').getBoundingClientRect();if(occupied.some(b=>r.left<b.right+3&&r.right>b.left-3&&r.top<b.bottom+3&&r.bottom>b.top-3))el.setAttribute('data-compact','true');else occupied.push(r);});};
+ const observer=new MutationObserver(()=>window.updateMapPinScale());observer.observe($('plant'),{attributes:true,attributeFilter:['viewBox']});new ResizeObserver(()=>window.updateMapPinScale()).observe($('plant'));window.updateMapPinScale();
+})();

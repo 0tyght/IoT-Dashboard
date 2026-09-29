@@ -39,3 +39,5 @@ See [standards and operational review](STANDARDS-REVIEW.md) for findings, correc
 Pointer previews link a motor across the map, matrix and attention list. Keyboard and touch selection open the same side inspector. Motion respects prefers-reduced-motion. Run node tests/interaction.cjs for hover, focus, keyboard, touch and navigation regression checks.
 
 The selected motor now occupies the right workspace column and replaces the summary card instead of floating over it. Tablet uses the same two-column workspace; narrow screens stack the panels. Map controls support zoom, background drag, and reset. Run node tests/layout.cjs for 12 viewport overlap checks and map camera regression checks.
+
+The dashboard uses a compact fleet status strip above an aligned map/detail workspace. Severity matrix and attention list share the next row on desktop; tablet gives the matrix full width. Map markers maintain a readable target size, and overlapping labels are suppressed until hover/focus/selection without removing any motors.
