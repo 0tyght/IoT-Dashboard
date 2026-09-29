@@ -42,4 +42,4 @@ The selected motor now occupies the right workspace column and replaces the summ
 
 The dashboard uses a compact fleet status strip above an aligned map/detail workspace. Severity matrix and attention list share the next row on desktop; tablet gives the matrix full width. Map markers maintain a readable target size, and overlapping labels are suppressed until hover/focus/selection without removing any motors.
 
-Blueprint workspace: selecting a motor opens a separate severity panel on the left while preserving motor information on the right. Fullscreen includes the map and both panels, supports Escape and a viewport fallback, and keeps nameplate/editor dialogs usable. Run node tests/fullscreen.cjs for the fullscreen lifecycle.
+Blueprint workspace: the normal dashboard keeps the selected-motor severity panel on the left and motor information on the right. Fullscreen starts with only the map and its camera controls; hover shows a compact preview and selection slides the motor severity drawer in from the left. It supports Escape, a viewport fallback and nameplate/editor dialogs. Run node tests/fullscreen.cjs for the fullscreen lifecycle.
