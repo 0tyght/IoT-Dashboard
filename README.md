@@ -41,3 +41,5 @@ Pointer previews link a motor across the map, matrix and attention list. Keyboar
 The selected motor now occupies the right workspace column and replaces the summary card instead of floating over it. Tablet uses the same two-column workspace; narrow screens stack the panels. Map controls support zoom, background drag, and reset. Run node tests/layout.cjs for 12 viewport overlap checks and map camera regression checks.
 
 The dashboard uses a compact fleet status strip above an aligned map/detail workspace. Severity matrix and attention list share the next row on desktop; tablet gives the matrix full width. Map markers maintain a readable target size, and overlapping labels are suppressed until hover/focus/selection without removing any motors.
+
+Blueprint workspace: selecting a motor opens a separate severity panel on the left while preserving motor information on the right. Fullscreen includes the map and both panels, supports Escape and a viewport fallback, and keeps nameplate/editor dialogs usable. Run node tests/fullscreen.cjs for the fullscreen lifecycle.

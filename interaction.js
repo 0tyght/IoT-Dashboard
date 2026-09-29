@@ -1,6 +1,6 @@
 /* Pointer previews complement selection; touch and keyboard retain explicit actions. */
 (()=>{
- const tip=document.createElement('div');tip.id='motor-preview';tip.role='tooltip';tip.hidden=true;document.body.append(tip);
+ const tip=document.createElement('div');tip.id='motor-preview';tip.role='tooltip';tip.hidden=true;document.querySelector('.map-workspace').append(tip);
  let target=null,origin=null,point={x:0,y:0},frame=0;
  const selector='#pins [data-index],#chart [data-index],#alerts [data-index]';
  function hide(){if(target)target.removeAttribute('aria-describedby');target=null;tip.hidden=true;document.querySelectorAll('.motor-hover').forEach(el=>el.classList.remove('motor-hover'));}
@@ -46,4 +46,15 @@
 (()=>{
  window.updateMapPinScale=()=>{const scale=$('plant').getScreenCTM()?.a;if(!scale)return;const size=Math.max(1,Math.min(2.6,.72/scale));const pins=[...document.querySelectorAll('#pins [data-index]')];pins.forEach(el=>{const m=motors[Number(el.dataset.index)];if(m)el.setAttribute('transform',`translate(${m.x*16} ${m.y*9.5}) scale(${size})`);el.removeAttribute('data-compact');});const occupied=[];pins.sort((a,b)=>Number(Number(b.dataset.index)===selected)-Number(Number(a.dataset.index)===selected)).forEach(el=>{const r=el.querySelector('rect').getBoundingClientRect();if(occupied.some(b=>r.left<b.right+3&&r.right>b.left-3&&r.top<b.bottom+3&&r.bottom>b.top-3))el.setAttribute('data-compact','true');else occupied.push(r);});};
  const observer=new MutationObserver(()=>window.updateMapPinScale());observer.observe($('plant'),{attributes:true,attributeFilter:['viewBox']});new ResizeObserver(()=>window.updateMapPinScale()).observe($('plant'));window.updateMapPinScale();
+})();
+/* Expanded workspace includes both independent motor panels. Native fullscreen has a viewport fallback. */
+(()=>{
+ const workspace=document.querySelector('.map-workspace'),button=document.createElement('button');button.type='button';button.id='expand-map';button.textContent='⛶ เต็มจอ';button.setAttribute('aria-label','ขยายแปลนเต็มจอ');button.setAttribute('aria-expanded','false');document.querySelector('.map-controls').append(button);
+ let expanded=false,busy=false,previousFocus=null,dialogHomes=[];
+ function enter(){previousFocus=document.activeElement;expanded=true;workspace.classList.add('is-expanded');document.body.classList.add('map-fullscreen');button.textContent='✕ ออกเต็มจอ';button.setAttribute('aria-label','ออกจากแปลนเต็มจอ');button.setAttribute('aria-expanded','true');dialogHomes=[...document.querySelectorAll('dialog')].map(el=>({el,parent:el.parentNode,next:el.nextSibling}));dialogHomes.forEach(({el})=>workspace.append(el));button.focus({preventScroll:true});}
+ function restore(){if(!expanded)return;expanded=false;workspace.classList.remove('is-expanded');document.body.classList.remove('map-fullscreen');button.textContent='⛶ เต็มจอ';button.setAttribute('aria-label','ขยายแปลนเต็มจอ');button.setAttribute('aria-expanded','false');[...dialogHomes].reverse().forEach(({el,parent,next})=>parent.insertBefore(el,next?.parentNode===parent?next:null));dialogHomes=[];previousFocus?.focus({preventScroll:true});}
+ async function leave(){if(document.fullscreenElement===workspace){try{await document.exitFullscreen();}catch{restore();}}else restore();}
+ button.addEventListener('click',async()=>{if(busy)return;busy=true;try{if(expanded)await leave();else{enter();try{await workspace.requestFullscreen?.();}catch{/* Keep the viewport fallback when fullscreen is unsupported or denied. */}}}finally{busy=false;}});
+ document.addEventListener('fullscreenchange',()=>{if(expanded&&document.fullscreenElement!==workspace)restore();});
+ document.addEventListener('keydown',e=>{if(!expanded||document.querySelector('dialog[open]'))return;if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();leave();}if(e.key==='Tab'){const candidates=[...workspace.querySelectorAll('button:not(:disabled),[tabindex="0"],a[href],input,select')].filter(el=>el.getClientRects().length);const i=candidates.indexOf(document.activeElement);if(e.shiftKey&&i<=0){e.preventDefault();candidates.at(-1)?.focus();}else if(!e.shiftKey&&(i===candidates.length-1||i<0)){e.preventDefault();candidates[0]?.focus();}}},true);
 })();
