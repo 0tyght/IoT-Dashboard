@@ -67,7 +67,8 @@ function drawMotorInspector(){
  const m=motors[selected],cls=['I','II','III','IV'][m.cls],zone=state(m);
  $('inspector-title').textContent=m.label;$('inspector-id').textContent=m.id;
  $('inspector-class').textContent=`Class ${cls} · Line ${m.zone}`;
- $('inspector-reading').textContent=`${m.value.toFixed(2)} mm/s RMS`;
+ $('inspector-reading').innerHTML=`<span>${m.value.toFixed(2)}</span><small>mm/s RMS</small>`;
+ $('inspector-status').style.color=colors[zone];
  $('inspector-status').textContent=`Zone ${'ABCD'[zone]} · ${states[zone]}${m.value>45?' · เกินช่วงกราฟ 45 mm/s (จุดแสดงที่ขอบ)':''}`;
  const ticks=[0,.28,.45,.71,1.12,1.8,2.8,4.5,7.1,11.2,18,28,45];
  const y=v=>{if(v<=0)return 36;if(v>=45)return 288;const i=ticks.findIndex(t=>t>v)-1;return 36+21*(i+(v-ticks[i])/(ticks[i+1]-ticks[i]));};
