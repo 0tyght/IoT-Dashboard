@@ -109,6 +109,8 @@ function renderSelected() {
   const threeAxis = profile?.sensorModel === MODEL;
   $('metric-type').textContent = threeAxis ? 'VELOCITY' : 'VALUE';
   $('chart-kind').disabled = !threeAxis;
+  $('chart-kind').options[0].textContent = threeAxis ? 'Velocity · mm/s' : `Custom value · ${profile?.unit || '—'}`;
+  if (!threeAxis) $('chart-kind').value = 'velocity';
   [...$('chart-legend').children].slice(0, 3).forEach(element => { element.hidden = !threeAxis; });
   $('chart-description').textContent = `${$('fleet-window').selectedOptions[0].textContent} · timestamp คือเวลาคอมพิวเตอร์รับข้อมูล (UTC+07:00)`;
   $('selected-title').textContent = profile ? profile.name || profile.motorId : 'สถานีตรวจวัดมอเตอร์';

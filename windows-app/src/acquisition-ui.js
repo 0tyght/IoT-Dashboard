@@ -52,7 +52,12 @@ function setupAcquisitionUI() {
   $('range-from').value = `${today()}T00:00:00`; $('range-to').value = `${today()}T23:59:59`;
   historyPlot = { svg: $('history-chart'), tooltip: $('history-tooltip'), frames: [], hoverIndex: 0 };
   bindPlot(historyPlot);
-  const drawHistory = () => drawSensorPlot(historyPlot, rangeFrames, $('range-kind').value, rangeFrames[0]?.unit);
+  const drawHistory = () => {
+    const custom = rangeFrames.length > 0 && !rangeFrames.some(frame => frame.channels);
+    $('range-kind').disabled = custom; $('range-kind').options[0].textContent = custom ? `Custom value · ${rangeFrames[0].unit}` : 'Velocity · mm/s';
+    if (custom) $('range-kind').value = 'velocity';
+    drawSensorPlot(historyPlot, rangeFrames, $('range-kind').value, rangeFrames[0]?.unit);
+  };
   $('range-kind').onchange = drawHistory;
   new ResizeObserver(() => { if ($('history-chart').clientWidth) drawHistory(); }).observe($('history-chart'));
   $('load-range').onclick = async () => {

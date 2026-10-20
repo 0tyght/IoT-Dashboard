@@ -1,4 +1,4 @@
-# Acquisition and recording review — version 0.8.0
+# Acquisition and recording review — version 0.8.1
 
 ## Completed requirements
 
@@ -19,6 +19,8 @@
 - Graph buffers over 120 readings, time/count selection, nine values per motor, alternate metric charts, historical plot, settings persistence, CRUD and 960/1366/1920 layouts in isolated Electron data.
 
 Impeccable's detector was run once for this change, followed by rendered inspection. Its remaining warnings concern 11 px auxiliary text, table/dialog wrappers with child-owned padding and inherited shadow declarations superseded by the dark theme. This is not a claim of complete accessibility or physical commissioning.
+
+The 0.8.1 patch corrects chart labels for custom single-register sensors in the overview, detail and history views; they use the configured unit instead of a fixed Velocity label. A desktop regression covers a custom µm profile.
 
 ## Next work, in priority order
 

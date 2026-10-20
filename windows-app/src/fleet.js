@@ -43,6 +43,7 @@ function buildFleet() {
     const trend = node('section', null, 'fleet-trend'), trendHead = node('div', null, 'fleet-trend-heading');
     const kindSelect = node('select'); kindSelect.setAttribute('aria-label', `ชนิดกราฟ ${profile.motorId}`);
     Object.entries(Measurements.groups).forEach(([value, group]) => kindSelect.add(new Option(`${group.label} · ${group.unit}`, value))); kindSelect.disabled = !threeAxis;
+    if (!threeAxis) kindSelect.replaceChildren(new Option(`Custom value · ${profile.unit}`, 'velocity'));
     trendHead.append(kindSelect);
     const coverage = node('span', '', 'graph-coverage'); trendHead.append(coverage);
     const chartBox = node('div', null, 'fleet-chart-box'), svg = svgNode('svg', { tabindex: 0, role: 'img', 'aria-label': `กราฟ ${profile.motorId} ใช้ลูกศรซ้ายขวาอ่านค่า` });
