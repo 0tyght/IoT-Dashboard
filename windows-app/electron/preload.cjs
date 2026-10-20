@@ -13,10 +13,15 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   connect: configs => ipcRenderer.invoke('sensor:connect', configs),
   disconnect: () => ipcRenderer.invoke('sensor:disconnect'),
   history: filter => ipcRenderer.invoke('data:history', filter),
+  chartRange: filter => ipcRenderer.invoke('data:chart-range', filter),
+  configureRecording: config => ipcRenderer.invoke('recording:configure', config),
+  startRecording: () => ipcRenderer.invoke('recording:start'),
+  stopRecording: () => ipcRenderer.invoke('recording:stop'),
   exportData: filter => ipcRenderer.invoke('data:export', filter),
   openDataPath: () => ipcRenderer.invoke('data:open-folder'),
   exportProfiles: () => ipcRenderer.invoke('profiles:export'),
   importProfiles: () => ipcRenderer.invoke('profiles:import'),
   onReading: subscribe('sensor:reading'),
-  onStatus: subscribe('sensor:status')
+  onStatus: subscribe('sensor:status'),
+  onRecording: subscribe('recording:state')
 });

@@ -54,7 +54,8 @@ const { _electron: electron } = require('playwright');
     await page.locator('#demo-mode').click();
     await page.locator('#fleet-view').waitFor({ state: 'visible' });
     assert.equal(await page.locator('.fleet-card').count(), 2);
-    assert.equal(await page.locator('.fleet-card svg polyline').count(), 6);
+    await page.waitForFunction(() => document.querySelectorAll('.fleet-card svg polyline').length === 6);
+    assert.equal(await page.locator('.fleet-value strong').count(), 18, 'all nine vibration values for each three-axis sensor');
     assert.equal(await page.locator('.fleet-axis-status').count(), 0, 'one communication state per motor, not per axis');
     await page.locator('#motor-search').fill('no-such-motor');
     await page.locator('#fleet-no-matches').waitFor({ state: 'visible' });
@@ -66,7 +67,21 @@ const { _electron: electron } = require('playwright');
     await page.locator('#toggle-sidebar').click();
     await page.locator('.fleet-card svg').first().hover();
     await page.locator('.fleet-tooltip').first().waitFor({ state: 'visible' });
-    await page.locator('#fleet-window').selectOption('30');
+    await page.locator('#fleet-window').selectOption('custom');
+    await page.locator('#graph-count').fill('500'); await page.locator('#graph-count').press('Tab');
+    await page.evaluate(() => {
+      const profile = profiles[0];
+      cache.clear();
+      for (let index = 0; index < 300; index++) {
+        const frame = demoFrame(profile, 0, index * .1); frame.timestamp = new Date(Date.now() - (300 - index) * 1000).toISOString(); addReading(frame);
+      }
+    });
+    assert(parseInt((await page.locator('.graph-coverage').first().textContent()).replaceAll(',', ''), 10) > 120, 'graph holds more than 120 readings');
+    assert((await page.locator('.fleet-last').first().textContent()).includes('+07:00'));
+    await page.locator('.fleet-trend-heading select').first().selectOption('displacement');
+    assert((await page.locator('.fleet-tooltip').first().textContent()).includes('µm') || await page.locator('.fleet-tooltip').first().isHidden());
+    await page.locator('.fleet-trend-heading select').first().selectOption('velocity');
+    await page.locator('#fleet-window').selectOption('300s');
     await page.locator('#fleet-add').click();
     await page.locator('#confirm-dialog').waitFor({ state: 'visible' });
     await page.locator('#cancel-confirm').click();
@@ -110,6 +125,9 @@ const { _electron: electron } = require('playwright');
     await page.locator('[data-tab="history"]').click();
     await page.locator('#history-summary').filter({ hasText: '1 รายการ' }).waitFor();
     assert((await page.locator('#history-body').textContent()).includes('-5.0'));
+    await page.locator('#history-motor').selectOption('MTR-01'); await page.locator('#load-range').click();
+    await page.locator('#range-summary').filter({ hasText: '1 ค่าจริง' }).waitFor();
+    assert.equal(await page.locator('#history-chart circle').count(), 3);
     const exportPath = path.join(temporary, 'readings-export.csv');
     await app.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }); }, exportPath);
     await page.locator('#export-csv').click();
@@ -119,6 +137,13 @@ const { _electron: electron } = require('playwright');
     await page.locator('#disconnect').click();
     await page.locator('#new-motor').waitFor();
     await page.waitForFunction(() => !document.getElementById('new-motor').disabled);
+    await page.locator('#record-settings').click();
+    await page.locator('#record-start-mode').selectOption('on-connect');
+    await page.locator('#recording-form [name="durationMinutes"]').fill('30');
+    await page.screenshot({ path: path.join(artifacts, 'recording-settings.png'), animations: 'disabled' });
+    await page.locator('#save-recording').click();
+    await page.locator('#recording-dialog').waitFor({ state: 'hidden' });
+    assert.equal(JSON.parse(fs.readFileSync(path.join(temporary, 'recording.json'), 'utf8')).durationMinutes, 30);
     assert.equal(await page.locator('.motor-item').count(), 2);
     await page.locator('[data-tab="motors"]').click();
     const backupPath = path.join(temporary, 'backup.json');
@@ -142,8 +167,12 @@ const { _electron: electron } = require('playwright');
     // Exercise the complete renderer live/error/recovery lifecycle using an isolated IPC fixture.
     // The actual serial scheduler and decoder are tested with FakeClient in fleet-store.cjs.
     await app.evaluate(({ ipcMain }) => {
+      const recording = { settings: { startMode: 'manual', durationMinutes: 0, startAt: '' }, connected: true, active: false, waiting: false, count: 0 };
+      ipcMain.removeHandler('recording:start'); ipcMain.removeHandler('recording:stop');
+      ipcMain.handle('recording:start', () => ({ ok: true, recording: { ...recording, active: true, startedAt: new Date().toISOString() } }));
+      ipcMain.handle('recording:stop', () => ({ ok: true, recording }));
       ipcMain.removeHandler('sensor:connect');
-      ipcMain.handle('sensor:connect', (_event, configs) => ({ ok: true, configs, readings: configs.map(config => ({
+      ipcMain.handle('sensor:connect', (_event, configs) => ({ ok: true, configs, recording, readings: configs.map(config => ({
         motorId: config.motorId, value: 3.4, primaryAxis: 'Z', unit: 'mm/s', port: config.path, slaveId: config.slaveId,
         timestamp: new Date().toISOString(), elapsedMs: 24, recorded: true,
         channels: { temperature: 35, velocityX: 1.2, velocityY: 2.3, velocityZ: 3.4, displacementX: 4000, displacementY: 20, displacementZ: 30, accelerationX: -1, accelerationY: 1.2, accelerationZ: 1.3 },
@@ -153,6 +182,11 @@ const { _electron: electron } = require('playwright');
     await page.locator('#connect-all').click();
     await page.locator('#mode-indicator').filter({ hasText: 'ACQUIRING' }).waitFor();
     assert.equal(await page.locator('#fleet-online').textContent(), '2');
+    await page.locator('#record-start').click();
+    await page.locator('#recording-status').filter({ hasText: 'กำลังบันทึก' }).waitFor();
+    await page.locator('#record-stop').click();
+    await page.locator('#recording-status').filter({ hasText: 'ยังไม่บันทึก' }).waitFor();
+    assert((await page.locator('#mode-indicator').textContent()).includes('ACQUIRING'), 'stopping recording leaves acquisition running');
     await page.locator('[data-tab="monitor"]').click();
     assert.equal(await page.locator('#reading-value').textContent(), '3.40');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('sensor:status', { state: 'read-error', motorId: 'MTR-01', message: 'Test timeout' }));

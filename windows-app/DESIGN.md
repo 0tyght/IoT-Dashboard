@@ -14,3 +14,5 @@ The operator scans many motors, identifies a communication problem, opens a moto
 - Forms retain standard selects, explicit units, separate serial/acquisition groups, editable nameplates and native save dialogs. Destructive operations and changes during acquisition retain confirmation.
 
 Evaluate empty, acquiring, simulation, stopped, paused, communication failure, stale data, storage failure and maintenance states. A clean detector scan does not replace rendered inspection or hardware commissioning.
+
+Version 0.8: show all nine vibration channels with separate units and temperature. Show an explicit full receive timestamp, requested poll period and actual receive period. The recording strip stays visible and separates reading from saving; it labels manual/automatic/scheduled behavior and saved row count. Graph controls select time/count windows and explain live retention. History accepts multi-day/timestamp ranges and labels reduced display points. Never label the 10–5000 Hz vibration bandwidth as the data update rate.

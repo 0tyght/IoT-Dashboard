@@ -36,6 +36,7 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
   failSlave = 2;
   await new Promise(resolve => setTimeout(resolve, 350));
   assert(readings.some(reading => reading.motorId === 'MTR-01'));
+  assert(readings.some(reading => reading.pollIntervalMs === 250 && reading.actualIntervalMs >= 240), 'measure actual receive period separately from configured request period');
   assert(statuses.some(status => status.motorId === 'MTR-02' && status.state === 'read-error'));
   assert.equal(maxConcurrent, 1, 'shared serial bus must never issue concurrent reads');
   await service.disconnect(); const stoppedCount = readings.length;

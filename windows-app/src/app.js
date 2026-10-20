@@ -4,16 +4,18 @@ const $ = id => document.getElementById(id);
 const form = $('sensor-form');
 const MODEL = 'vemsee-sn3001-wz3a-n01';
 let profiles = [], ports = [], selected = '', editing = null, mode = 'offline', busy = false, frozen = false;
-let demoTimer, chartFrames = [], chartIndex = -1, historyGeneration = 0;
+let demoTimer, chartFrames = [], historyGeneration = 0;
 let successful = 0, failures = 0, logs = [], dataError = false;
 let editorBaseline = '';
 let currentTab = 'fleet';
+let detailPlot;
 const cache = new Map();
 const digits = (value, precision = 1) => Number.isFinite(value) ? value.toFixed(precision) : '—';
 const currentProfile = () => profiles.find(profile => profile.motorId === selected);
 const stateFor = id => { if (!cache.has(id)) cache.set(id, { frames: [], errors: 0, samples: 0, status: 'offline', message: '' }); return cache.get(id); };
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-const time = value => value ? new Date(value).toLocaleTimeString('th-TH', { hour12: false }) : '—';
+const time = value => value ? new Date(value).toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false }) : '—';
+const timestamp = value => value ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false }).format(new Date(value)).replace(',', '.') + ' +07:00' : '—';
 function node(tag, text, className) { const element = document.createElement(tag); if (text != null) element.textContent = text; if (className) element.className = className; return element; }
 function emptyRow(body, columns, message) { body.replaceChildren(); const row = node('tr'), cell = node('td', message, 'empty-cell'); cell.colSpan = columns; row.append(cell); body.append(row); }
 function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { $('toast').hidden = true; }, 4500); }
@@ -47,9 +49,11 @@ function updateControls() {
   $('mode-indicator').className = `mode-indicator ${mode === 'live' ? 'live' : mode === 'demo' ? 'demo-mode' : ''}`;
   $('mode-indicator').textContent = mode === 'live' ? 'ACQUIRING' : mode === 'demo' ? 'SIMULATION' : 'OFFLINE';
   $('connect-all').setAttribute('aria-busy', String(busy));
+  renderRecording();
 }
 function setTab(tab) {
   currentTab = tab;
+  $('graph-tools').hidden = !['fleet', 'monitor'].includes(tab);
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
   document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
   document.querySelector('main').scrollTop = 0;
@@ -106,7 +110,7 @@ function renderSelected() {
   $('metric-type').textContent = threeAxis ? 'VELOCITY' : 'VALUE';
   $('chart-kind').disabled = !threeAxis;
   [...$('chart-legend').children].slice(0, 3).forEach(element => { element.hidden = !threeAxis; });
-  $('chart-description').textContent = threeAxis ? '120 ค่าล่าสุด · เลื่อนเมาส์เพื่ออ่านค่า' : `Custom register · ${profile?.unit || '—'} · เลื่อนเมาส์เพื่ออ่านค่า`;
+  $('chart-description').textContent = `${$('fleet-window').selectedOptions[0].textContent} · timestamp คือเวลาคอมพิวเตอร์รับข้อมูล (UTC+07:00)`;
   $('selected-title').textContent = profile ? profile.name || profile.motorId : 'สถานีตรวจวัดมอเตอร์';
   $('selected-area').textContent = profile?.area || 'LOCAL WORKSPACE';
   $('selected-subtitle').textContent = profile ? `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee SN-3001-WZ3A-N01' : 'Custom Modbus sensor'} · ${profile.path} / Slave ${profile.slaveId}` : 'ตั้งค่าเซ็นเซอร์เพื่อเริ่มเก็บข้อมูลในเครื่องนี้';
@@ -121,17 +125,17 @@ function renderSelected() {
     $('connection-detail').textContent = mode === 'demo' ? 'ค่าจำลอง · ไม่เขียนไฟล์' : `${profile.baudRate} baud · Slave ${profile.slaveId} · ${profile.parity.toUpperCase()}`;
     $('nameplate-display').textContent = profile.nameplate || 'ยังไม่มีข้อมูลฉลากเครื่อง · เพิ่มได้ในหน้าตั้งค่ามอเตอร์';
   }
-  if (!frozen) {
+  {
     $('reading-value').textContent = digits(last?.value, 2);
     $('reading-unit').textContent = last?.unit || profile?.unit || 'mm/s';
     $('primary-axis').textContent = last?.primaryAxis ? `MAX · AXIS ${last.primaryAxis}` : 'CUSTOM';
     $('temperature').textContent = digits(last?.channels?.temperature);
-    $('reading-time').textContent = last ? `รับล่าสุด ${time(last.timestamp)}` : 'รอการตอบกลับ';
+    $('reading-time').textContent = last ? `รับล่าสุด ${timestamp(last.timestamp)}` : 'รอการตอบกลับ';
     $('sample-count').textContent = state?.samples || 0;
-    $('last-response').textContent = last ? `Response ${last.elapsedMs ?? 0} ms` : 'รอการตอบกลับ';
-    $('record-state').textContent = mode === 'demo' ? 'ข้อมูลจำลอง · ไม่บันทึก' : last?.recorded === false ? 'บันทึกไม่สำเร็จ ตรวจพื้นที่ดิสก์' : last ? 'บันทึกลงไฟล์รายวันแล้ว' : 'ยังไม่มีข้อมูล';
+    $('last-response').textContent = last ? `ตั้ง ${profile.pollInterval} ms · รับจริง ${last.actualIntervalMs ?? state.actualIntervalMs ?? '—'} ms · ตอบ ${last.elapsedMs ?? 0} ms` : 'รอการตอบกลับ';
+    $('record-state').textContent = storageLabel(last);
     renderChannels(last); renderRegisters(last, profile);
-    chartFrames = [...(state?.frames || [])]; drawChart();
+    if (!frozen) { chartFrames = graphWindow(state?.frames || [], $('trend-chart').clientWidth); drawChart(); }
   }
   refreshSelectionState();
   if (currentTab === 'fleet') {
@@ -183,47 +187,25 @@ function chartSeries() {
   return chartFrames.some(frame => frame.channels) ? ['X', 'Y', 'Z'].map((axis, index) => ({ key: `${kind}${axis}`, color: FLEET_COLORS[index], label: axis })) : [{ key: 'value', color: FLEET_COLORS[0], label: 'Value' }];
 }
 function drawChart() {
-  const svg = $('trend-chart'); svg.replaceChildren(); $('chart-tooltip').hidden = true;
-  const series = chartSeries(), values = series.flatMap(item => chartFrames.map(frame => item.key === 'value' ? frame.value : frame.channels?.[item.key]).filter(Number.isFinite));
-  const floor = Math.min(0, ...values), ceiling = Math.max(1, ...values), span = ceiling - floor;
-  const lower = floor < 0 ? floor - span * .1 : 0, upper = ceiling + span * .15;
-  const y = value => 22 + (upper - value) / (upper - lower) * 222;
-  const x = index => 56 + index / Math.max(chartFrames.length - 1, 1) * 822;
-  for (let index = 0; index <= 4; index++) {
-    const value = upper - index / 4 * (upper - lower), yy = 22 + index * 222 / 4;
-    svg.append(svgNode('line', { x1: 56, y1: yy, x2: 878, y2: yy, stroke: '#343c48', 'stroke-dasharray': index === 4 ? '' : '3 4' }), svgNode('text', { x: 44, y: yy + 4, 'text-anchor': 'end', fill: '#a0aec0', 'font-size': 10 }, digits(value)));
-  }
-  for (const item of series) {
-    const points = chartFrames.map((frame, index) => {
-      const value = item.key === 'value' ? frame.value : frame.channels?.[item.key];
-      return Number.isFinite(value) ? `${x(index)},${y(value)}` : null;
-    }).filter(Boolean);
-    if (!points.length) continue;
-    svg.append(svgNode('polyline', { points: points.join(' '), fill: 'none', stroke: item.color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
-    const [cx, cy] = points.at(-1).split(','); svg.append(svgNode('circle', { cx, cy, r: 3, fill: '#fff', stroke: item.color, 'stroke-width': 2 }));
-  }
-  if (!values.length) svg.append(svgNode('text', { x: 450, y: 140, 'text-anchor': 'middle', fill: '#9baabd', 'font-size': 13 }, 'รอข้อมูลจากเซ็นเซอร์'));
-  [0, Math.floor((chartFrames.length - 1) / 2), chartFrames.length - 1].filter((value, index, array) => value >= 0 && array.indexOf(value) === index).forEach(index => svg.append(svgNode('text', { x: x(index), y: 271, 'text-anchor': index === 0 ? 'start' : index === chartFrames.length - 1 ? 'end' : 'middle', fill: '#a0aec0', 'font-size': 10 }, time(chartFrames[index]?.timestamp))));
-  svg.append(svgNode('line', { id: 'crosshair', x1: 56, x2: 56, y1: 20, y2: 246, stroke: '#98aac1', 'stroke-dasharray': '3 3', visibility: 'hidden' }));
-  const maxima = chartFrames.map(frame => Math.max(...series.map(item => item.key === 'value' ? frame.value : frame.channels?.[item.key]).filter(Number.isFinite))).filter(Number.isFinite);
+  if (!detailPlot) return;
+  drawSensorPlot(detailPlot, chartFrames, $('chart-kind').value, currentProfile()?.unit);
+  const series = chartSeries(), maxima = chartFrames.map(frame => Math.max(...series.map(item => item.key === 'value' ? frame.value : frame.channels?.[item.key]).filter(Number.isFinite))).filter(Number.isFinite);
   $('minimum-value').textContent = maxima.length ? digits(Math.min(...maxima), 2) : '—';
   $('maximum-value').textContent = maxima.length ? digits(Math.max(...maxima), 2) : '—';
   $('average-value').textContent = maxima.length ? digits(maxima.reduce((sum, value) => sum + value, 0) / maxima.length, 2) : '—';
   $('chart-live').textContent = frozen ? 'PAUSED' : mode === 'demo' ? 'DEMO' : mode === 'live' ? 'LIVE' : 'STOPPED';
 }
-function showChartPoint(index) {
-  if (!chartFrames.length) return;
-  chartIndex = Math.max(0, Math.min(chartFrames.length - 1, index));
-  const frame = chartFrames[chartIndex], x = 56 + chartIndex / Math.max(chartFrames.length - 1, 1) * 822;
-  const line = $('crosshair'); if (line) { line.setAttribute('x1', x); line.setAttribute('x2', x); line.setAttribute('visibility', 'visible'); }
-  $('chart-tooltip').textContent = `${time(frame.timestamp)}\n${chartSeries().map(item => `${item.label}: ${digits(item.key === 'value' ? frame.value : frame.channels?.[item.key], 2)}`).join('   ')}`;
-  $('chart-tooltip').hidden = false;
-}
 function addReading(reading) {
   if (!Number.isFinite(reading.value)) return;
   const state = stateFor(reading.motorId);
   if (state.frames.some(frame => frame.timestamp === reading.timestamp)) return;
-  state.frames.push(reading); state.frames.sort((a, b) => a.timestamp.localeCompare(b.timestamp)); state.frames = state.frames.slice(-120);
+  const previous = state.frames.at(-1);
+  state.actualIntervalMs = previous ? Date.parse(reading.timestamp) - Date.parse(previous.timestamp) : null;
+  state.frames.push(reading);
+  if (previous && reading.timestamp < previous.timestamp) state.frames.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const limit = Math.min(20000, Math.floor(200000 / Math.max(1, profiles.length)));
+  if (state.frames.length > limit) { state.frames.splice(0, state.frames.length - limit); state.dropped = true; }
+  $('graph-buffer-note').textContent = `หน่วยความจำ ${limit.toLocaleString()} ค่าต่อมอเตอร์ · ช่วงเก่ากว่าโหลดจากประวัติ${state.dropped ? ' · ตัดค่าเก่าจากหน้าจอแล้ว' : ''}`;
   state.samples++; successful++;
   if (state.status === 'fault' || state.status === 'stale') addLog('info', reading.motorId, 'กลับมารับข้อมูลได้แล้ว');
   state.status = 'online'; state.message = '';
@@ -332,7 +314,8 @@ async function startLive() {
     const result = check(await api.connect(profiles));
     cache.clear(); successful = 0; failures = 0; frozen = false; mode = 'live';
     if (!result.configs.some(profile => profile.motorId === selected)) selected = result.configs[0].motorId;
-    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', `เริ่มบันทึก ${result.configs.length} มอเตอร์`);
+    if (result.recording) renderRecording(result.recording);
+    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', `เริ่มอ่าน ${result.configs.length} มอเตอร์ · การบันทึกใช้เงื่อนไขที่ตั้งแยกไว้`);
   } catch (error) { message(`${error.message} · ยังไม่ได้เริ่มเก็บข้อมูล ตรวจการตั้งค่าแต่ละมอเตอร์แล้วลองใหม่`); addLog('error', '', error.message); }
   finally { setBusy(false); }
 }
@@ -340,7 +323,7 @@ async function stop() {
   if (busy) return;
   setBusy(true);
   try {
-    if (mode === 'live') check(await api.disconnect());
+    if (mode === 'live') { const result = check(await api.disconnect()); if (result.recording) renderRecording(result.recording); }
     clearInterval(demoTimer); mode = 'offline'; frozen = false; controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
     cache.forEach(state => { state.status = 'offline'; }); renderSelected(); addLog('info', '', 'หยุดการอ่านแล้ว');
   } finally { setBusy(false); }
@@ -370,7 +353,7 @@ async function stopAndRestore() {
   const wasDemo = mode === 'demo'; await stop();
   if (wasDemo && beforeDemo) { profiles = beforeDemo; beforeDemo = null; selected = profiles[0]?.motorId || ''; cache.clear(); renderProfiles(); renderSelected(); }
 }
-function historyFilter() { return { date: $('history-date').value, motorId: $('history-motor').value }; }
+function historyFilter() { return { date: $('history-date').value, endDate: $('history-end-date').value || $('history-date').value, motorId: $('history-motor').value }; }
 async function loadHistory() {
   const generation = ++historyGeneration; $('load-history').disabled = true;
   try {
@@ -379,9 +362,9 @@ async function loadHistory() {
     $('history-summary').textContent = `${result.total.toLocaleString()} รายการ · แสดงล่าสุด ${result.rows.length} รายการ${result.skipped ? ` · ข้ามบรรทัดเสียหาย ${result.skipped}` : ''}`;
     for (const frame of result.rows.reverse()) {
       const row = node('tr');
-      row.append(node('td', time(frame.timestamp), 'mono'), node('td', frame.motorId), ...['velocityX', 'velocityY', 'velocityZ', 'temperature'].map(key => node('td', digits(frame.channels?.[key]), 'mono')), node('td', `${digits(frame.value, 2)} ${frame.unit}`, 'mono'), node('td', `${frame.port} / ${frame.slaveId}`)); body.append(row);
+      row.append(node('td', timestamp(frame.timestamp), 'mono'), node('td', frame.motorId), ...[...Measurements.keys, 'temperature'].map(key => node('td', digits(frame.channels?.[key]), 'mono')), node('td', `${digits(frame.value, 2)} ${frame.unit}`, 'mono'), node('td', `${frame.port} / ${frame.slaveId}`)); body.append(row);
     }
-    if (!result.rows.length) emptyRow(body, 8, 'ไม่มีข้อมูลที่บันทึกในวันที่และมอเตอร์ที่เลือก');
+    if (!result.rows.length) emptyRow(body, 14, 'ไม่มีข้อมูลที่บันทึกในวันที่และมอเตอร์ที่เลือก');
   } catch (error) { if (generation === historyGeneration) { $('history-summary').textContent = error.message; toast(error.message); } }
   finally { if (generation === historyGeneration) $('load-history').disabled = false; }
 }
@@ -399,7 +382,7 @@ document.querySelectorAll('[data-tab]').forEach((button, index, tabs) => {
 });
 $('new-motor').onclick = $('add-motor-table').onclick = () => openEditor();
 $('fleet-add').onclick = $('fleet-empty-add').onclick = () => openEditor();
-$('fleet-window').onchange = refreshFleet;
+$('fleet-window').onchange = updateGraphWindow;
 $('fleet-filter').onchange = refreshFleet;
 $('fleet-reset-filters').onclick = () => { $('motor-search').value = ''; $('fleet-filter').value = 'all'; renderMotorList(); };
 $('edit-motor').onclick = () => openEditor(currentProfile());
@@ -418,9 +401,9 @@ $('disconnect').onclick = () => action(stopAndRestore);
 $('demo-mode').onclick = startDemo;
 $('pause-stream').onclick = () => { frozen = !frozen; controlLabel($('pause-stream'), frozen ? 'แสดงกราฟต่อ' : 'พักกราฟ', frozen ? 'play' : 'pause'); $('pause-stream').setAttribute('aria-pressed', String(frozen)); if (!frozen) renderSelected(); else $('chart-live').textContent = 'PAUSED'; toast(frozen ? 'พักหน้าจอแล้ว การอ่านและบันทึกข้อมูลจริงยังทำงาน' : 'กลับมาแสดงข้อมูลล่าสุด'); };
 $('chart-kind').onchange = drawChart;
-$('trend-chart').onpointermove = event => { const bounds = event.currentTarget.getBoundingClientRect(); showChartPoint(Math.round(((event.clientX - bounds.left) / bounds.width * 900 - 56) / 822 * (chartFrames.length - 1))); };
-$('trend-chart').onpointerleave = () => { $('chart-tooltip').hidden = true; $('crosshair')?.setAttribute('visibility', 'hidden'); };
-$('trend-chart').onkeydown = event => { if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); showChartPoint(chartIndex + (event.key === 'ArrowRight' ? 1 : -1)); } };
+
+
+
 $('load-history').onclick = loadHistory;
 $('export-csv').onclick = () => action(async () => { $('export-csv').disabled = true; try { const result = check(await api.exportData(historyFilter())); if (!result.canceled) toast(`ส่งออก ${result.total} รายการแล้ว`); } finally { $('export-csv').disabled = false; } });
 $('open-data').onclick = () => action(async () => check(await api.openDataPath()));
@@ -453,11 +436,17 @@ setInterval(() => {
   }
 }, 1000);
 setupControls();
+setupAcquisitionUI();
+detailPlot = { svg: $('trend-chart'), tooltip: $('chart-tooltip'), frames: [], hoverIndex: 0 };
+bindPlot(detailPlot);
+new ResizeObserver(() => { if ($('trend-chart').clientWidth) drawChart(); }).observe($('trend-chart'));
 controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
 (async () => {
-  $('history-date').value = today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 8, 'เลือกวันที่แล้วโหลดข้อมูล');
+  $('history-date').value = today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 14, 'เลือกวันที่แล้วโหลดข้อมูล');
   try {
     const initial = check(await api.initialize()); profiles = initial.profiles; selected = profiles[0]?.motorId || '';
+    if (initial.recording) renderRecording(initial.recording);
+    $('record-path').textContent = `โฟลเดอร์: ${initial.dataPath}`;
     $('app-version').textContent = `v${initial.version}`; $('data-path').textContent = `ข้อมูลในเครื่อง: ${initial.dataPath}`;
     addLog('info', '', 'เปิดโปรแกรมพร้อมใช้งาน');
   } catch (error) { dataError = true; message(error.message); }

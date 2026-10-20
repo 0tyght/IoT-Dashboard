@@ -6,9 +6,10 @@ const { once } = require('node:events');
 const { SerialPort } = require('serialport');
 const { FleetService } = require('./fleet-service.cjs');
 const { DataStore, CSV_KEYS, csvRow } = require('./data-store.cjs');
+const { RecordingService } = require('./recording-service.cjs');
 
 if (process.env.VECTRA_TEST_DATA) app.setPath('userData', process.env.VECTRA_TEST_DATA);
-let mainWindow, fleet, store, busy = false, quitting = false;
+let mainWindow, fleet, store, recording, recordingTimer, busy = false, quitting = false;
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => { if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
 const send = (channel, payload) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload); };
@@ -18,17 +19,15 @@ async function exclusive(action) {
   try { return await action(); } finally { busy = false; }
 }
 async function record(reading) {
-  try { await store.append(reading); send('sensor:reading', { ...reading, recorded: true }); }
-  catch (error) {
-    send('sensor:reading', { ...reading, recorded: false });
-    send('sensor:status', { state: 'storage-error', motorId: reading.motorId, message: error.message });
-  }
+  return recording.accept(reading, store);
 }
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'dark';
   store = new DataStore(app.getPath('userData'));
-  fleet = new FleetService({ onReading: record, onStatus: status => send('sensor:status', status) });
+  recording = new RecordingService({ onChange: state => send('recording:state', state), onError: (motorId, message) => send('sensor:status', { state: 'storage-error', motorId, message }) });
+  recordingTimer = setInterval(() => recording.tick(), 250);
+  fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)), onStatus: status => send('sensor:status', status) });
   mainWindow = new BrowserWindow({
     width: 1440, height: 940, minWidth: 960, minHeight: 680, backgroundColor: '#101215', show: false, autoHideMenuBar: true,
     icon: path.join(__dirname, '..', 'assets', 'app.ico'),
@@ -45,7 +44,13 @@ app.whenReady().then(() => {
       try { return await action(...args); } catch (error) { return { ok: false, message: error.message }; }
     });
   }
-  handle('app:initialize', () => ({ ok: true, profiles: store.loadProfiles(), dataPath: store.dataPath(), version: app.getVersion() }));
+  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('recording:configure', raw => {
+    if (fleet.buses.length || busy) throw new Error('หยุดอ่านก่อนเปลี่ยนการบันทึก');
+    const settings = store.saveRecording(raw); return { ok: true, recording: recording.configure(settings) };
+  });
+  handle('recording:start', () => { if (busy) throw new Error('รอการเชื่อมต่อให้เสร็จก่อน'); return { ok: true, recording: recording.start() }; });
+  handle('recording:stop', () => exclusive(async () => { recording.stop(); await store.queue; return { ok: true, recording: recording.snapshot() }; }));
   handle('sensor:list-ports', async () => ({ ok: true, ports: (await SerialPort.list()).map(port => ({ path: port.path, manufacturer: port.manufacturer || '', vendorId: port.vendorId || '', productId: port.productId || '' })) }));
   handle('profiles:save', raw => {
     if (fleet.buses.length || busy) throw new Error('หยุดการอ่านก่อนแก้ไขมอเตอร์');
@@ -54,11 +59,12 @@ app.whenReady().then(() => {
   handle('sensor:test', config => exclusive(() => fleet.test(config)));
   handle('sensor:connect', raw => exclusive(async () => {
     const result = await fleet.connect(raw);
-    await Promise.all(result.readings.map(reading => store.append(reading)));
-    return { ...result, readings: result.readings.map(reading => ({ ...reading, recorded: true })) };
-  }).catch(async error => { await fleet.disconnect(); throw error; }));
-  handle('sensor:disconnect', () => exclusive(async () => { await fleet.disconnect(); await store.queue; return { ok: true }; }));
+    recording.connect();
+    return { ...result, readings: await Promise.all(result.readings.map(record)), recording: recording.snapshot() };
+  }).catch(async error => { recording.disconnect(); await fleet.disconnect(); throw error; }));
+  handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; return { ok: true, recording: recording.snapshot() }; }));
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
+  handle('data:chart-range', async filter => ({ ok: true, ...await store.chartRange(filter) }));
   handle('data:open-folder', async () => {
     await fs.promises.mkdir(store.dataPath(), { recursive: true });
     const error = await shell.openPath(store.dataPath());
@@ -102,6 +108,7 @@ app.whenReady().then(() => {
 app.on('before-quit', event => {
   if (quitting) return;
   event.preventDefault(); quitting = true;
+  clearInterval(recordingTimer); recording?.disconnect();
   Promise.resolve().then(() => fleet?.disconnect()).then(() => store?.queue).finally(() => app.quit());
 });
 app.on('window-all-closed', () => app.quit());

@@ -84,7 +84,7 @@ class FleetService {
     const initialReadings = [];
     try {
       for (const entries of groups.values()) {
-        const bus = { configs: entries, client: null, timer: null, work: null, nextDue: new Map() };
+        const bus = { configs: entries, client: null, timer: null, work: null, nextDue: new Map(), lastReceived: new Map() };
         this.buses.push(bus);
         bus.client = await this.open(entries[0]);
         for (const config of entries) {
@@ -94,6 +94,7 @@ class FleetService {
           try { snapshot = await readSnapshot(bus.client, config); }
           catch (error) { throw new Error(`${config.motorId} (${config.path} / Slave ${config.slaveId}): ${error.message}`); }
           initialReadings.push(this.reading(config, snapshot, Date.now() - started));
+          bus.lastReceived.set(config.motorId, Date.now());
           bus.nextDue.set(config.motorId, Date.now() + config.pollInterval);
         }
       }
@@ -106,7 +107,7 @@ class FleetService {
   }
 
   reading(config, snapshot, elapsedMs) {
-    return { ...snapshot, schemaVersion: 1, sensorModel: config.sensorModel, motorId: config.motorId, timestamp: new Date().toISOString(), source: 'RS485 / Modbus RTU', port: config.path, slaveId: config.slaveId, elapsedMs };
+    return { ...snapshot, schemaVersion: 2, sensorModel: config.sensorModel, motorId: config.motorId, timestamp: new Date().toISOString(), timestampSource: 'computer-received', source: 'RS485 / Modbus RTU', port: config.path, slaveId: config.slaveId, elapsedMs, pollIntervalMs: config.pollInterval, actualIntervalMs: null };
   }
 
   schedule(bus, generation, delay) {
@@ -125,13 +126,17 @@ class FleetService {
         if (!bus.client?.isOpen) bus.client = await this.open(config);
         const snapshot = await readSnapshot(bus.client, config);
         if (generation !== this.generation) return;
-        this.onReading(this.reading(config, snapshot, Date.now() - started));
+        const received = Date.now(), reading = this.reading(config, snapshot, received - started);
+        reading.actualIntervalMs = bus.lastReceived.has(config.motorId) ? received - bus.lastReceived.get(config.motorId) : null;
+        bus.lastReceived.set(config.motorId, received);
+        this.onReading(reading);
         this.onStatus({ state: 'receiving', motorId: config.motorId, path: config.path });
       } catch (error) {
         if (generation !== this.generation) return;
         this.onStatus({ state: 'read-error', motorId: config.motorId, path: config.path, message: error.message });
       }
-      bus.nextDue.set(config.motorId, Date.now() + config.pollInterval);
+      // Start-to-start requested period; slow devices/shared buses may run longer.
+      bus.nextDue.set(config.motorId, Math.max(Date.now() + 20, started + config.pollInterval));
     }
     const delay = Math.max(20, Math.min(...bus.configs.map(config => (bus.nextDue.get(config.motorId) || 0) - Date.now())));
     this.schedule(bus, generation, delay);
