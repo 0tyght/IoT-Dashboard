@@ -43,5 +43,9 @@ assert.deepEqual(snapshot.channels, {
 assert.equal(snapshot.primaryAxis, 'Z');
 assert.equal(snapshot.value, 3.4);
 assert.throws(() => decodeVemseeSnapshot([1, 2], [1, 2, 3]), /0000H/);
+assert.equal(decodeVemseeSnapshot([300, 10, 20, 30, 50000, 0, 0], [0, 0, 0]).channels.displacementX, 5000);
+assert.throws(() => normalizeConfig({ path: 'COM3', dataType: 'toString' }), /ชนิดข้อมูล/);
+assert.throws(() => normalizeConfig({ path: 'COM3', dataType: 'float32', registerAddress: 65535 }), /ช่วง Register/);
+assert.throws(() => normalizeConfig({ path: 'COM3', stopBits: 3 }), /Stop bits/);
 
 console.log('PASS: sensor configuration validation and register decoding');

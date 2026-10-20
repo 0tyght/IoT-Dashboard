@@ -1,6 +1,7 @@
 node_modules/
 /release/
 /windows-app/release/
+/windows-app/assets/app.ico
 .artifacts/
 .DS_Store
 Thumbs.db

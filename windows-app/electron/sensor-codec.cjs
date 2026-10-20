@@ -19,7 +19,7 @@ function normalizeConfig(input = {}) {
   const serialPath = String(input.path || '').trim();
   if (!serialPath || serialPath.length > 128) throw new Error('กรุณาเลือก COM Port');
   const dataType = String(input.dataType || 'float32');
-  if (!(dataType in REGISTER_COUNTS)) throw new Error('ชนิดข้อมูลไม่รองรับ');
+  if (!Object.hasOwn(REGISTER_COUNTS, dataType)) throw new Error('ชนิดข้อมูลไม่รองรับ');
   const byteOrder = String(input.byteOrder || 'ABCD').toUpperCase();
   if (!ALLOWED_ORDERS.has(byteOrder)) throw new Error('Byte order ไม่รองรับ');
   const baudRate = Number(input.baudRate || 9600);
@@ -28,25 +28,34 @@ function normalizeConfig(input = {}) {
   if (!ALLOWED_PARITY.has(parity)) throw new Error('Parity ไม่รองรับ');
   const registerType = String(input.registerType || 'holding');
   if (!ALLOWED_FUNCTIONS.has(registerType)) throw new Error('Modbus function ไม่รองรับ');
-  const sensorModel = String(input.sensorModel || 'vemsee-sn3001-wz3a-n01');
+  const sensorModel = String(input.sensorModel || 'custom');
   if (!SENSOR_MODELS.has(sensorModel)) throw new Error('รุ่นเซ็นเซอร์ไม่รองรับ');
   const scale = numberInRange(input.scale ?? 1, 'Scale', -1000000, 1000000);
   if (scale === 0) throw new Error('Scale ต้องไม่เป็น 0');
+  const registerAddress = numberInRange(input.registerAddress ?? 0, 'Register address', 0, 65535, true);
+  if (registerAddress + registerCount(dataType) > 65536) throw new Error('ช่วง Register เกิน 65535');
+  const stopBits = numberInRange(input.stopBits ?? 1, 'Stop bits', 1, 2, true);
+  const motorId = String(input.motorId || 'MTR-01').trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,23}$/.test(motorId)) throw new Error('รหัสมอเตอร์ต้องเป็น A–Z, 0–9, _ หรือ - ไม่เกิน 24 ตัว');
   return {
     path: serialPath,
     baudRate,
     parity,
     dataBits: 8,
-    stopBits: Number(input.stopBits) === 2 ? 2 : 1,
+    stopBits,
     slaveId: numberInRange(input.slaveId ?? 1, 'Slave ID', 1, sensorModel === 'vemsee-sn3001-wz3a-n01' ? 254 : 247, true),
     sensorModel,
     registerType,
-    registerAddress: numberInRange(input.registerAddress ?? 0, 'Register address', 0, 65535, true),
+    registerAddress,
     dataType,
     byteOrder,
     scale,
     pollInterval: numberInRange(input.pollInterval ?? 2000, 'รอบอ่านข้อมูล', 250, 3600000, true),
-    motorId: String(input.motorId || 'MTR-01').trim().slice(0, 24) || 'MTR-01',
+    motorId,
+    enabled: input.enabled !== false,
+    name: String(input.name || '').trim().slice(0, 80),
+    area: String(input.area || '').trim().slice(0, 60),
+    nameplate: String(input.nameplate || '').trim().slice(0, 2000),
     unit: String(input.unit || 'mm/s RMS').trim().slice(0, 32) || 'mm/s RMS',
     timeout: numberInRange(input.timeout ?? 1500, 'Timeout', 200, 30000, true)
   };
@@ -63,12 +72,12 @@ function decodeVemseeSnapshot(primaryRegisters, accelerationRegisters) {
   const tenth = value => signed16(value) / 10;
   const channels = {
     temperature: tenth(primaryRegisters[0]),
-    velocityX: tenth(primaryRegisters[1]),
-    velocityY: tenth(primaryRegisters[2]),
-    velocityZ: tenth(primaryRegisters[3]),
-    displacementX: tenth(primaryRegisters[4]),
-    displacementY: tenth(primaryRegisters[5]),
-    displacementZ: tenth(primaryRegisters[6]),
+    velocityX: primaryRegisters[1] / 10,
+    velocityY: primaryRegisters[2] / 10,
+    velocityZ: primaryRegisters[3] / 10,
+    displacementX: primaryRegisters[4] / 10,
+    displacementY: primaryRegisters[5] / 10,
+    displacementZ: primaryRegisters[6] / 10,
     accelerationX: tenth(accelerationRegisters[0]),
     accelerationY: tenth(accelerationRegisters[1]),
     accelerationZ: tenth(accelerationRegisters[2])

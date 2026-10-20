@@ -1,16 +1,17 @@
 {
   "name": "vectra-sensor-monitor",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "VECTRA",
   "private": true,
   "description": "Windows desktop application for RS485 Modbus motor vibration monitoring",
   "main": "electron/main.cjs",
   "scripts": {
-    "start": "electron .",
-    "test": "node tests/sensor-codec.cjs && node tests/desktop-smoke.cjs",
-    "test:sensor": "node tests/sensor-codec.cjs",
+    "start": "node scripts/create-icon.cjs && electron .",
+    "test": "npm run test:unit && node tests/desktop-smoke.cjs",
+    "test:unit": "node tests/sensor-codec.cjs && node tests/fleet-store.cjs",
+    "test:sensor": "npm run test:unit",
     "test:desktop": "node tests/desktop-smoke.cjs",
-    "dist:win": "electron-builder --win nsis portable",
+    "dist:win": "node scripts/create-icon.cjs && electron-builder --win nsis portable",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -32,12 +33,14 @@
     "files": [
       "src/**",
       "electron/**",
+      "assets/app.ico",
       "package.json"
     ],
     "directories": {
       "output": "release"
     },
     "win": {
+      "icon": "assets/app.ico",
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }

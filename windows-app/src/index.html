@@ -1,120 +1,40 @@
 <!doctype html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:">
-  <title>VECTRA Sensor Monitor</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>VECTRA Sensor Monitor</title><link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="window-shell">
-    <header class="titlebar">
-      <div class="app-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-      <div><strong>VECTRA Sensor Monitor</strong><small>Motor vibration acquisition</small></div>
-      <div class="title-status" id="title-status"><i></i><span>ยังไม่เชื่อมต่อ</span></div>
-    </header>
-
-    <div class="app-layout">
-      <nav class="sidebar" aria-label="เมนูโปรแกรม">
-        <div class="sidebar-heading">เมนู</div>
-        <button class="nav-button active" data-page="setup" aria-pressed="true"><span class="nav-icon">⌁</span><span>การเชื่อมต่อ<small>ตรวจสอบ RS485</small></span></button>
-        <button class="nav-button" data-page="dashboard" aria-pressed="false" disabled><span class="nav-icon">▦</span><span>แดชบอร์ด<small>ค่าการสั่นล่าสุด</small></span></button>
-        <div class="sidebar-spacer"></div>
-        <div class="sidebar-info"><strong>LOCAL MODE</strong><span>ข้อมูลเก็บในเครื่องนี้</span></div>
-      </nav>
-
-      <main>
-        <section class="page setup-page active" id="setup-page" aria-labelledby="setup-title">
-          <div class="page-heading">
-            <div><p class="kicker">DEVICE SETUP</p><h1 id="setup-title">เชื่อมต่อเซ็นเซอร์</h1><p>เลือกอะแดปเตอร์ USB–RS485 แล้วทดสอบว่าเซ็นเซอร์ตอบกลับก่อนเข้าแดชบอร์ด</p></div>
-            <button class="secondary" id="refresh-ports">↻ สแกนอุปกรณ์อีกครั้ง</button>
-          </div>
-
-          <div class="info-bar"><span aria-hidden="true">ⓘ</span><p><strong>พบ COM Port ยังไม่เท่ากับพบเซ็นเซอร์</strong><br>Windows อาจเห็นเพียงอะแดปเตอร์ ต้องทดสอบ Modbus สำเร็จจึงจะเปิดข้อมูลจริงได้</p></div>
-
-          <div class="setup-grid">
-            <section class="card devices-card">
-              <div class="card-heading"><div><h2>อุปกรณ์ที่ Windows พบ</h2><p id="port-summary">กำลังตรวจสอบ...</p></div><span class="step">1</span></div>
-              <div id="port-list" class="port-list" aria-live="polite"></div>
-              <div class="path-box"><span>โฟลเดอร์เก็บข้อมูล</span><code id="data-path">กำลังโหลด...</code><button id="open-data" class="link-button">เปิดโฟลเดอร์</button></div>
-            </section>
-
-            <form class="card settings-card" id="sensor-form">
-              <div class="card-heading"><div><h2>ค่าการสื่อสารและ Register</h2><p>กรอกจากคู่มือของเซ็นเซอร์รุ่นที่เสียบอยู่</p></div><span class="step">2</span></div>
-              <div class="form-grid">
-                <label class="wide">รุ่นเซ็นเซอร์<select name="sensorModel" id="sensor-model"><option value="vemsee-sn3001-wz3a-n01">VemSee SN-3001-WZ3A-N01 — 3 แกน</option><option value="custom">กำหนด Register เอง</option></select></label>
-                <label class="wide">COM Port<select name="path" id="port-select" required><option value="">เลือกอุปกรณ์</option></select></label>
-                <label>รหัสมอเตอร์<input name="motorId" value="MTR-01" maxlength="24" required></label>
-                <label>หน่วย<input name="unit" value="mm/s RMS" maxlength="32" required></label>
-                <label>Baud rate<select name="baudRate"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>4800</option><option>2400</option><option>1200</option></select></label>
-                <label>Parity<select name="parity"><option value="none">None</option><option value="even">Even</option><option value="odd">Odd</option></select></label>
-                <label>Stop bits<select name="stopBits"><option value="1">1</option><option value="2">2</option></select></label>
-                <label>Slave ID<input name="slaveId" type="number" value="1" min="1" max="247" required></label>
-                <label>Modbus function<select name="registerType"><option value="holding">Holding register (03)</option><option value="input">Input register (04)</option></select></label>
-                <label>Register address<input name="registerAddress" type="number" value="0" min="0" max="65535" required></label>
-                <label>Data type<select name="dataType"><option value="float32">Float 32-bit</option><option value="uint16">Unsigned 16-bit</option><option value="int16">Signed 16-bit</option><option value="uint32">Unsigned 32-bit</option><option value="int32">Signed 32-bit</option></select></label>
-                <label>Byte / word order<select name="byteOrder"><option>ABCD</option><option>CDAB</option><option>BADC</option><option>DCBA</option></select></label>
-                <label>Scale<input name="scale" type="number" value="1" step="any" required></label>
-                <label>อ่านทุก (ms)<input name="pollInterval" type="number" value="2000" min="250" max="3600000" required></label>
-                <label>Timeout (ms)<input name="timeout" type="number" value="1500" min="200" max="30000" required></label>
-              </div>
-              <div class="preset-note" id="preset-note"><strong>Preset จากคู่มือ SN-3001-WZ3A-N01</strong><span>อ่านอุณหภูมิ 0000H, Velocity X/Y/Z 0001H–0003H, Displacement X/Y/Z 0004H–0006H และ Acceleration X/Y/Z 000AH–000CH โดยหารค่าที่อ่านได้ด้วย 10</span><small>คู่มือที่ให้มายังไม่ระบุค่าโรงงานของ Baud rate, Parity และ UID โปรดยืนยันค่าที่ตั้งอยู่กับผู้ขายหรืออุปกรณ์จริง</small></div>
-
-              <div class="test-result idle" id="test-result" role="status"><span class="result-icon">○</span><div><strong>ยังไม่ได้ทดสอบเซ็นเซอร์</strong><p>ปุ่มเข้าแดชบอร์ดจะพร้อมหลังได้รับค่าตอบกลับที่ถูกต้อง</p></div></div>
-              <div class="form-actions">
-                <button type="button" class="secondary" id="demo-mode">เปิดโหมดจำลอง</button>
-                <button type="button" class="secondary accent" id="test-sensor">ทดสอบเซ็นเซอร์</button>
-                <button type="submit" class="primary" id="connect-sensor" disabled>เชื่อมต่อและเข้าแดชบอร์ด</button>
-              </div>
-            </form>
-          </div>
-        </section>
-
-        <section class="page dashboard-page" id="dashboard-page" aria-labelledby="dashboard-title" hidden>
-          <div class="page-heading dashboard-heading">
-            <div><p class="kicker">LIVE MONITORING</p><h1 id="dashboard-title">ภาพรวมมอเตอร์ <span id="dashboard-motor">MTR-01</span></h1><p id="dashboard-source">รอข้อมูลจากเซ็นเซอร์</p></div>
-            <div class="command-bar"><button class="secondary" id="back-settings">⚙ ตั้งค่าเซ็นเซอร์</button><button class="secondary" id="pause-stream">หยุดชั่วคราว</button></div>
-          </div>
-
-          <div class="summary-grid">
-            <article class="summary-card primary-reading"><span id="primary-reading-label">ค่าการสั่นล่าสุด</span><div><strong id="reading-value">—</strong><small id="reading-unit">mm/s</small></div><p id="reading-time">ยังไม่ได้รับข้อมูล</p></article>
-            <article class="summary-card"><span>สถานะข้อมูล</span><strong class="status-text" id="reading-status">กำลังรอ</strong><p id="status-note">ระบบยังไม่ได้รับค่ารอบแรก</p></article>
-            <article class="summary-card"><span>การเชื่อมต่อ</span><strong id="connection-name">—</strong><p id="connection-detail">—</p></article>
-            <article class="summary-card"><span>จำนวนข้อมูลรอบนี้</span><strong id="sample-count">0</strong><p>บันทึกลงไฟล์รายวันอัตโนมัติ</p></article>
-          </div>
-
-          <section class="channel-grid" id="channel-grid" hidden aria-label="ค่าจากเซ็นเซอร์สามแกน">
-            <article><span>Velocity X</span><strong id="velocity-x">—</strong><small>mm/s</small></article>
-            <article><span>Velocity Y</span><strong id="velocity-y">—</strong><small>mm/s</small></article>
-            <article><span>Velocity Z</span><strong id="velocity-z">—</strong><small>mm/s</small></article>
-            <article class="temperature-channel"><span>Temperature</span><strong id="temperature">—</strong><small>°C</small></article>
-          </section>
-
-          <div class="dashboard-grid">
-            <section class="card chart-card">
-              <div class="card-heading"><div><h2>แนวโน้มค่าการสั่น</h2><p>60 ค่าล่าสุดในรอบการใช้งานนี้</p><div class="axis-legend" id="axis-legend" hidden><span><i class="axis-x"></i>X</span><span><i class="axis-y"></i>Y</span><span><i class="axis-z"></i>Z</span></div></div><span class="live-chip"><i></i><b id="live-label">LIVE</b></span></div>
-              <svg id="trend-chart" viewBox="0 0 800 310" role="img" aria-label="กราฟแนวโน้มค่าการสั่น"></svg>
-              <div class="chart-scale"><span>ต่ำสุด <b id="minimum-value">—</b></span><span>เฉลี่ย <b id="average-value">—</b></span><span>สูงสุด <b id="maximum-value">—</b></span></div>
-            </section>
-            <aside class="card session-card">
-              <div class="card-heading"><div><h2>รายละเอียดรอบปัจจุบัน</h2><p>ใช้ตรวจสอบแหล่งที่มาของค่า</p></div></div>
-              <dl>
-                <div><dt>โหมด</dt><dd id="session-mode">—</dd></div>
-                <div><dt>มอเตอร์</dt><dd id="session-motor">—</dd></div>
-                <div><dt>พอร์ต</dt><dd id="session-port">—</dd></div>
-                <div><dt>Slave ID</dt><dd id="session-slave">—</dd></div>
-                <div><dt>Register</dt><dd id="session-register">—</dd></div>
-                <div><dt>ตำแหน่งข้อมูล</dt><dd><button id="open-data-dashboard" class="link-button">เปิดโฟลเดอร์</button></dd></div>
-              </dl>
-              <div class="warning-box"><strong>เกณฑ์สถานะยังไม่ถูกนำมาใช้</strong><p>โปรแกรมนี้แสดงค่าที่อ่านได้โดยไม่ตัดสินสภาพเครื่อง จนกว่าจะยืนยันรุ่นเซ็นเซอร์ จุดวัด และเกณฑ์ของมอเตอร์จริง</p></div>
-            </aside>
-          </div>
-        </section>
-      </main>
-    </div>
+<div class="shell">
+  <header class="appbar"><div class="brand-mark" aria-hidden="true">V</div><strong>VECTRA <span>Sensor Monitor</span></strong><span class="app-version" id="app-version"></span><div class="appbar-end"><span class="mode-indicator" id="mode-indicator">● OFFLINE</span><button id="help-button" class="subtle">? คู่มือ</button></div></header>
+  <div class="commandbar"><div class="command-group"><button id="connect-all" class="primary"><span>▶</span> เริ่มอ่านข้อมูล</button><button id="disconnect" disabled><span>■</span> หยุด</button><span class="separator"></span><button id="new-motor"><span>＋</span> เพิ่มมอเตอร์</button><button id="edit-motor"><span>⚙</span> ตั้งค่าการเชื่อมต่อ</button></div><div class="command-group"><button id="open-data"><span>▱</span> โฟลเดอร์ข้อมูล</button><button id="demo-mode" class="subtle">ทดลองหน้าจอ</button></div></div>
+  <div class="workspace">
+    <aside class="sidebar"><div class="side-heading"><div><span class="eyebrow">WORKSPACE</span><h2>มอเตอร์ของฉัน</h2></div><span class="count" id="motor-count">0</span></div><label class="search"><span>⌕</span><input id="motor-search" type="search" placeholder="ค้นหารหัส / ชื่อ / พื้นที่" aria-label="ค้นหามอเตอร์"></label><div id="motor-list" class="motor-list"></div><div class="sidebar-bottom"><div class="legend"><i class="dot online"></i>รับข้อมูล <i class="dot fault"></i>ขัดข้อง <i class="dot offline"></i>ออฟไลน์</div><p>RS485 / Modbus RTU<br><span>อ่านตามลำดับบนบัสเดียวกัน</span></p></div></aside>
+    <main>
+      <div class="document-heading"><div><div class="breadcrumb">อุปกรณ์ / <span id="selected-area">LOCAL WORKSPACE</span></div><h1 id="selected-title">สถานีตรวจวัดมอเตอร์</h1><p id="selected-subtitle">ตั้งค่าเซ็นเซอร์เพื่อเริ่มเก็บข้อมูลในเครื่องนี้</p></div><div class="selection-state" id="selection-state">ยังไม่ได้เริ่มอ่าน</div></div>
+      <nav class="tabs" aria-label="มุมมอง"><button class="active" data-tab="monitor" aria-selected="true">ภาพรวม</button><button data-tab="registers" aria-selected="false">ตาราง Register</button><button data-tab="history" aria-selected="false">ประวัติข้อมูล</button><button data-tab="motors" aria-selected="false">จัดการมอเตอร์</button><button data-tab="events" aria-selected="false">บันทึกเหตุการณ์ <span id="event-count">0</span></button></nav>
+      <div id="global-message" class="message error" role="alert" hidden></div>
+      <section id="monitor-view" class="view">
+        <div id="welcome" class="welcome"><div class="welcome-art" aria-hidden="true"><span>⌁</span><i></i><i></i><i></i></div><p class="eyebrow">READY WHEN YOU ARE</p><h2>จากเซ็นเซอร์ สู่ข้อมูลที่อ่านง่าย</h2><p>เพิ่มมอเตอร์ เลือก COM Port และ Slave ID<br>โปรแกรมจะทดสอบการตอบกลับก่อนเริ่มบันทึกค่าจริง</p><button id="welcome-setup" class="primary">＋ ตั้งค่ามอเตอร์ตัวแรก</button><div class="welcome-steps"><span><b>01</b> เลือกอุปกรณ์</span><span><b>02</b> ทดสอบ Modbus</span><span><b>03</b> ติดตามและบันทึก</span></div></div>
+        <div id="monitor-content" hidden>
+          <div id="demo-banner" class="message demo" hidden>โหมดทดลองหน้าจอ · ข้อมูลจำลองไม่ถูกบันทึกเป็นประวัติจริง</div>
+          <div class="metric-grid"><article class="metric primary-metric"><div class="metric-label"><b id="metric-type">VELOCITY</b> <span id="primary-axis">MAX AXIS</span></div><div class="metric-number"><strong id="reading-value">—</strong><span id="reading-unit">mm/s</span></div><div class="metric-foot" id="reading-time">ยังไม่ได้รับข้อมูล</div></article><article class="metric"><div class="metric-label">TEMPERATURE</div><div class="metric-number"><strong id="temperature">—</strong><span>°C</span></div><div class="metric-foot">อุณหภูมิที่เซ็นเซอร์</div></article><article class="metric connection-metric"><div class="metric-label">CONNECTION</div><strong id="connection-name">—</strong><p id="connection-detail">—</p><div class="metric-foot" id="last-response">รอการตอบกลับ</div></article><article class="metric"><div class="metric-label">ACQUISITION</div><div class="metric-number"><strong id="sample-count">0</strong><span>samples</span></div><div class="metric-foot" id="record-state">รอข้อมูล</div></article></div>
+          <div class="monitor-grid"><section class="panel trend-panel"><div class="panel-heading"><div><h2>แนวโน้มการสั่นสะเทือน</h2><p id="chart-description">120 ค่าล่าสุด · เลื่อนเมาส์เพื่ออ่านค่า</p></div><div class="inline-controls"><select id="chart-kind" aria-label="ชนิดกราฟ"><option value="velocity">Velocity · mm/s</option><option value="displacement">Displacement · µm</option><option value="acceleration">Acceleration · m/s²</option></select><button id="pause-stream" title="หยุดเฉพาะหน้าจอ การบันทึกยังทำงาน">Ⅱ พักกราฟ</button></div></div><div class="chart-legend" id="chart-legend"><span><i class="x"></i>แกน X</span><span><i class="y"></i>แกน Y</span><span><i class="z"></i>แกน Z</span><span class="chart-live" id="chart-live">● LIVE</span></div><div class="chart-wrap"><svg id="trend-chart" viewBox="0 0 900 290" tabindex="0" role="img" aria-label="กราฟข้อมูล 120 ค่าล่าสุด ใช้ลูกศรซ้ายขวาเพื่ออ่านค่า"></svg><div id="chart-tooltip" class="chart-tooltip" role="status" hidden></div></div><div class="chart-stats"><span>ต่ำสุด <b id="minimum-value">—</b></span><span>เฉลี่ย <b id="average-value">—</b></span><span>สูงสุด <b id="maximum-value">—</b></span><small>สถิติของค่าสูงสุดแต่ละรอบในช่วงกราฟ</small></div></section>
+          <section class="panel channels-panel"><div class="panel-heading"><div><h2>ค่าทั้ง 3 แกน</h2><p>ค่าตามตำแหน่งแกนบนเซ็นเซอร์</p></div></div><table class="channel-table"><thead><tr><th>การวัด</th><th class="axis-x">X</th><th class="axis-y">Y</th><th class="axis-z">Z</th></tr></thead><tbody id="channel-body"></tbody></table><div class="context-note"><span>ⓘ</span><p>สีของกราฟใช้แยกแกนวัด การประเมินสภาพเครื่องต้องกำหนดเกณฑ์ที่เหมาะกับจุดวัดและชนิดเครื่องก่อน</p></div><div class="asset-note"><span class="eyebrow">MOTOR NAMEPLATE</span><p id="nameplate-display">ยังไม่มีข้อมูลฉลากเครื่อง</p></div></section></div>
+        </div>
+      </section>
+      <section id="registers-view" class="view" hidden><div class="section-toolbar"><div><h2>Register monitor</h2><p>ค่าดิบและค่าหลังแปลงจากมอเตอร์ที่เลือก</p></div><span class="tag">READ ONLY · FC03 / FC04</span></div><div class="table-scroll panel"><table class="data-table"><thead><tr><th>Address (Hex)</th><th>PLC</th><th>รายการ</th><th>Raw decimal</th><th>Raw hex</th><th>ค่าที่แปลง</th><th>หน่วย</th></tr></thead><tbody id="register-body"></tbody></table></div><p class="footnote">Address ในการสื่อสารเริ่มจาก 0 · PLC 40001 ตรงกับ 0000H · ตารางนี้ไม่เขียนค่าการตั้งค่าหรือสอบเทียบลงเซ็นเซอร์</p></section>
+      <section id="history-view" class="view" hidden><div class="section-toolbar"><div><h2>ประวัติที่บันทึกในเครื่อง</h2><p id="history-summary">เลือกวันที่ แล้วกดโหลดข้อมูล</p></div><div class="inline-controls"><input type="date" id="history-date" aria-label="วันที่ข้อมูล"><select id="history-motor" aria-label="กรองมอเตอร์"><option value="">ทุกมอเตอร์</option></select><button id="load-history">↻ โหลดข้อมูล</button><button id="export-csv" class="primary">↓ ส่งออก CSV</button></div></div><div class="table-scroll panel"><table class="data-table"><thead><tr><th>เวลา</th><th>มอเตอร์</th><th>X · mm/s</th><th>Y · mm/s</th><th>Z · mm/s</th><th>อุณหภูมิ °C</th><th>ค่าสูงสุด / custom</th><th>แหล่งข้อมูล</th></tr></thead><tbody id="history-body"></tbody></table></div><p class="footnote" id="data-path"></p></section>
+      <section id="motors-view" class="view" hidden><div class="section-toolbar"><div><h2>ทะเบียนมอเตอร์</h2><p>แยกมอเตอร์ด้วยรหัสและ Slave ID · รองรับ 64 ตัว</p></div><div class="inline-controls"><button id="import-profiles">นำเข้ารายชื่อ</button><button id="export-profiles">สำรอง JSON</button><button id="add-motor-table" class="primary">＋ เพิ่มมอเตอร์</button></div></div><div class="table-scroll panel"><table class="data-table"><thead><tr><th>รหัส / ชื่อ</th><th>พื้นที่</th><th>รุ่นเซ็นเซอร์</th><th>พอร์ต / Slave</th><th>การสื่อสาร</th><th></th></tr></thead><tbody id="motors-body"></tbody></table></div></section>
+      <section id="events-view" class="view" hidden><div class="section-toolbar"><div><h2>บันทึกเหตุการณ์</h2><p>200 เหตุการณ์ล่าสุดในรอบการเปิดโปรแกรมนี้</p></div><button id="clear-events">ล้างหน้าจอเหตุการณ์</button></div><div class="table-scroll panel"><table class="data-table"><thead><tr><th>เวลา</th><th>ประเภท</th><th>มอเตอร์</th><th>รายละเอียด</th></tr></thead><tbody id="events-body"></tbody></table></div></section>
+    </main>
   </div>
-  <div class="toast" id="toast" hidden role="status"></div>
-  <script src="app.js"></script>
-</body>
-</html>
+  <footer class="statusbar"><span id="status-text"><i class="dot offline"></i> พร้อมตั้งค่า</span><span id="status-bus">Modbus RTU · 8 data bits</span><span class="status-spacer"></span><span id="status-count">รับสำเร็จ 0 · ผิดพลาด 0</span><span id="status-clock"></span></footer>
+</div>
+
+<dialog id="connection-dialog" aria-labelledby="dialog-title"><form id="sensor-form"><div class="dialog-header"><div><span class="eyebrow">CONNECTION SETUP</span><h2 id="dialog-title">เพิ่มมอเตอร์</h2><p>กำหนดอุปกรณ์และจุดวัดสำหรับมอเตอร์นี้</p></div><button type="button" id="close-connection" class="icon-button" aria-label="ปิดการตั้งค่า">✕</button></div><div class="dialog-content"><aside class="device-pane"><div class="device-heading"><h3>Serial devices</h3><button type="button" id="refresh-ports" class="icon-button" title="สแกน COM Port">↻</button></div><p id="port-summary">กำลังสแกน...</p><div id="port-list"></div><div class="wiring-note"><strong>VemSee · การต่อสาย</strong><span><i class="wire brown"></i>น้ำตาล · VCC 10–30 VDC</span><span><i class="wire black"></i>ดำ · GND</span><span><i class="wire yellow"></i>เหลือง · RS485 A</span><span><i class="wire blue"></i>ฟ้า · RS485 B</span><p>พบ USB Adapter ยังไม่ยืนยันว่าเซ็นเซอร์ตอบกลับ</p></div></aside><div class="settings-pane"><div class="form-grid"><label>รหัสมอเตอร์ *<input name="motorId" maxlength="24" pattern="[A-Za-z0-9][A-Za-z0-9_-]*" required placeholder="MTR-01"></label><label>ชื่อ / ฉลาก<input name="name" maxlength="80" placeholder="Cooling water pump"></label><label>พื้นที่ / ไลน์ผลิต<input name="area" maxlength="60" placeholder="Line A"></label><label>รุ่นเซ็นเซอร์<select name="sensorModel" id="sensor-model"><option value="vemsee-sn3001-wz3a-n01">VemSee SN-3001-WZ3A-N01</option><option value="custom">Custom register</option></select></label></div><fieldset><legend>Serial connection</legend><div class="form-grid four"><label class="span-two">COM Port *<select name="path" id="port-select" required><option value="">เลือกอุปกรณ์</option></select></label><label>Slave ID<input name="slaveId" type="number" min="1" max="254" value="1" required></label><label>Baud rate<select name="baudRate"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>4800</option><option>2400</option><option>1200</option></select></label><label>Data bits<input value="8" readonly aria-label="Data bits 8"></label><label>Parity<select name="parity"><option value="none">None</option><option value="even">Even</option><option value="odd">Odd</option></select></label><label>Stop bits<select name="stopBits"><option value="1">1</option><option value="2">2</option></select></label><label>Function<select name="registerType"><option value="holding">03 Holding</option><option value="input">04 Input</option></select></label></div></fieldset><fieldset><legend>Acquisition</legend><div class="form-grid"><label>ช่วงอ่านต่อมอเตอร์ (ms)<input name="pollInterval" type="number" value="2000" min="250" max="3600000" required></label><label>Response timeout (ms)<input name="timeout" type="number" value="1500" min="200" max="30000" required></label></div></fieldset><div class="preset-note" id="preset-note"><strong>VemSee 3-axis preset</strong><p>อ่าน 0000H–0006H และ 000AH–000CH · แปลงค่าดิบ ÷ 10<br>คู่มือระบุหน่วย Velocity เป็น mm/s แต่ยังไม่ยืนยัน RMS / Peak จึงยังไม่ประเมินตาม ISO อัตโนมัติ</p></div><fieldset id="custom-fields" hidden><legend>Custom register</legend><div class="form-grid four"><label>Address (0-based)<input name="registerAddress" type="number" min="0" max="65535" value="0" required></label><label>Data type<select name="dataType"><option value="uint16">UInt16</option><option value="int16">Int16</option><option value="float32">Float32</option><option value="uint32">UInt32</option><option value="int32">Int32</option></select></label><label>Byte order<select name="byteOrder"><option>ABCD</option><option>CDAB</option><option>BADC</option><option>DCBA</option></select></label><label>Scale<input name="scale" type="number" step="any" value="0.1" required></label><label>หน่วย<input name="unit" maxlength="32" value="mm/s" required></label></div></fieldset><details class="nameplate-editor"><summary>ข้อมูลฉลากเครื่อง / หมายเหตุ</summary><label>ข้อมูลป้ายเครื่อง<textarea name="nameplate" maxlength="2000" rows="3" placeholder="ผู้ผลิต, รุ่น, Serial, กำลัง kW, รอบ rpm, จุดติดตั้งเซ็นเซอร์ DE/NDE และทิศทางแกน"></textarea></label></details><div class="test-result" id="test-result" role="status"><b>ยังไม่ได้ทดสอบ</b><p>ยืนยัน Baud rate, Slave ID, Parity และ Stop bits ที่ตั้งอยู่ในเซ็นเซอร์</p></div><div id="form-error" class="message error" role="alert" hidden></div></div></div><div class="dialog-footer"><span>บันทึกการตั้งค่า → กดเริ่มอ่านเพื่อตรวจทุกมอเตอร์</span><button type="button" id="test-sensor">ทดสอบมอเตอร์นี้</button><button type="submit" id="save-motor" class="primary">บันทึกมอเตอร์</button></div></form></dialog>
+<dialog id="confirm-dialog"><h2 id="confirm-title"></h2><p id="confirm-message"></p><div class="confirm-actions"><button id="cancel-confirm">ยกเลิก</button><button class="danger" id="accept-confirm">ยืนยัน</button></div></dialog>
+<dialog id="help-dialog"><div class="dialog-header"><div><span class="eyebrow">QUICK START</span><h2>เริ่มใช้งาน VECTRA</h2></div><button id="close-help" class="icon-button" aria-label="ปิดคู่มือ">✕</button></div><div class="help-content"><ol><li><strong>ต่ออุปกรณ์</strong> จ่ายไฟเซ็นเซอร์ตามคู่มือ แล้วต่อ RS485 A/B ผ่าน USB Adapter ไปยังคอมพิวเตอร์</li><li><strong>เพิ่มมอเตอร์</strong> เลือกพอร์ต รุ่นเซ็นเซอร์ Slave ID และค่าการสื่อสารที่ตรงกับอุปกรณ์</li><li><strong>ทดสอบและบันทึก</strong> ทดสอบทีละตัวก่อนเริ่มอ่าน หากอยู่บัสเดียวกันแต่ละตัวต้องใช้ Slave ID ไม่ซ้ำ</li><li><strong>เริ่มอ่านข้อมูล</strong> โปรแกรมอ่านมอเตอร์ตามลำดับบนแต่ละบัส ทดสอบครบทุกตัวก่อนเปิดการบันทึก</li><li><strong>ดูประวัติ / ส่งออก</strong> เลือกวันและมอเตอร์ได้จากแท็บประวัติ CSV ส่งออกข้อมูลทั้งหมดของตัวกรองนั้น</li></ol><p>ข้อมูลจริงเก็บเป็นไฟล์ NDJSON รายวันในเครื่อง · โหมดทดลองแสดงข้อมูลจำลองและไม่เขียนลงประวัติจริง · ปุ่มพักกราฟหยุดเฉพาะการแสดงผล</p><p>หากอ่านไม่สำเร็จ ตรวจไฟเลี้ยง สาย A/B, Slave ID และ Baud rate โปรแกรมจะลองอ่านใหม่อัตโนมัติ สีสถานะหมายถึงคุณภาพการสื่อสาร ไม่ใช่ความรุนแรงการสั่น</p><p>Frequency register และการสอบเทียบยังไม่เปิดใช้ เพราะคู่มือที่ได้รับยังไม่ยืนยันรูปแบบ Floating Point และลำดับ word</p></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div><script src="app.js"></script>
+</body></html>
