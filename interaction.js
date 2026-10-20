@@ -10,7 +10,7 @@
   document.querySelectorAll(selector).forEach(el=>el.classList.toggle('motor-hover',Number(el.dataset.index)===index));
   tip.replaceChildren();const name=document.createElement('strong'),meta=document.createElement('span'),value=document.createElement('b'),hint=document.createElement('small');
   name.textContent=m.label;meta.textContent=`${m.id} · Class ${['I','II','III','IV'][m.cls]} · ${m.zone||'ไม่ระบุพื้นที่'}`;
-  value.textContent=`${m.value.toFixed(2)} mm/s RMS · Zone ${'ABCD'[state(m)]}`;value.style.color=colors[state(m)];hint.textContent=`${m.liveSource?'ข้อมูลจากเซ็นเซอร์':'ข้อมูลจำลอง'} · คลิก / Enter เพื่อเปิดด้านข้าง`;tip.append(name,meta,value,hint);tip.hidden=false;target.setAttribute('aria-describedby',tip.id);
+  value.textContent=`${m.value.toFixed(2)} mm/s RMS · Zone ${'ABCD'[state(m)]}`;value.style.color=colors[state(m)];hint.textContent='ข้อมูลจำลอง · คลิก / Enter เพื่อเปิดด้านข้าง';tip.append(name,meta,value,hint);tip.hidden=false;target.setAttribute('aria-describedby',tip.id);
   const box=tip.getBoundingClientRect();tip.style.left=`${Math.max(8,Math.min(innerWidth-box.width-8,point.x+16))}px`;tip.style.top=`${Math.max(8,Math.min(innerHeight-box.height-8,point.y+18))}px`;
  }
  window.refreshMotorHover=refresh;

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:">
+  <title>VECTRA Sensor Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="window-shell">
+    <header class="titlebar">
+      <div class="app-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div><strong>VECTRA Sensor Monitor</strong><small>Motor vibration acquisition</small></div>
+      <div class="title-status" id="title-status"><i></i><span>ยังไม่เชื่อมต่อ</span></div>
+    </header>
+
+    <div class="app-layout">
+      <nav class="sidebar" aria-label="เมนูโปรแกรม">
+        <div class="sidebar-heading">เมนู</div>
+        <button class="nav-button active" data-page="setup" aria-pressed="true"><span class="nav-icon">⌁</span><span>การเชื่อมต่อ<small>ตรวจสอบ RS485</small></span></button>
+        <button class="nav-button" data-page="dashboard" aria-pressed="false" disabled><span class="nav-icon">▦</span><span>แดชบอร์ด<small>ค่าการสั่นล่าสุด</small></span></button>
+        <div class="sidebar-spacer"></div>
+        <div class="sidebar-info"><strong>LOCAL MODE</strong><span>ข้อมูลเก็บในเครื่องนี้</span></div>
+      </nav>
+
+      <main>
+        <section class="page setup-page active" id="setup-page" aria-labelledby="setup-title">
+          <div class="page-heading">
+            <div><p class="kicker">DEVICE SETUP</p><h1 id="setup-title">เชื่อมต่อเซ็นเซอร์</h1><p>เลือกอะแดปเตอร์ USB–RS485 แล้วทดสอบว่าเซ็นเซอร์ตอบกลับก่อนเข้าแดชบอร์ด</p></div>
+            <button class="secondary" id="refresh-ports">↻ สแกนอุปกรณ์อีกครั้ง</button>
+          </div>
+
+          <div class="info-bar"><span aria-hidden="true">ⓘ</span><p><strong>พบ COM Port ยังไม่เท่ากับพบเซ็นเซอร์</strong><br>Windows อาจเห็นเพียงอะแดปเตอร์ ต้องทดสอบ Modbus สำเร็จจึงจะเปิดข้อมูลจริงได้</p></div>
+
+          <div class="setup-grid">
+            <section class="card devices-card">
+              <div class="card-heading"><div><h2>อุปกรณ์ที่ Windows พบ</h2><p id="port-summary">กำลังตรวจสอบ...</p></div><span class="step">1</span></div>
+              <div id="port-list" class="port-list" aria-live="polite"></div>
+              <div class="path-box"><span>โฟลเดอร์เก็บข้อมูล</span><code id="data-path">กำลังโหลด...</code><button id="open-data" class="link-button">เปิดโฟลเดอร์</button></div>
+            </section>
+
+            <form class="card settings-card" id="sensor-form">
+              <div class="card-heading"><div><h2>ค่าการสื่อสารและ Register</h2><p>กรอกจากคู่มือของเซ็นเซอร์รุ่นที่เสียบอยู่</p></div><span class="step">2</span></div>
+              <div class="form-grid">
+                <label class="wide">COM Port<select name="path" id="port-select" required><option value="">เลือกอุปกรณ์</option></select></label>
+                <label>รหัสมอเตอร์<input name="motorId" value="MTR-01" maxlength="24" required></label>
+                <label>หน่วย<input name="unit" value="mm/s RMS" maxlength="32" required></label>
+                <label>Baud rate<select name="baudRate"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>4800</option><option>2400</option><option>1200</option></select></label>
+                <label>Parity<select name="parity"><option value="none">None</option><option value="even">Even</option><option value="odd">Odd</option></select></label>
+                <label>Stop bits<select name="stopBits"><option value="1">1</option><option value="2">2</option></select></label>
+                <label>Slave ID<input name="slaveId" type="number" value="1" min="1" max="247" required></label>
+                <label>Modbus function<select name="registerType"><option value="holding">Holding register (03)</option><option value="input">Input register (04)</option></select></label>
+                <label>Register address<input name="registerAddress" type="number" value="0" min="0" max="65535" required></label>
+                <label>Data type<select name="dataType"><option value="float32">Float 32-bit</option><option value="uint16">Unsigned 16-bit</option><option value="int16">Signed 16-bit</option><option value="uint32">Unsigned 32-bit</option><option value="int32">Signed 32-bit</option></select></label>
+                <label>Byte / word order<select name="byteOrder"><option>ABCD</option><option>CDAB</option><option>BADC</option><option>DCBA</option></select></label>
+                <label>Scale<input name="scale" type="number" value="1" step="any" required></label>
+                <label>อ่านทุก (ms)<input name="pollInterval" type="number" value="2000" min="250" max="3600000" required></label>
+                <label>Timeout (ms)<input name="timeout" type="number" value="1500" min="200" max="30000" required></label>
+              </div>
+
+              <div class="test-result idle" id="test-result" role="status"><span class="result-icon">○</span><div><strong>ยังไม่ได้ทดสอบเซ็นเซอร์</strong><p>ปุ่มเข้าแดชบอร์ดจะพร้อมหลังได้รับค่าตอบกลับที่ถูกต้อง</p></div></div>
+              <div class="form-actions">
+                <button type="button" class="secondary" id="demo-mode">เปิดโหมดจำลอง</button>
+                <button type="button" class="secondary accent" id="test-sensor">ทดสอบเซ็นเซอร์</button>
+                <button type="submit" class="primary" id="connect-sensor" disabled>เชื่อมต่อและเข้าแดชบอร์ด</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="page dashboard-page" id="dashboard-page" aria-labelledby="dashboard-title" hidden>
+          <div class="page-heading dashboard-heading">
+            <div><p class="kicker">LIVE MONITORING</p><h1 id="dashboard-title">ภาพรวมมอเตอร์ <span id="dashboard-motor">MTR-01</span></h1><p id="dashboard-source">รอข้อมูลจากเซ็นเซอร์</p></div>
+            <div class="command-bar"><button class="secondary" id="back-settings">⚙ ตั้งค่าเซ็นเซอร์</button><button class="secondary" id="pause-stream">หยุดชั่วคราว</button></div>
+          </div>
+
+          <div class="summary-grid">
+            <article class="summary-card primary-reading"><span>ค่าการสั่นล่าสุด</span><div><strong id="reading-value">—</strong><small id="reading-unit">mm/s RMS</small></div><p id="reading-time">ยังไม่ได้รับข้อมูล</p></article>
+            <article class="summary-card"><span>สถานะข้อมูล</span><strong class="status-text" id="reading-status">กำลังรอ</strong><p id="status-note">ระบบยังไม่ได้รับค่ารอบแรก</p></article>
+            <article class="summary-card"><span>การเชื่อมต่อ</span><strong id="connection-name">—</strong><p id="connection-detail">—</p></article>
+            <article class="summary-card"><span>จำนวนข้อมูลรอบนี้</span><strong id="sample-count">0</strong><p>บันทึกลงไฟล์รายวันอัตโนมัติ</p></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="card chart-card">
+              <div class="card-heading"><div><h2>แนวโน้มค่าการสั่น</h2><p>60 ค่าล่าสุดในรอบการใช้งานนี้</p></div><span class="live-chip"><i></i><b id="live-label">LIVE</b></span></div>
+              <svg id="trend-chart" viewBox="0 0 800 310" role="img" aria-label="กราฟแนวโน้มค่าการสั่น"></svg>
+              <div class="chart-scale"><span>ต่ำสุด <b id="minimum-value">—</b></span><span>เฉลี่ย <b id="average-value">—</b></span><span>สูงสุด <b id="maximum-value">—</b></span></div>
+            </section>
+            <aside class="card session-card">
+              <div class="card-heading"><div><h2>รายละเอียดรอบปัจจุบัน</h2><p>ใช้ตรวจสอบแหล่งที่มาของค่า</p></div></div>
+              <dl>
+                <div><dt>โหมด</dt><dd id="session-mode">—</dd></div>
+                <div><dt>มอเตอร์</dt><dd id="session-motor">—</dd></div>
+                <div><dt>พอร์ต</dt><dd id="session-port">—</dd></div>
+                <div><dt>Slave ID</dt><dd id="session-slave">—</dd></div>
+                <div><dt>Register</dt><dd id="session-register">—</dd></div>
+                <div><dt>ตำแหน่งข้อมูล</dt><dd><button id="open-data-dashboard" class="link-button">เปิดโฟลเดอร์</button></dd></div>
+              </dl>
+              <div class="warning-box"><strong>เกณฑ์สถานะยังไม่ถูกนำมาใช้</strong><p>โปรแกรมนี้แสดงค่าที่อ่านได้โดยไม่ตัดสินสภาพเครื่อง จนกว่าจะยืนยันรุ่นเซ็นเซอร์ จุดวัด และเกณฑ์ของมอเตอร์จริง</p></div>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <div class="toast" id="toast" hidden role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>

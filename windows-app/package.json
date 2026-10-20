@@ -1,16 +1,16 @@
 {
-  "name": "vectra-motor-monitor",
-  "version": "0.2.0",
+  "name": "vectra-sensor-monitor",
+  "version": "0.3.0",
   "author": "VECTRA",
   "private": true,
-  "description": "Offline-first Windows motor vibration dashboard with RS485/Modbus sensor discovery",
-  "main": "desktop/main.cjs",
+  "description": "Windows desktop application for RS485 Modbus motor vibration monitoring",
+  "main": "electron/main.cjs",
   "scripts": {
-    "desktop": "electron .",
-    "dist:win": "electron-builder --win nsis portable",
-    "test": "node tests/storage.cjs && node tests/standards.cjs && node tests/dashboard.cjs && node tests/interaction.cjs && node tests/layout.cjs && node tests/fullscreen.cjs && node tests/sensor-codec.cjs",
+    "start": "electron .",
+    "test": "node tests/sensor-codec.cjs && node tests/desktop-smoke.cjs",
     "test:sensor": "node tests/sensor-codec.cjs",
     "test:desktop": "node tests/desktop-smoke.cjs",
+    "dist:win": "electron-builder --win nsis portable",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -23,22 +23,15 @@
     "playwright": "1.64.1"
   },
   "build": {
-    "appId": "th.vectra.motor.monitor",
-    "productName": "VECTRA Motor Monitor",
+    "appId": "th.vectra.sensor.monitor",
+    "productName": "VECTRA Sensor Monitor",
     "asar": true,
     "asarUnpack": [
       "node_modules/@serialport/**"
     ],
     "files": [
-      "index.html",
-      "style.css",
-      "retro.css",
-      "desktop.css",
-      "motor-data.js",
-      "app.js",
-      "interaction.js",
-      "desktop-renderer.js",
-      "desktop/**",
+      "src/**",
+      "electron/**",
       "package.json"
     ],
     "directories": {
@@ -46,14 +39,8 @@
     },
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
-        }
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ]
     },
     "nsis": {

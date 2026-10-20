@@ -1,5 +1,6 @@
 node_modules/
-release/
+/release/
+/windows-app/release/
 .artifacts/
 .DS_Store
 Thumbs.db

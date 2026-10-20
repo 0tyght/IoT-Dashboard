@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   connect: config => ipcRenderer.invoke('sensor:connect', config),
   disconnect: () => ipcRenderer.invoke('sensor:disconnect'),
   getDataPath: () => ipcRenderer.invoke('data:path'),
+  openDataPath: () => ipcRenderer.invoke('data:open-folder'),
   onReading: callback => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('sensor:reading', listener);

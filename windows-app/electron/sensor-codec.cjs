@@ -15,8 +15,8 @@ function numberInRange(value, label, min, max, integer = false) {
 }
 
 function normalizeConfig(input = {}) {
-  const path = String(input.path || '').trim();
-  if (!path || path.length > 128) throw new Error('กรุณาเลือก COM Port');
+  const serialPath = String(input.path || '').trim();
+  if (!serialPath || serialPath.length > 128) throw new Error('กรุณาเลือก COM Port');
   const dataType = String(input.dataType || 'float32');
   if (!(dataType in REGISTER_COUNTS)) throw new Error('ชนิดข้อมูลไม่รองรับ');
   const byteOrder = String(input.byteOrder || 'ABCD').toUpperCase();
@@ -27,8 +27,10 @@ function normalizeConfig(input = {}) {
   if (!ALLOWED_PARITY.has(parity)) throw new Error('Parity ไม่รองรับ');
   const registerType = String(input.registerType || 'holding');
   if (!ALLOWED_FUNCTIONS.has(registerType)) throw new Error('Modbus function ไม่รองรับ');
+  const scale = numberInRange(input.scale ?? 1, 'Scale', -1000000, 1000000);
+  if (scale === 0) throw new Error('Scale ต้องไม่เป็น 0');
   return {
-    path,
+    path: serialPath,
     baudRate,
     parity,
     dataBits: 8,
@@ -38,11 +40,10 @@ function normalizeConfig(input = {}) {
     registerAddress: numberInRange(input.registerAddress ?? 0, 'Register address', 0, 65535, true),
     dataType,
     byteOrder,
-    scale: numberInRange(input.scale ?? 1, 'Scale', -1000000, 1000000),
+    scale,
     pollInterval: numberInRange(input.pollInterval ?? 2000, 'รอบอ่านข้อมูล', 250, 3600000, true),
-    motorId: String(input.motorId || '').trim().slice(0, 24),
-    unit: String(input.unit || 'mm/s RMS').trim().slice(0, 32),
-    autoConnect: input.autoConnect !== false,
+    motorId: String(input.motorId || 'MTR-01').trim().slice(0, 24) || 'MTR-01',
+    unit: String(input.unit || 'mm/s RMS').trim().slice(0, 32) || 'mm/s RMS',
     timeout: numberInRange(input.timeout ?? 1500, 'Timeout', 200, 30000, true)
   };
 }
@@ -52,19 +53,12 @@ function orderedBytes(registers, order) {
   registers.forEach((value, index) => source.writeUInt16BE(Number(value) & 0xffff, index * 2));
   if (source.length < 4) return source;
   const bytes = [...source.slice(0, 4)];
-  const maps = {
-    ABCD: [0, 1, 2, 3],
-    CDAB: [2, 3, 0, 1],
-    BADC: [1, 0, 3, 2],
-    DCBA: [3, 2, 1, 0]
-  };
+  const maps = { ABCD: [0, 1, 2, 3], CDAB: [2, 3, 0, 1], BADC: [1, 0, 3, 2], DCBA: [3, 2, 1, 0] };
   return Buffer.from(maps[order].map(index => bytes[index]));
 }
 
 function decodeRegisters(registers, config) {
-  if (!Array.isArray(registers) || registers.length < REGISTER_COUNTS[config.dataType]) {
-    throw new Error('จำนวน Register ที่ได้รับไม่ครบ');
-  }
+  if (!Array.isArray(registers) || registers.length < REGISTER_COUNTS[config.dataType]) throw new Error('จำนวน Register ที่ได้รับไม่ครบ');
   const buffer = orderedBytes(registers, config.byteOrder);
   let value;
   switch (config.dataType) {

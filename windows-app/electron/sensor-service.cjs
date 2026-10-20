@@ -52,7 +52,7 @@ class SensorService {
       vendorId: port.vendorId || '',
       productId: port.productId || '',
       pnpId: port.pnpId || ''
-    }));
+    })).sort((a, b) => Number(Boolean(b.vendorId)) - Number(Boolean(a.vendorId)) || a.path.localeCompare(b.path, undefined, { numeric: true }));
   }
 
   static async test(rawConfig) {

@@ -42,11 +42,11 @@ function appendReading(reading) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1500,
-    height: 920,
-    minWidth: 1024,
-    minHeight: 700,
-    backgroundColor: '#071413',
+    width: 1180,
+    height: 780,
+    minWidth: 900,
+    minHeight: 640,
+    backgroundColor: '#f3f3f3',
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -57,7 +57,7 @@ function createWindow() {
       backgroundThrottling: false
     }
   });
-  mainWindow.loadFile(path.join(__dirname, '..', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, '..', 'src', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//i.test(url)) shell.openExternal(url);
@@ -76,7 +76,13 @@ app.whenReady().then(() => {
     onStatus: status => mainWindow?.webContents.send('sensor:status', status)
   });
 
-  ipcMain.handle('sensor:list-ports', () => SensorService.listPorts());
+  ipcMain.handle('sensor:list-ports', async () => {
+    try {
+      return { ok: true, ports: await SensorService.listPorts() };
+    } catch (error) {
+      return { ok: false, ports: [], message: error.message };
+    }
+  });
   ipcMain.handle('sensor:load-config', () => readConfig());
   ipcMain.handle('sensor:test', async (_event, config) => {
     try {
@@ -99,6 +105,12 @@ app.whenReady().then(() => {
     return { ok: true };
   });
   ipcMain.handle('data:path', () => userFile('data'));
+  ipcMain.handle('data:open-folder', async () => {
+    const directory = userFile('data');
+    fs.mkdirSync(directory, { recursive: true });
+    const error = await shell.openPath(directory);
+    return { ok: !error, message: error };
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
