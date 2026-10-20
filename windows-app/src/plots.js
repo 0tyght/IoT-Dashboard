@@ -18,7 +18,7 @@ function drawSensorPlot(refs, frames, kind = 'velocity', customUnit = '') {
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.replaceChildren(); tooltip.hidden = true;
   for (let index = 0; index <= 4; index++) {
     const yy = top + index / 4 * (bottom - top), value = high - index / 4 * (high - low);
-    svg.append(svgNode('line', { x1: left, x2: right, y1: yy, y2: yy, stroke: '#354354' }), svgNode('text', { x: left - 7, y: yy + 4, fill: '#b7c9e1', 'font-size': 11, 'text-anchor': 'end' }, digits(value, Math.abs(value) < 1 ? 2 : 1)));
+    svg.append(svgNode('line', { x1: left, x2: right, y1: yy, y2: yy, stroke: 'var(--chart-grid)' }), svgNode('text', { x: left - 7, y: yy + 4, fill: 'var(--chart-label)', 'font-size': 11, 'text-anchor': 'end' }, digits(value, Math.abs(value) < 1 ? 2 : 1)));
   }
   for (const series of refs.series) {
     let points = [], lastValid;
@@ -29,9 +29,9 @@ function drawSensorPlot(refs, frames, kind = 'velocity', customUnit = '') {
     }
     flush(); if (lastValid) svg.append(svgNode('circle', { cx: x(lastValid), cy: y(valueOf(lastValid, series.key)), r: 2.5, fill: series.color }));
   }
-  [0, Math.floor((data.length - 1) / 2), data.length - 1].filter((index, pos, indexes) => index >= 0 && index < data.length && indexes.indexOf(index) === pos).forEach(index => svg.append(svgNode('text', { x: x(data[index]), y: height - 7, fill: '#b7c9e1', 'font-size': 11, 'text-anchor': index === 0 ? 'start' : index === data.length - 1 ? 'end' : 'middle' }, axisTime(data[index].timestamp))));
-  if (!values.length) svg.append(svgNode('text', { x: width / 2, y: height / 2, fill: '#b7c9e1', 'font-size': 12, 'text-anchor': 'middle' }, 'ยังไม่มีข้อมูลในช่วงนี้'));
-  svg.append(svgNode('line', { class: 'plot-crosshair', x1: left, x2: left, y1: top, y2: bottom, stroke: '#bac5d4', 'stroke-dasharray': '3 3', visibility: 'hidden' }));
+  [0, Math.floor((data.length - 1) / 2), data.length - 1].filter((index, pos, indexes) => index >= 0 && index < data.length && indexes.indexOf(index) === pos).forEach(index => svg.append(svgNode('text', { x: x(data[index]), y: height - 7, fill: 'var(--chart-label)', 'font-size': 11, 'text-anchor': index === 0 ? 'start' : index === data.length - 1 ? 'end' : 'middle' }, axisTime(data[index].timestamp))));
+  if (!values.length) svg.append(svgNode('text', { x: width / 2, y: height / 2, fill: 'var(--chart-label)', 'font-size': 12, 'text-anchor': 'middle' }, 'ยังไม่มีข้อมูลในช่วงนี้'));
+  svg.append(svgNode('line', { class: 'plot-crosshair', x1: left, x2: left, y1: top, y2: bottom, stroke: 'var(--chart-cursor)', 'stroke-dasharray': '3 3', visibility: 'hidden' }));
   if (refs.hovering || document.activeElement === svg) showPlotPoint(refs, refs.hoverIndex || 0);
 }
 function showPlotPoint(refs, index) {

@@ -23,13 +23,13 @@ async function record(reading) {
 }
 
 app.whenReady().then(() => {
-  nativeTheme.themeSource = 'dark';
+  nativeTheme.themeSource = 'light';
   store = new DataStore(app.getPath('userData'));
   recording = new RecordingService({ onChange: state => send('recording:state', state), onError: (motorId, message) => send('sensor:status', { state: 'storage-error', motorId, message }) });
   recordingTimer = setInterval(() => recording.tick(), 250);
   fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)), onStatus: status => send('sensor:status', status) });
   mainWindow = new BrowserWindow({
-    width: 1440, height: 940, minWidth: 960, minHeight: 680, backgroundColor: '#101215', show: false, autoHideMenuBar: true,
+    width: 1440, height: 940, minWidth: 960, minHeight: 680, backgroundColor: '#f7f8fb', show: false, autoHideMenuBar: true,
     icon: path.join(__dirname, '..', 'assets', 'app.ico'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });

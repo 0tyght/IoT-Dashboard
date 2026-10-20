@@ -22,7 +22,7 @@ const entries = [16, 24, 32, 48, 64, 128, 256].map(size => {
     }
     const offset = 40 + ((size - 1 - y) * size + x) * 4;
     const mix = coverage ? white / coverage : 0;
-    dib[offset] = Math.round(213 + (255 - 213) * mix); dib[offset + 1] = Math.round(104 + 151 * mix); dib[offset + 2] = Math.round(33 + 222 * mix); dib[offset + 3] = Math.round(coverage / 4 * 255);
+    dib[offset] = Math.round(233 + 22 * mix); dib[offset + 1] = Math.round(82 + 173 * mix); dib[offset + 2] = Math.round(98 + 157 * mix); dib[offset + 3] = Math.round(coverage / 4 * 255);
     if (!coverage) dib[40 + size * size * 4 + (size - 1 - y) * maskStride + Math.floor(x / 8)] |= 128 >> (x % 8);
   }
   return { size, dib };

@@ -4,7 +4,7 @@ An independent Windows application for local RS485 / Modbus RTU motor monitoring
 
 ## Features
 
-- Dark monitoring interface with per-motor rows, amber section headers, consistent X/Y/Z colors, one communication state, reading age and a separate chart for every motor. Overview charts preserve readable pixel-sized labels on resize. Detailed register/history views and the Windows connection dialog remain available.
+- Light monitoring interface based on the user's white/lavender reference: white panels, pale gray workspace, violet actions/selection, subtle dividers and consistent teal/blue/violet axes. Wide detail views place motor metrics, trend and channel data in three columns. Per-motor rows retain all nine values, one communication state, receive timestamps and independent charts. Detailed register/history views and Windows connection dialogs use the same theme.
 - Communication/maintenance filters, search reset, a collapsible registry and keyboard-accessible tabs. Connection faults are shown directly in the affected motor row. See `DESIGN.md` and `UXUI-REVIEW.md` for the interaction rules and review findings.
 - Add, edit, delete and search up to 64 motor profiles; store labels, locations and nameplate notes. Temporarily exclude a motor from acquisition using **พักอ่าน** during maintenance.
 - Per-motor actions are available directly in the overview. When acquisition is active, editing, adding or deleting asks to stop acquisition first. Motor health is not inferred from communications status or axis colors.

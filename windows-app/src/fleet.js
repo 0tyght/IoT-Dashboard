@@ -1,6 +1,6 @@
 'use strict';
 const fleetCards = new Map();
-const FLEET_COLORS = ['#6ed3a3', '#e5bf69', '#67b6e8'];
+const FLEET_COLORS = ['--x', '--y', '--z'].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim());
 function fleetStatus(profile, state) {
   if (profile.enabled === false) return { text: 'พักอ่าน', kind: 'idle' };
   if (mode === 'demo') return { text: 'จำลอง', kind: 'demo' };
