@@ -31,7 +31,7 @@ function renderLogs() {
   const body = $('events-body'); body.replaceChildren();
   if (!logs.length) return emptyRow(body, 4, 'ยังไม่มีเหตุการณ์ในรอบนี้');
   for (const entry of logs) {
-    const row = node('tr'); row.append(node('td', time(entry.timestamp), 'mono'), node('td', entry.kind === 'error' ? 'ผิดพลาด' : 'ข้อมูล', `event-${entry.kind}`), node('td', entry.motorId || 'SYSTEM'), node('td', entry.detail, 'wrap-cell')); body.append(row);
+    const row = node('tr'); row.append(node('td', timestamp(entry.timestamp), 'mono'), node('td', entry.kind === 'error' ? 'ผิดพลาด' : 'ข้อมูล', `event-${entry.kind}`), node('td', entry.motorId || 'SYSTEM'), node('td', entry.detail, 'wrap-cell')); body.append(row);
   }
 }
 function setBusy(value) { busy = value; updateControls(); }
@@ -108,11 +108,9 @@ function renderSelected() {
   const profile = currentProfile(), state = profile ? stateFor(profile.motorId) : null, last = state?.frames.at(-1);
   const threeAxis = profile?.sensorModel === MODEL;
   $('metric-type').textContent = threeAxis ? 'VELOCITY' : 'VALUE';
-  $('chart-kind').disabled = !threeAxis;
-  $('chart-kind').options[0].textContent = threeAxis ? 'Velocity · mm/s' : `Custom value · ${profile?.unit || '—'}`;
-  if (!threeAxis) $('chart-kind').value = 'velocity';
   [...$('chart-legend').children].slice(0, 3).forEach(element => { element.hidden = !threeAxis; });
-  $('chart-description').textContent = `${$('fleet-window').selectedOptions[0].textContent} · timestamp คือเวลาคอมพิวเตอร์รับข้อมูล (UTC+07:00)`;
+  $('pause-stream').setAttribute('aria-pressed', String(frozen));
+  $('chart-description').textContent = frozen ? 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ' : `${$('fleet-window').selectedOptions[0].textContent} · เวลาคอมพิวเตอร์รับข้อมูล (UTC+07:00)`;
   $('selected-title').textContent = profile ? profile.name || profile.motorId : 'สถานีตรวจวัดมอเตอร์';
   $('selected-area').textContent = profile?.area || 'LOCAL WORKSPACE';
   $('selected-subtitle').textContent = profile ? `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee SN-3001-WZ3A-N01' : 'Custom Modbus sensor'} · ${profile.path} / Slave ${profile.slaveId}` : 'ตั้งค่าเซ็นเซอร์เพื่อเริ่มเก็บข้อมูลในเครื่องนี้';
@@ -137,7 +135,7 @@ function renderSelected() {
     $('last-response').textContent = last ? `ตั้ง ${profile.pollInterval} ms · รับจริง ${last.actualIntervalMs ?? state.actualIntervalMs ?? '—'} ms · ตอบ ${last.elapsedMs ?? 0} ms` : 'รอการตอบกลับ';
     $('record-state').textContent = storageLabel(last);
     renderChannels(last); renderRegisters(last, profile);
-    if (!frozen) { chartFrames = graphWindow(state?.frames || [], $('trend-chart').clientWidth); drawChart(); }
+    if (!frozen) { chartFrames = graphWindow(state?.frames || [], $('trend-chart').clientWidth); if (currentTab === 'monitor') drawChart(); }
   }
   refreshSelectionState();
   if (currentTab === 'fleet') {
@@ -184,17 +182,9 @@ function renderRegisters(last, profile) {
   }
 }
 function svgNode(tag, attributes = {}, text) { const element = document.createElementNS('http://www.w3.org/2000/svg', tag); Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value)); if (text != null) element.textContent = text; return element; }
-function chartSeries() {
-  const kind = $('chart-kind').value;
-  return chartFrames.some(frame => frame.channels) ? ['X', 'Y', 'Z'].map((axis, index) => ({ key: `${kind}${axis}`, color: FLEET_COLORS[index], label: axis })) : [{ key: 'value', color: FLEET_COLORS[0], label: 'Value' }];
-}
 function drawChart() {
   if (!detailPlot) return;
-  drawSensorPlot(detailPlot, chartFrames, $('chart-kind').value, currentProfile()?.unit);
-  const series = chartSeries(), maxima = chartFrames.map(frame => Math.max(...series.map(item => item.key === 'value' ? frame.value : frame.channels?.[item.key]).filter(Number.isFinite))).filter(Number.isFinite);
-  $('minimum-value').textContent = maxima.length ? digits(Math.min(...maxima), 2) : '—';
-  $('maximum-value').textContent = maxima.length ? digits(Math.max(...maxima), 2) : '—';
-  $('average-value').textContent = maxima.length ? digits(maxima.reduce((sum, value) => sum + value, 0) / maxima.length, 2) : '—';
+  detailPlot.draw(chartFrames, currentProfile());
   $('chart-live').textContent = frozen ? 'PAUSED' : mode === 'demo' ? 'DEMO' : mode === 'live' ? 'LIVE' : 'STOPPED';
 }
 function addReading(reading) {
@@ -401,8 +391,7 @@ $('motor-search').oninput = () => { renderMotorList(); refreshFleet(); };
 $('connect-all').onclick = () => action(startLive);
 $('disconnect').onclick = () => action(stopAndRestore);
 $('demo-mode').onclick = startDemo;
-$('pause-stream').onclick = () => { frozen = !frozen; controlLabel($('pause-stream'), frozen ? 'แสดงกราฟต่อ' : 'พักกราฟ', frozen ? 'play' : 'pause'); $('pause-stream').setAttribute('aria-pressed', String(frozen)); if (!frozen) renderSelected(); else $('chart-live').textContent = 'PAUSED'; toast(frozen ? 'พักหน้าจอแล้ว การอ่านและบันทึกข้อมูลจริงยังทำงาน' : 'กลับมาแสดงข้อมูลล่าสุด'); };
-$('chart-kind').onchange = drawChart;
+$('pause-stream').onclick = () => { frozen = !frozen; controlLabel($('pause-stream'), frozen ? 'แสดงกราฟต่อ' : 'พักกราฟ', frozen ? 'play' : 'pause'); $('pause-stream').setAttribute('aria-pressed', String(frozen)); if (!frozen) renderSelected(); else { $('chart-live').textContent = 'PAUSED'; $('chart-description').textContent = 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ'; } toast(frozen ? 'พักเฉพาะกราฟแล้ว ค่าล่าสุดและการบันทึกยังอัปเดต' : 'กลับมาแสดงข้อมูลล่าสุด'); };
 
 
 
@@ -439,8 +428,7 @@ setInterval(() => {
 }, 1000);
 setupControls();
 setupAcquisitionUI();
-detailPlot = { svg: $('trend-chart'), tooltip: $('chart-tooltip'), frames: [], hoverIndex: 0 };
-bindPlot(detailPlot);
+detailPlot = createPlotStack($('detail-plots'), { prefix: 'trend', label: 'มอเตอร์ที่เลือก' });
 new ResizeObserver(() => { if ($('trend-chart').clientWidth) drawChart(); }).observe($('trend-chart'));
 controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
 (async () => {

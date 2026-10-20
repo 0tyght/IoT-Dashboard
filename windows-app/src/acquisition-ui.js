@@ -1,6 +1,6 @@
 'use strict';
 let recordingState = { settings: { startMode: 'manual', startAt: '', durationMinutes: 0 }, connected: false, active: false, waiting: false, count: 0 };
-let historyPlot, rangeFrames = [], rangeGeneration = 0;
+let historyPlot, rangeFrames = [], rangeGeneration = 0, rangeProfile = null, rangeReduced = false;
 let recordActionBusy = false;
 function storageLabel(last) {
   if (mode === 'demo') return 'ข้อมูลจำลอง';
@@ -50,25 +50,26 @@ function setupAcquisitionUI() {
   $('history-end-date').value = today();
   $('history-date').onchange = () => { if ($('history-end-date').value < $('history-date').value) $('history-end-date').value = $('history-date').value; };
   $('range-from').value = `${today()}T00:00:00`; $('range-to').value = `${today()}T23:59:59`;
-  historyPlot = { svg: $('history-chart'), tooltip: $('history-tooltip'), frames: [], hoverIndex: 0 };
-  bindPlot(historyPlot);
-  const drawHistory = () => {
-    const custom = rangeFrames.length > 0 && !rangeFrames.some(frame => frame.channels);
-    $('range-kind').disabled = custom; $('range-kind').options[0].textContent = custom ? `Custom value · ${rangeFrames[0].unit}` : 'Velocity · mm/s';
-    if (custom) $('range-kind').value = 'velocity';
-    drawSensorPlot(historyPlot, rangeFrames, $('range-kind').value, rangeFrames[0]?.unit);
+  historyPlot = createPlotStack($('history-plots'), { prefix: 'history', label: 'ย้อนหลัง' });
+  const drawHistory = () => historyPlot.draw(rangeFrames, rangeProfile || profiles.find(profile => profile.motorId === $('history-motor').value) || { sensorModel: MODEL, unit: 'mm/s' }, { reduced: rangeReduced });
+  const clearRange = () => {
+    rangeGeneration++; rangeFrames = []; rangeProfile = null; drawHistory();
+    $('load-range').disabled = false; $('range-summary').textContent = 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟย้อนหลัง';
   };
-  $('range-kind').onchange = drawHistory;
+  for (const id of ['history-motor', 'range-from', 'range-to']) $(id).onchange = clearRange;
   new ResizeObserver(() => { if ($('history-chart').clientWidth) drawHistory(); }).observe($('history-chart'));
   $('load-range').onclick = async () => {
-    const generation = ++rangeGeneration; $('load-range').disabled = true; $('range-summary').textContent = 'กำลังโหลดจากไฟล์…';
+    const generation = ++rangeGeneration, motorId = $('history-motor').value;
+    $('load-range').disabled = true; $('range-summary').textContent = 'กำลังโหลดจากไฟล์…';
     try {
-      const result = check(await api.chartRange({ motorId: $('history-motor').value, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
+      const result = check(await api.chartRange({ motorId, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
       if (generation !== rangeGeneration) return;
-      rangeFrames = Measurements.thinFrames(result.rows);
-      $('range-summary').textContent = `${$('history-motor').value} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${rangeFrames.length.toLocaleString()} จุด${result.reduced || rangeFrames.length < result.rows.length ? ' (ลดจำนวนจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
+      rangeFrames = result.rows; rangeReduced = Boolean(result.reduced);
+      // The recording determines its channels/units, even if the motor was edited later.
+      rangeProfile = rangeFrames.length ? { sensorModel: rangeFrames.some(frame => frame.channels) ? MODEL : 'custom', unit: rangeFrames[0].unit } : null;
       drawHistory();
-    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; drawHistory(); $('range-summary').textContent = error.message; } }
+      $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${historyPlot.frames.length.toLocaleString()} จุด${result.reduced || historyPlot.frames.length < result.rows.length ? ' (ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
+    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; drawHistory(); $('range-summary').textContent = error.message; } }
     finally { if (generation === rangeGeneration) $('load-range').disabled = false; }
   };
 }

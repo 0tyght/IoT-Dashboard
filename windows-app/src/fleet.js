@@ -1,6 +1,13 @@
 'use strict';
 const fleetCards = new Map();
 const FLEET_COLORS = ['--x', '--y', '--z'].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+const fleetVisibility = new IntersectionObserver(entries => {
+  for (const entry of entries) {
+    const refs = fleetCards.get(entry.target.dataset.fleetId); if (!refs) continue;
+    refs.inViewport = entry.isIntersecting;
+    if (entry.isIntersecting && currentTab === 'fleet') { refs.lastKey = ''; refreshFleet(); }
+  }
+}, { root: document.querySelector('main'), rootMargin: '160px' });
 function fleetStatus(profile, state) {
   if (profile.enabled === false) return { text: 'พักอ่าน', kind: 'idle' };
   if (mode === 'demo') return { text: 'จำลอง', kind: 'demo' };
@@ -11,7 +18,7 @@ function fleetStatus(profile, state) {
 }
 function graphWindow(frames, width = 600) { return Measurements.windowFrames(frames, $('fleet-window').value, $('graph-count').value, width); }
 function buildFleet() {
-  fleetCards.forEach(refs => refs.resizeObserver?.disconnect()); fleetCards.clear(); $('fleet-list').replaceChildren();
+  fleetVisibility.disconnect(); fleetCards.forEach(refs => refs.resizeObserver?.disconnect()); fleetCards.clear(); $('fleet-list').replaceChildren();
   for (const profile of profiles) {
     const card = node('article', null, 'fleet-card fleet-nine'); card.dataset.fleetId = profile.motorId;
     const header = node('header', null, 'fleet-card-header'), identity = node('div', null, 'fleet-identity');
@@ -41,24 +48,21 @@ function buildFleet() {
     const footer = node('div', null, 'fleet-reading-footer'), temperature = node('span'), samples = node('span'), storage = node('span');
     const cadence = node('p', null, 'fleet-cadence'); footer.append(temperature, samples, storage); readings.append(connection, lastTile, valueGrid, cadence, footer);
     const trend = node('section', null, 'fleet-trend'), trendHead = node('div', null, 'fleet-trend-heading');
-    const kindSelect = node('select'); kindSelect.setAttribute('aria-label', `ชนิดกราฟ ${profile.motorId}`);
-    Object.entries(Measurements.groups).forEach(([value, group]) => kindSelect.add(new Option(`${group.label} · ${group.unit}`, value))); kindSelect.disabled = !threeAxis;
-    if (!threeAxis) kindSelect.replaceChildren(new Option(`Custom value · ${profile.unit}`, 'velocity'));
-    trendHead.append(kindSelect);
+    trendHead.append(node('strong', threeAxis ? 'แนวโน้มทุกช่องวัด' : `Custom value · ${profile.unit}`));
     const coverage = node('span', '', 'graph-coverage'); trendHead.append(coverage);
-    const chartBox = node('div', null, 'fleet-chart-box'), svg = svgNode('svg', { tabindex: 0, role: 'img', 'aria-label': `กราฟ ${profile.motorId} ใช้ลูกศรซ้ายขวาอ่านค่า` });
-    const tooltip = node('div', null, 'fleet-tooltip'); tooltip.hidden = true; chartBox.append(svg, tooltip);
+    const chartBox = node('div', null, 'plot-stack fleet-plots');
+    const plotStack = createPlotStack(chartBox, { prefix: `fleet-${profile.motorId}`, label: profile.motorId, tooltipClass: 'fleet-tooltip' });
     const legend = node('div', null, 'fleet-chart-legend');
     if (threeAxis) ['X', 'Y', 'Z'].forEach((axis, index) => { const label = node('span', `แกน ${axis}`); label.prepend(node('i', null, `fleet-line-${index}`)); legend.append(label); });
-    trend.append(trendHead, chartBox, legend); body.append(readings, trend); card.append(header, body);
+    trend.append(trendHead, legend, chartBox); body.append(readings, trend); card.append(header, body);
     const problem = node('p', null, 'fleet-problem'); problem.hidden = true; card.append(problem); $('fleet-list').append(card);
-    const refs = { card, values, age, lastTime, connection, connectionText, temperature, samples, storage, cadence, problem, svg, tooltip, kindSelect, coverage, frames: [], hoverIndex: 0, hovering: false, lastKey: '' };
+    const refs = { card, values, age, lastTime, connection, connectionText, temperature, samples, storage, cadence, problem, plotStack, coverage, inViewport: false, lastKey: '' };
     refs.redraw = () => {
-      const frames = graphWindow(stateFor(profile.motorId).frames, svg.clientWidth); drawSensorPlot(refs, frames, kindSelect.value, profile.unit);
-      coverage.textContent = `${frames.length.toLocaleString()} ค่า${refs.frames.length < frames.length ? ` (${refs.frames.length} จุด)` : ''}${frames.length ? ` · ${time(frames[0].timestamp)}–${time(frames.at(-1).timestamp)}` : ''}`;
+      const frames = graphWindow(stateFor(profile.motorId).frames, plotStack.svg.clientWidth); plotStack.draw(frames, profile);
+      coverage.textContent = `${frames.length.toLocaleString()} ค่า${plotStack.frames.length < frames.length ? ` (${plotStack.frames.length} จุด)` : ''}${frames.length ? ` · ${time(frames[0].timestamp)}–${time(frames.at(-1).timestamp)}` : ''}`;
     };
-    kindSelect.onchange = refs.redraw; bindPlot(refs); fleetCards.set(profile.motorId, refs);
-    refs.resizeObserver = new ResizeObserver(() => { if (svg.clientWidth > 0) refs.redraw(); }); refs.resizeObserver.observe(svg);
+    fleetCards.set(profile.motorId, refs); fleetVisibility.observe(card);
+    refs.resizeObserver = new ResizeObserver(() => { if (currentTab === 'fleet' && refs.inViewport && plotStack.svg.clientWidth > 0) refs.redraw(); }); refs.resizeObserver.observe(chartBox);
   }
   refreshFleet();
 }
@@ -81,7 +85,7 @@ function refreshFleet() {
     refs.cadence.textContent = `ตั้งอ่านทุก ${profile.pollInterval / 1000} s · รับจริง ${Number.isFinite(actual) ? `${(actual / 1000).toFixed(3)} s` : 'รอสองรอบ'} · ตอบกลับ ${last?.elapsedMs ?? '—'} ms`;
     refs.age.textContent = last ? `${Math.max(0, Math.floor((Date.now() - Date.parse(last.timestamp)) / 1000))} s` : '—';
     const key = `${last?.timestamp}|${$('fleet-window').value}|${$('graph-count').value}|${status.kind}`;
-    if (refs.lastKey !== key) { refs.lastKey = key; refs.redraw(); }
+    if (currentTab === 'fleet' && refs.inViewport && !refs.card.hidden && refs.lastKey !== key) { refs.lastKey = key; refs.redraw(); }
   }
   $('fleet-total').textContent = profiles.length; $('fleet-online').textContent = online; $('fleet-fault').textContent = faults; $('fleet-disabled').textContent = profiles.filter(profile => profile.enabled === false).length;
   $('fleet-demo').hidden = mode !== 'demo'; $('fleet-empty').hidden = profiles.length > 0; $('fleet-no-matches').hidden = !profiles.length || visible > 0;

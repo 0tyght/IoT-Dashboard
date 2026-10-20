@@ -306,3 +306,40 @@ legend { color: #796b8b; font-size: 12px; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
   button:active:not(:disabled) { transform: none; }
 }
+
+/* Small multiples keep different physical units separate and aligned in time. */
+.plot-stack { min-width: 0; }
+.plot-stack-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+.plot-cursor-time, .plot-note { margin: 0; padding: 7px 18px; color: var(--muted); font-size: 11px; line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.plot-cursor-time { background: var(--bg); border-bottom: 1px solid var(--line); }
+.plot-note { border-top: 1px solid var(--line); }
+.measurement-plot { min-width: 0; padding: 10px 0 0; }
+.measurement-plot + .measurement-plot { border-top: 1px solid var(--line); }
+.measurement-plot-heading { display: flex; gap: 4px 14px; flex-wrap: wrap; align-items: baseline; justify-content: space-between; padding: 0 18px; }
+.measurement-plot h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.plot-readout { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plot-readout span + span { margin-left: 8px; }
+.detail-plots { container-type: inline-size; }
+@container (min-width: 620px) {
+  .detail-plots .plot-stack-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+}
+.plot-stack .chart-wrap { margin: 0 8px; }
+.plot-stack .fleet-chart-box svg, .plot-stack #trend-chart, .plot-stack #history-chart { width: 100%; height: 145px; min-height: 145px; max-height: none; display: block; cursor: crosshair; }
+.plot-stack [data-kind="temperature"] svg { height: 132px; min-height: 132px; }
+.fleet-trend { justify-content: flex-start; gap: 8px; }
+.fleet-trend-heading strong { font-size: 12px; font-weight: 600; }
+.fleet-readings { justify-content: flex-start; gap: 18px; }
+.fleet-measurements { gap: 22px; }
+.fleet-reading-footer { margin-top: auto; }
+.fleet-plots .plot-stack-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.fleet-plots .measurement-plot { border-top: 1px solid var(--line); }
+.fleet-plots .measurement-plot-heading { padding: 0 6px; }
+.fleet-plots .chart-wrap { margin: 0; }
+.fleet-plots .plot-cursor-time, .fleet-plots .plot-note { padding-left: 6px; padding-right: 6px; }
+.fleet-plots .plot-readout { flex-basis: 100%; }
+@media (min-width: 1201px) and (max-width: 1599px) {
+  .fleet-card-body { grid-template-columns: minmax(265px, .65fr) minmax(550px, 1.35fr); gap: 18px; }
+}
+@media (min-width: 1750px) {
+  .fleet-card-body { grid-template-columns: minmax(350px, .65fr) minmax(620px, 1.35fr); }
+}
