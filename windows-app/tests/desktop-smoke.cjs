@@ -21,12 +21,17 @@ const { _electron: electron } = require('playwright');
     assert.equal(await page.evaluate(() => Boolean(window.vectraDesktop)), true);
     assert.equal(await page.locator('#connect-sensor').isDisabled(), true);
     assert.equal(await page.locator('.settings-card').isVisible(), true);
+    assert.equal(await page.locator('#sensor-model').inputValue(), 'vemsee-sn3001-wz3a-n01');
+    assert.equal(await page.locator('#preset-note').isVisible(), true);
     await page.screenshot({ path: path.join(artifactDirectory, 'windows-setup.png') });
 
     await page.locator('#demo-mode').click();
     await page.locator('#dashboard-page').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#session-mode').textContent(), 'ข้อมูลจำลอง');
     assert.equal(await page.locator('#reading-value').textContent() !== '—', true);
+    assert.equal(await page.locator('#channel-grid').isVisible(), true);
+    assert.equal(await page.locator('#velocity-x').textContent() !== '—', true);
+    assert.equal(await page.locator('#axis-legend').isVisible(), true);
     await page.screenshot({ path: path.join(artifactDirectory, 'windows-dashboard.png') });
 
     await page.locator('#back-settings').click();

@@ -43,6 +43,7 @@
             <form class="card settings-card" id="sensor-form">
               <div class="card-heading"><div><h2>ค่าการสื่อสารและ Register</h2><p>กรอกจากคู่มือของเซ็นเซอร์รุ่นที่เสียบอยู่</p></div><span class="step">2</span></div>
               <div class="form-grid">
+                <label class="wide">รุ่นเซ็นเซอร์<select name="sensorModel" id="sensor-model"><option value="vemsee-sn3001-wz3a-n01">VemSee SN-3001-WZ3A-N01 — 3 แกน</option><option value="custom">กำหนด Register เอง</option></select></label>
                 <label class="wide">COM Port<select name="path" id="port-select" required><option value="">เลือกอุปกรณ์</option></select></label>
                 <label>รหัสมอเตอร์<input name="motorId" value="MTR-01" maxlength="24" required></label>
                 <label>หน่วย<input name="unit" value="mm/s RMS" maxlength="32" required></label>
@@ -58,6 +59,7 @@
                 <label>อ่านทุก (ms)<input name="pollInterval" type="number" value="2000" min="250" max="3600000" required></label>
                 <label>Timeout (ms)<input name="timeout" type="number" value="1500" min="200" max="30000" required></label>
               </div>
+              <div class="preset-note" id="preset-note"><strong>Preset จากคู่มือ SN-3001-WZ3A-N01</strong><span>อ่านอุณหภูมิ 0000H, Velocity X/Y/Z 0001H–0003H, Displacement X/Y/Z 0004H–0006H และ Acceleration X/Y/Z 000AH–000CH โดยหารค่าที่อ่านได้ด้วย 10</span><small>คู่มือที่ให้มายังไม่ระบุค่าโรงงานของ Baud rate, Parity และ UID โปรดยืนยันค่าที่ตั้งอยู่กับผู้ขายหรืออุปกรณ์จริง</small></div>
 
               <div class="test-result idle" id="test-result" role="status"><span class="result-icon">○</span><div><strong>ยังไม่ได้ทดสอบเซ็นเซอร์</strong><p>ปุ่มเข้าแดชบอร์ดจะพร้อมหลังได้รับค่าตอบกลับที่ถูกต้อง</p></div></div>
               <div class="form-actions">
@@ -76,15 +78,22 @@
           </div>
 
           <div class="summary-grid">
-            <article class="summary-card primary-reading"><span>ค่าการสั่นล่าสุด</span><div><strong id="reading-value">—</strong><small id="reading-unit">mm/s RMS</small></div><p id="reading-time">ยังไม่ได้รับข้อมูล</p></article>
+            <article class="summary-card primary-reading"><span id="primary-reading-label">ค่าการสั่นล่าสุด</span><div><strong id="reading-value">—</strong><small id="reading-unit">mm/s</small></div><p id="reading-time">ยังไม่ได้รับข้อมูล</p></article>
             <article class="summary-card"><span>สถานะข้อมูล</span><strong class="status-text" id="reading-status">กำลังรอ</strong><p id="status-note">ระบบยังไม่ได้รับค่ารอบแรก</p></article>
             <article class="summary-card"><span>การเชื่อมต่อ</span><strong id="connection-name">—</strong><p id="connection-detail">—</p></article>
             <article class="summary-card"><span>จำนวนข้อมูลรอบนี้</span><strong id="sample-count">0</strong><p>บันทึกลงไฟล์รายวันอัตโนมัติ</p></article>
           </div>
 
+          <section class="channel-grid" id="channel-grid" hidden aria-label="ค่าจากเซ็นเซอร์สามแกน">
+            <article><span>Velocity X</span><strong id="velocity-x">—</strong><small>mm/s</small></article>
+            <article><span>Velocity Y</span><strong id="velocity-y">—</strong><small>mm/s</small></article>
+            <article><span>Velocity Z</span><strong id="velocity-z">—</strong><small>mm/s</small></article>
+            <article class="temperature-channel"><span>Temperature</span><strong id="temperature">—</strong><small>°C</small></article>
+          </section>
+
           <div class="dashboard-grid">
             <section class="card chart-card">
-              <div class="card-heading"><div><h2>แนวโน้มค่าการสั่น</h2><p>60 ค่าล่าสุดในรอบการใช้งานนี้</p></div><span class="live-chip"><i></i><b id="live-label">LIVE</b></span></div>
+              <div class="card-heading"><div><h2>แนวโน้มค่าการสั่น</h2><p>60 ค่าล่าสุดในรอบการใช้งานนี้</p><div class="axis-legend" id="axis-legend" hidden><span><i class="axis-x"></i>X</span><span><i class="axis-y"></i>Y</span><span><i class="axis-z"></i>Z</span></div></div><span class="live-chip"><i></i><b id="live-label">LIVE</b></span></div>
               <svg id="trend-chart" viewBox="0 0 800 310" role="img" aria-label="กราฟแนวโน้มค่าการสั่น"></svg>
               <div class="chart-scale"><span>ต่ำสุด <b id="minimum-value">—</b></span><span>เฉลี่ย <b id="average-value">—</b></span><span>สูงสุด <b id="maximum-value">—</b></span></div>
             </section>

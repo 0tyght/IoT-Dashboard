@@ -2,7 +2,7 @@
 
 const ModbusRTU = require('modbus-serial');
 const { SerialPort } = require('serialport');
-const { normalizeConfig, decodeRegisters, registerCount } = require('./sensor-codec.cjs');
+const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, registerCount } = require('./sensor-codec.cjs');
 
 function closeClient(client) {
   return new Promise(resolve => {
@@ -24,13 +24,24 @@ async function createClient(config) {
   return client;
 }
 
-async function readOnce(client, config) {
-  const count = registerCount(config.dataType);
+async function readRegisters(client, config, address, count) {
   const result = config.registerType === 'input'
-    ? await client.readInputRegisters(config.registerAddress, count)
-    : await client.readHoldingRegisters(config.registerAddress, count);
-  const registers = Array.from(result.data || []);
-  return { registers, value: decodeRegisters(registers, config) };
+    ? await client.readInputRegisters(address, count)
+    : await client.readHoldingRegisters(address, count);
+  return Array.from(result.data || []);
+}
+
+async function readOnce(client, config) {
+  if (config.sensorModel === 'vemsee-sn3001-wz3a-n01') {
+    const primaryRegisters = await readRegisters(client, config, 0x0000, 7);
+    const accelerationRegisters = await readRegisters(client, config, 0x000a, 3);
+    return {
+      registers: { primary: primaryRegisters, acceleration: accelerationRegisters },
+      ...decodeVemseeSnapshot(primaryRegisters, accelerationRegisters)
+    };
+  }
+  const registers = await readRegisters(client, config, config.registerAddress, registerCount(config.dataType));
+  return { registers, value: decodeRegisters(registers, config), unit: config.unit };
 }
 
 class SensorService {
@@ -90,8 +101,10 @@ class SensorService {
       this.onReading({
         motorId: this.config.motorId,
         value: reading.value,
+        channels: reading.channels || null,
+        primaryAxis: reading.primaryAxis || null,
         rawRegisters: reading.registers,
-        unit: this.config.unit,
+        unit: reading.unit || this.config.unit,
         timestamp: new Date().toISOString(),
         source: 'RS485 / Modbus RTU',
         port: this.config.path,

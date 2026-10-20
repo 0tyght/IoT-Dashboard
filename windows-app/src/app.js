@@ -32,8 +32,29 @@ function getConfig() {
 }
 
 function configSignature(config = getConfig()) {
-  const keys = ['path', 'motorId', 'unit', 'baudRate', 'parity', 'stopBits', 'slaveId', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'pollInterval', 'timeout'];
+  const keys = ['sensorModel', 'path', 'motorId', 'unit', 'baudRate', 'parity', 'stopBits', 'slaveId', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'pollInterval', 'timeout'];
   return JSON.stringify(Object.fromEntries(keys.map(key => [key, config[key]])));
+}
+
+function applySensorPreset(model, keepConnection = true) {
+  const connection = keepConnection ? {
+    path: form.elements.path.value,
+    motorId: form.elements.motorId.value,
+    baudRate: form.elements.baudRate.value,
+    parity: form.elements.parity.value,
+    stopBits: form.elements.stopBits.value,
+    slaveId: form.elements.slaveId.value,
+    pollInterval: form.elements.pollInterval.value,
+    timeout: form.elements.timeout.value
+  } : {};
+  if (model === 'vemsee-sn3001-wz3a-n01') {
+    fillForm({ sensorModel: model, registerType: 'holding', registerAddress: 0, dataType: 'int16', byteOrder: 'ABCD', scale: 0.1, unit: 'mm/s', ...connection });
+    $('preset-note').hidden = false;
+  } else {
+    fillForm({ sensorModel: 'custom', registerAddress: 0, dataType: 'float32', byteOrder: 'ABCD', scale: 1, unit: 'mm/s RMS', ...connection });
+    $('preset-note').hidden = true;
+  }
+  invalidateTest();
 }
 
 function setTestResult(kind, title, message) {
@@ -131,6 +152,9 @@ function resetSessionDisplay() {
   pauseDisplay = false;
   $('sample-count').textContent = '0';
   $('pause-stream').textContent = 'หยุดกราฟชั่วคราว';
+  $('channel-grid').hidden = true;
+  $('axis-legend').hidden = true;
+  $('primary-reading-label').textContent = 'ค่าการสั่นล่าสุด';
   updateStats();
   drawChart();
 }
@@ -141,11 +165,11 @@ function beginDashboard(nextSession) {
   const config = session.config;
   $('dashboard-motor').textContent = config.motorId;
   $('reading-unit').textContent = config.unit;
-  $('session-mode').textContent = session.mode === 'demo' ? 'ข้อมูลจำลอง' : 'RS485 / Modbus RTU';
+  $('session-mode').textContent = session.mode === 'demo' ? 'ข้อมูลจำลอง' : config.sensorModel === 'vemsee-sn3001-wz3a-n01' ? 'VemSee 3-axis / Modbus' : 'RS485 / Modbus RTU';
   $('session-motor').textContent = config.motorId;
   $('session-port').textContent = session.mode === 'demo' ? 'ไม่ใช้พอร์ต' : config.path;
   $('session-slave').textContent = session.mode === 'demo' ? '—' : config.slaveId;
-  $('session-register').textContent = session.mode === 'demo' ? '—' : `${config.registerType === 'input' ? '04' : '03'} / ${config.registerAddress}`;
+  $('session-register').textContent = session.mode === 'demo' ? '—' : config.sensorModel === 'vemsee-sn3001-wz3a-n01' ? `${config.registerType === 'input' ? '04' : '03'} / 0000H–0006H, 000AH–000CH` : `${config.registerType === 'input' ? '04' : '03'} / ${config.registerAddress}`;
   $('connection-name').textContent = session.mode === 'demo' ? 'SIMULATION' : config.path;
   $('connection-detail').textContent = session.mode === 'demo' ? 'ไม่ได้อ่านค่าจากฮาร์ดแวร์' : `Slave ${config.slaveId} · ${config.baudRate} baud`;
   $('dashboard-source').textContent = session.mode === 'demo' ? 'กำลังแสดงข้อมูลจำลอง — ไม่ใช่ค่าจากเซ็นเซอร์' : `รับข้อมูลจริงจาก ${config.path}`;
@@ -158,11 +182,20 @@ function beginDashboard(nextSession) {
 function addReading(reading) {
   sampleCount += 1;
   if (pauseDisplay) return;
-  readings.push({ value: Number(reading.value), timestamp: reading.timestamp });
+  readings.push({ value: Number(reading.value), channels: reading.channels || null, timestamp: reading.timestamp });
   readings = readings.slice(-60);
   $('reading-value').textContent = Number(reading.value).toFixed(2);
   $('reading-unit').textContent = reading.unit || session?.config.unit || 'mm/s RMS';
   $('reading-time').textContent = `รับล่าสุด ${new Date(reading.timestamp).toLocaleTimeString('th-TH')}`;
+  if (reading.channels) {
+    $('channel-grid').hidden = false;
+    $('axis-legend').hidden = false;
+    $('primary-reading-label').textContent = `Velocity สูงสุด · แกน ${reading.primaryAxis || '—'}`;
+    $('velocity-x').textContent = Number(reading.channels.velocityX).toFixed(1);
+    $('velocity-y').textContent = Number(reading.channels.velocityY).toFixed(1);
+    $('velocity-z').textContent = Number(reading.channels.velocityZ).toFixed(1);
+    $('temperature').textContent = Number(reading.channels.temperature).toFixed(1);
+  }
   $('reading-status').textContent = 'รับข้อมูลแล้ว';
   $('reading-status').style.color = 'var(--success)';
   $('status-note').textContent = session?.mode === 'demo' ? 'ค่านี้สร้างโดยโปรแกรมเพื่อทดสอบหน้าจอ' : 'ตอบกลับจากเซ็นเซอร์และบันทึกลงไฟล์แล้ว';
@@ -190,7 +223,14 @@ function drawChart() {
   svg.replaceChildren();
   const width = 800, height = 310, left = 52, right = 22, top = 24, bottom = 40;
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
-  const values = readings.map(item => item.value).filter(Number.isFinite);
+  const hasAxes = readings.some(item => item.channels);
+  const series = hasAxes ? [
+    { key: 'velocityX', color: '#0067c0' },
+    { key: 'velocityY', color: '#16855b' },
+    { key: 'velocityZ', color: '#a15c00' }
+  ] : [{ key: 'value', color: '#0067c0' }];
+  const seriesValues = series.map(item => readings.map(reading => item.key === 'value' ? reading.value : reading.channels?.[item.key]).filter(Number.isFinite));
+  const values = seriesValues.flat();
   const max = values.length ? Math.max(...values, 1) : 10;
   const yMax = Math.ceil(max * 1.2 * 10) / 10;
   for (let i = 0; i <= 4; i += 1) {
@@ -206,14 +246,18 @@ function drawChart() {
     svg.append(message);
     return;
   }
-  const points = values.map((value, index) => {
-    const x = left + (values.length === 1 ? plotWidth / 2 : index * plotWidth / (values.length - 1));
-    const y = top + plotHeight - value / yMax * plotHeight;
-    return `${x},${y}`;
-  }).join(' ');
-  svg.append(svgNode('polyline', { points, fill: 'none', stroke: '#0067c0', 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
-  const last = points.split(' ').at(-1).split(',');
-  svg.append(svgNode('circle', { cx: last[0], cy: last[1], r: 5, fill: '#fff', stroke: '#0067c0', 'stroke-width': 3 }));
+  series.forEach((item, seriesIndex) => {
+    const current = seriesValues[seriesIndex];
+    if (!current.length) return;
+    const points = current.map((value, index) => {
+      const x = left + (current.length === 1 ? plotWidth / 2 : index * plotWidth / (current.length - 1));
+      const y = top + plotHeight - value / yMax * plotHeight;
+      return `${x},${y}`;
+    }).join(' ');
+    svg.append(svgNode('polyline', { points, fill: 'none', stroke: item.color, 'stroke-width': 2.3, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    const last = points.split(' ').at(-1).split(',');
+    svg.append(svgNode('circle', { cx: last[0], cy: last[1], r: 4, fill: '#fff', stroke: item.color, 'stroke-width': 2.5 }));
+  });
 }
 
 async function returnToSetup() {
@@ -231,6 +275,7 @@ $('refresh-ports').addEventListener('click', scanPorts);
 $('open-data').addEventListener('click', () => api.openDataPath());
 $('open-data-dashboard').addEventListener('click', () => api.openDataPath());
 $('port-select').addEventListener('change', event => { selectPort(event.target.value); });
+$('sensor-model').addEventListener('change', event => applySensorPreset(event.target.value));
 form.addEventListener('input', invalidateTest);
 
 $('test-sensor').addEventListener('click', async () => {
@@ -250,7 +295,13 @@ $('test-sensor').addEventListener('click', async () => {
   verifiedSignature = configSignature(result.config);
   fillForm(result.config);
   $('connect-sensor').disabled = false;
-  setTestResult('success', `เซ็นเซอร์ตอบกลับ: ${Number(result.value).toFixed(3)} ${result.config.unit}`, `Raw registers: ${result.registers.join(', ')}`);
+  const raw = Array.isArray(result.registers)
+    ? result.registers.join(', ')
+    : `0000H: ${(result.registers?.primary || []).join(', ')} · 000AH: ${(result.registers?.acceleration || []).join(', ')}`;
+  const summary = result.channels
+    ? `X ${result.channels.velocityX.toFixed(1)} · Y ${result.channels.velocityY.toFixed(1)} · Z ${result.channels.velocityZ.toFixed(1)} mm/s · ${result.channels.temperature.toFixed(1)} °C`
+    : `${Number(result.value).toFixed(3)} ${result.config.unit}`;
+  setTestResult('success', `เซ็นเซอร์ตอบกลับ: ${summary}`, `Raw registers: ${raw}`);
   setTitleStatus('connected', `ตรวจพบเซ็นเซอร์ที่ ${result.config.path}`);
 });
 
@@ -280,10 +331,20 @@ $('demo-mode').addEventListener('click', () => {
   let phase = 0;
   demoTimer = setInterval(() => {
     phase += .24;
-    const value = 3.4 + Math.sin(phase) * .55 + (Math.random() - .5) * .18;
-    addReading({ value, unit: config.unit, timestamp: new Date().toISOString() });
+    const channels = config.sensorModel === 'vemsee-sn3001-wz3a-n01' ? {
+      velocityX: 2.8 + Math.sin(phase) * .35,
+      velocityY: 3.4 + Math.sin(phase + .7) * .5,
+      velocityZ: 2.1 + Math.sin(phase + 1.4) * .3,
+      displacementX: 18.2, displacementY: 21.5, displacementZ: 16.4,
+      accelerationX: 1.2, accelerationY: 1.6, accelerationZ: 1.1,
+      temperature: 34.6 + Math.sin(phase / 4) * .4
+    } : null;
+    const axes = channels ? [['X', channels.velocityX], ['Y', channels.velocityY], ['Z', channels.velocityZ]] : [['—', 3.4 + Math.sin(phase) * .55]];
+    const [primaryAxis, value] = axes.reduce((highest, current) => current[1] > highest[1] ? current : highest);
+    addReading({ value, channels, primaryAxis, unit: channels ? 'mm/s' : config.unit, timestamp: new Date().toISOString() });
   }, 1000);
-  addReading({ value: 3.4, unit: config.unit, timestamp: new Date().toISOString() });
+  const initialChannels = config.sensorModel === 'vemsee-sn3001-wz3a-n01' ? { velocityX: 2.8, velocityY: 3.4, velocityZ: 2.1, displacementX: 18.2, displacementY: 21.5, displacementZ: 16.4, accelerationX: 1.2, accelerationY: 1.6, accelerationZ: 1.1, temperature: 34.6 } : null;
+  addReading({ value: 3.4, channels: initialChannels, primaryAxis: initialChannels ? 'Y' : null, unit: initialChannels ? 'mm/s' : config.unit, timestamp: new Date().toISOString() });
 });
 
 $('back-settings').addEventListener('click', returnToSetup);
@@ -315,7 +376,9 @@ api.onStatus(status => {
 (async function initialize() {
   if (!api) return;
   const [saved, dataPath] = await Promise.all([api.loadConfig(), api.getDataPath()]);
-  fillForm(saved);
+  if (saved) fillForm(saved);
+  else applySensorPreset('vemsee-sn3001-wz3a-n01', true);
+  $('preset-note').hidden = form.elements.sensorModel.value !== 'vemsee-sn3001-wz3a-n01';
   $('data-path').textContent = dataPath;
   drawChart();
   await scanPorts();

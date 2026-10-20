@@ -5,6 +5,7 @@ const ALLOWED_PARITY = new Set(['none', 'even', 'odd']);
 const ALLOWED_FUNCTIONS = new Set(['holding', 'input']);
 const REGISTER_COUNTS = { uint16: 1, int16: 1, uint32: 2, int32: 2, float32: 2 };
 const ALLOWED_ORDERS = new Set(['ABCD', 'CDAB', 'BADC', 'DCBA']);
+const SENSOR_MODELS = new Set(['vemsee-sn3001-wz3a-n01', 'custom']);
 
 function numberInRange(value, label, min, max, integer = false) {
   const number = Number(value);
@@ -27,6 +28,8 @@ function normalizeConfig(input = {}) {
   if (!ALLOWED_PARITY.has(parity)) throw new Error('Parity ไม่รองรับ');
   const registerType = String(input.registerType || 'holding');
   if (!ALLOWED_FUNCTIONS.has(registerType)) throw new Error('Modbus function ไม่รองรับ');
+  const sensorModel = String(input.sensorModel || 'vemsee-sn3001-wz3a-n01');
+  if (!SENSOR_MODELS.has(sensorModel)) throw new Error('รุ่นเซ็นเซอร์ไม่รองรับ');
   const scale = numberInRange(input.scale ?? 1, 'Scale', -1000000, 1000000);
   if (scale === 0) throw new Error('Scale ต้องไม่เป็น 0');
   return {
@@ -35,7 +38,8 @@ function normalizeConfig(input = {}) {
     parity,
     dataBits: 8,
     stopBits: Number(input.stopBits) === 2 ? 2 : 1,
-    slaveId: numberInRange(input.slaveId ?? 1, 'Slave ID', 1, 247, true),
+    slaveId: numberInRange(input.slaveId ?? 1, 'Slave ID', 1, sensorModel === 'vemsee-sn3001-wz3a-n01' ? 254 : 247, true),
+    sensorModel,
     registerType,
     registerAddress: numberInRange(input.registerAddress ?? 0, 'Register address', 0, 65535, true),
     dataType,
@@ -46,6 +50,33 @@ function normalizeConfig(input = {}) {
     unit: String(input.unit || 'mm/s RMS').trim().slice(0, 32) || 'mm/s RMS',
     timeout: numberInRange(input.timeout ?? 1500, 'Timeout', 200, 30000, true)
   };
+}
+
+function signed16(value) {
+  const unsigned = Number(value) & 0xffff;
+  return unsigned & 0x8000 ? unsigned - 0x10000 : unsigned;
+}
+
+function decodeVemseeSnapshot(primaryRegisters, accelerationRegisters) {
+  if (!Array.isArray(primaryRegisters) || primaryRegisters.length < 7) throw new Error('ข้อมูล Register 0000H–0006H ไม่ครบ');
+  if (!Array.isArray(accelerationRegisters) || accelerationRegisters.length < 3) throw new Error('ข้อมูล Register 000AH–000CH ไม่ครบ');
+  const tenth = value => signed16(value) / 10;
+  const channels = {
+    temperature: tenth(primaryRegisters[0]),
+    velocityX: tenth(primaryRegisters[1]),
+    velocityY: tenth(primaryRegisters[2]),
+    velocityZ: tenth(primaryRegisters[3]),
+    displacementX: tenth(primaryRegisters[4]),
+    displacementY: tenth(primaryRegisters[5]),
+    displacementZ: tenth(primaryRegisters[6]),
+    accelerationX: tenth(accelerationRegisters[0]),
+    accelerationY: tenth(accelerationRegisters[1]),
+    accelerationZ: tenth(accelerationRegisters[2])
+  };
+  if (Object.values(channels).some(value => !Number.isFinite(value))) throw new Error('ค่าที่อ่านได้ไม่ใช่ตัวเลขที่ใช้งานได้');
+  const axes = [['X', channels.velocityX], ['Y', channels.velocityY], ['Z', channels.velocityZ]];
+  const [primaryAxis, value] = axes.reduce((highest, current) => Math.abs(current[1]) > Math.abs(highest[1]) ? current : highest);
+  return { channels, primaryAxis, value, unit: 'mm/s' };
 }
 
 function orderedBytes(registers, order) {
@@ -78,4 +109,4 @@ function registerCount(dataType) {
   return REGISTER_COUNTS[dataType] || 1;
 }
 
-module.exports = { normalizeConfig, decodeRegisters, registerCount };
+module.exports = { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, registerCount };

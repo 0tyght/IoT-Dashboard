@@ -41,8 +41,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $version = (Get-Content "windows-app/package.json" | ConvertFrom-Json).version
           gh release create "${{ github.ref_name }}" `
-            "windows-app/release/VECTRA Sensor Monitor-Setup-0.3.0-x64.exe" `
-            "windows-app/release/VECTRA Sensor Monitor-Portable-0.3.0-x64.exe" `
-            --title "VECTRA Sensor Monitor 0.3.0" `
-            --notes "Windows x64 release. Use Setup for a normal installation or Portable to run without installation. The application requires the sensor manufacturer's RS485/Modbus register settings before live commissioning."
+            "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
+            "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
+            --title "VECTRA Sensor Monitor $version" `
+            --notes "Windows x64 release. Includes a VemSee SN-3001-WZ3A-N01 three-axis preset from the supplied register map. Confirm the installed sensor's UID, baud rate, parity and wiring before commissioning."
