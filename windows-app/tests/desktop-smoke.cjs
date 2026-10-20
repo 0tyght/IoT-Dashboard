@@ -18,8 +18,9 @@ const { _electron: electron } = require('playwright');
     const page = await app.firstWindow(); const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('#app-version').filter({ hasText: 'v0.5.0' }).waitFor();
+    await page.locator('#app-version').filter({ hasText: `v${require('../package.json').version}` }).waitFor();
     assert(await page.locator('#connect-all').isDisabled());
+    await page.screenshot({ path: path.join(artifacts, 'empty-state.png'), animations: 'disabled' });
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('sensor:list-ports');
       ipcMain.handle('sensor:list-ports', () => ({ ok: true, ports: [{ path: 'COM987', manufacturer: 'Test RS485 adapter', vendorId: 'TEST' }] }));

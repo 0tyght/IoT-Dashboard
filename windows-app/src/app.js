@@ -109,7 +109,9 @@ function renderSelected() {
   $('selected-subtitle').textContent = profile ? `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee SN-3001-WZ3A-N01' : 'Custom Modbus sensor'} · ${profile.path} / Slave ${profile.slaveId}` : 'ตั้งค่าเซ็นเซอร์เพื่อเริ่มเก็บข้อมูลในเครื่องนี้';
   $('welcome').hidden = Boolean(last) || mode !== 'offline';
   $('monitor-content').hidden = !last && mode === 'offline';
-  $('welcome-setup').textContent = profiles.length ? '⚙ ตรวจสอบการตั้งค่า' : '＋ ตั้งค่ามอเตอร์ตัวแรก';
+  $('empty-state-title').textContent = profiles.length ? 'ยังไม่มีข้อมูลการวัด' : 'ยังไม่มีมอเตอร์';
+  $('empty-state-description').textContent = profiles.length ? 'เลือก “เริ่มอ่านข้อมูล” เพื่อทดสอบการเชื่อมต่อและรับข้อมูลจากเซ็นเซอร์' : 'เพิ่มมอเตอร์และกำหนดค่าการเชื่อมต่อเพื่อเริ่มอ่านข้อมูล';
+  $('welcome-setup').textContent = profiles.length ? '⚙ ตั้งค่าการเชื่อมต่อ' : '＋ เพิ่มมอเตอร์';
   $('demo-banner').hidden = mode !== 'demo';
   if (profile) {
     $('connection-name').textContent = mode === 'demo' ? 'DEMO' : profile.path;
