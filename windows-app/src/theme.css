@@ -43,7 +43,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .mode-indicator.demo-mode { color: #7461ad; }
 .commandbar { min-height: 52px; height: auto; background: #fff; padding: 9px 18px; flex-wrap: wrap; gap: 8px 14px; }
 .command-group button { font-size: 12px; }
-.recording-strip { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 18px; background: #fcfbff; border-bottom: 1px solid #e9e5f4; }
+.session-menu { position: relative; margin-left: auto; flex-shrink: 0; }
+.session-menu > summary { cursor: pointer; min-height: 34px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); font-size: 12px; }
+.session-menu > summary:hover, .session-menu[open] > summary { background: var(--blue-soft); border-color: #b6acee; }
+.session-options { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 245px; padding: 6px; border-radius: 8px; background: var(--paper); box-shadow: 0 6px 24px #28304c26; display: grid; gap: 3px; }
+.session-options button { text-align: left; justify-content: flex-start; border-color: transparent; white-space: normal; font-size: 12px; padding: 9px 10px; }
+.session-options button + button { border-top-color: var(--line); }
+#disconnect.primary { background: #4d466b; border-color: #4d466b; }
+#disconnect.primary:hover:not(:disabled) { background: #39334f; border-color: #39334f; }
+.recording-strip .storage-fault { color: var(--red); }
+.recording-strip { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; padding: 5px 18px; background: #fcfbff; border-bottom: 1px solid #e9e5f4; }
 .recording-strip > div:first-child { display: flex; gap: 7px 14px; align-items: center; flex-wrap: wrap; min-width: 0; }
 .recording-strip strong { color: #625579; font-size: 12px; }
 .recording-strip span { color: #756c86; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }

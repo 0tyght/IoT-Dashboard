@@ -36,19 +36,19 @@ function renderLogs() {
 }
 function setBusy(value) { busy = value; updateControls(); }
 function updateControls() {
-  const running = mode !== 'offline';
-  $('connect-all').disabled = busy || running || !profiles.some(profile => profile.enabled !== false) || dataError;
-  controlLabel($('connect-all'), busy ? 'กำลังดำเนินการ…' : 'เริ่มอ่านข้อมูล', 'play');
-  $('disconnect').disabled = busy || !running;
-  for (const id of ['new-motor', 'add-motor-table', 'fleet-add', 'fleet-empty-add']) $(id).disabled = busy || dataError;
-  $('import-profiles').disabled = busy || running || dataError;
-  $('edit-motor').disabled = busy || !currentProfile() || dataError || isTemporaryMotor(selected);
-  $('demo-mode').disabled = busy || running;
-  $('export-profiles').disabled = busy || !profiles.length;
-  document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = busy || dataError || isTemporaryMotor(button.dataset.edit || button.dataset.delete); });
+  const locked = busy || recordActionBusy, running = mode !== 'offline';
+  $('connect-all').disabled = locked || running || !profiles.some(profile => profile.enabled !== false) || dataError;
+  $('disconnect').disabled = locked || !running;
+  for (const id of ['new-motor', 'fleet-empty-add']) $(id).disabled = locked || dataError;
+  $('import-profiles').disabled = locked || running || dataError;
+  $('edit-motor').disabled = locked || !currentProfile() || dataError || isTemporaryMotor(selected);
+  $('demo-mode').disabled = locked || running;
+  $('export-profiles').disabled = locked || !profiles.length;
+  document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = locked || dataError || isTemporaryMotor(button.dataset.edit || button.dataset.delete); });
   $('mode-indicator').className = `mode-indicator ${mode === 'live' ? 'live' : mode === 'demo' ? 'demo-mode' : ''}`;
   $('mode-indicator').textContent = mode === 'live' ? 'ACQUIRING' : mode === 'demo' ? 'SIMULATION' : 'OFFLINE';
-  $('connect-all').setAttribute('aria-busy', String(busy));
+  $('connect-all').setAttribute('aria-busy', String(locked));
+  $('disconnect').setAttribute('aria-busy', String(locked));
   renderRecording();
 }
 function setTab(tab) {
@@ -117,9 +117,8 @@ function renderSelected() {
   $('welcome').hidden = Boolean(last) || mode !== 'offline';
   $('monitor-content').hidden = !last && mode === 'offline';
   $('empty-state-title').textContent = profiles.length ? 'ยังไม่มีข้อมูลการวัด' : 'ยังไม่มีมอเตอร์';
-  $('empty-state-description').textContent = profiles.length ? 'เลือก “เริ่มอ่านข้อมูล” เพื่อทดสอบการเชื่อมต่อและรับข้อมูลจากเซ็นเซอร์' : 'เพิ่มมอเตอร์และกำหนดค่าการเชื่อมต่อเพื่อเริ่มอ่านข้อมูล';
+  $('empty-state-description').textContent = profiles.length ? 'กดปุ่มเริ่มเพื่อตรวจการเชื่อมต่อและรับข้อมูลตามโหมดที่เลือก' : 'เพิ่มมอเตอร์และกำหนดค่าการเชื่อมต่อเพื่อเริ่มอ่านข้อมูล';
   controlLabel($('welcome-setup'), profiles.length ? 'ตั้งค่าการเชื่อมต่อ' : 'เพิ่มมอเตอร์', profiles.length ? 'settings' : 'plus');
-  $('demo-banner').hidden = mode !== 'demo';
   if (profile) {
     $('connection-name').textContent = mode === 'demo' ? 'DEMO' : profile.path;
     $('connection-detail').textContent = mode === 'demo' ? 'ค่าจำลอง · ไม่เขียนไฟล์' : `${profile.baudRate} baud · Slave ${profile.slaveId} · ${profile.parity.toUpperCase()}`;
@@ -301,13 +300,17 @@ function toggleMotor(profile) {
 }
 async function startLive() {
   if (busy || mode !== 'offline' || !profiles.length) return;
+  if (recordingState.settings.startMode === 'scheduled' && Date.parse(recordingState.settings.startAt) <= Date.now()) {
+    $('record-settings').click(); $('record-form-error').textContent = 'เวลาบันทึกผ่านแล้ว เลือกเวลาใหม่หรือเปลี่ยนเป็นอ่านและบันทึกอัตโนมัติ'; $('record-form-error').hidden = false; return;
+  }
   setBusy(true); message(); addLog('info', '', 'กำลังทดสอบทุกมอเตอร์ก่อนเริ่มอ่าน');
   try {
     const result = check(await api.connect(profiles));
     cache.clear(); successful = 0; failures = 0; frozen = false; mode = 'live';
     if (!result.configs.some(profile => profile.motorId === selected)) selected = result.configs[0].motorId;
     if (result.recording) renderRecording(result.recording);
-    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', `เริ่มอ่าน ${result.configs.length} มอเตอร์ · การบันทึกใช้เงื่อนไขที่ตั้งแยกไว้`);
+    if (result.recording?.scheduleMissed) message('เวลาบันทึกผ่านไประหว่างตรวจเซ็นเซอร์ · กำลังอ่านโดยไม่บันทึก เลือก เพิ่มเติม → เริ่มบันทึกทันที');
+    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', `เริ่มอ่าน ${result.configs.length} มอเตอร์ · ${recordingState.active ? 'บันทึกอัตโนมัติ' : recordingState.waiting ? 'รอเวลาบันทึก' : 'ดูอย่างเดียว'}`);
   } catch (error) { message(`${error.message} · ยังไม่ได้เริ่มเก็บข้อมูล ตรวจการตั้งค่าแต่ละมอเตอร์แล้วลองใหม่`); addLog('error', '', error.message); }
   finally { setBusy(false); }
 }
@@ -317,7 +320,7 @@ async function stop() {
   try {
     if (mode === 'live') { const result = check(await api.disconnect()); if (result.recording) renderRecording(result.recording); }
     clearInterval(demoTimer); mode = 'offline'; frozen = false; controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
-    cache.forEach(state => { state.status = 'offline'; }); renderSelected(); addLog('info', '', 'หยุดการอ่านแล้ว');
+    cache.forEach(state => { state.status = 'offline'; }); renderSelected(); addLog('info', '', 'หยุดการอ่านและปิดรอบบันทึกแล้ว');
   } finally { setBusy(false); }
 }
 function demoFrame(profile, index, phase) {
@@ -372,8 +375,8 @@ document.querySelectorAll('[data-tab]').forEach((button, index, tabs) => {
     setTab(tabs[next].dataset.tab); tabs[next].focus();
   };
 });
-$('new-motor').onclick = $('add-motor-table').onclick = () => openEditor();
-$('fleet-add').onclick = $('fleet-empty-add').onclick = () => openEditor();
+$('new-motor').onclick = () => openEditor();
+$('fleet-empty-add').onclick = () => openEditor();
 $('fleet-window').onchange = updateGraphWindow;
 $('fleet-filter').onchange = refreshFleet;
 $('fleet-reset-filters').onclick = () => { $('motor-search').value = ''; $('fleet-filter').value = 'all'; renderMotorList(); };

@@ -20,6 +20,9 @@ const { _electron: electron } = require('playwright');
     await page.waitForLoadState('domcontentloaded');
     await page.locator('#app-version').filter({ hasText: `v${require('../package.json').version}` }).waitFor();
     assert(await page.locator('#connect-all').isDisabled());
+    assert((await page.locator('#connect-all').textContent()).includes('เริ่มอ่านและบันทึก'));
+    assert(await page.locator('#disconnect').isHidden());
+    assert(await page.locator('#recording-strip').isHidden(), 'idle mode has no redundant recording toolbar');
     await page.screenshot({ path: path.join(artifacts, 'empty-state.png'), animations: 'disabled' });
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('sensor:list-ports');
@@ -51,7 +54,7 @@ const { _electron: electron } = require('playwright');
     assert((await page.locator('[data-fleet-id="MTR-01"] h2').textContent()).includes('pump 01'));
     assert(JSON.parse(fs.readFileSync(path.join(temporary, 'motors.json'), 'utf8'))[0].nameplate.includes('DE'));
 
-    await page.locator('#demo-mode').click();
+    await page.locator('#session-actions summary').click(); await page.locator('#demo-mode').click();
     await page.locator('#fleet-view').waitFor({ state: 'visible' });
     assert.equal(await page.locator('.fleet-card').count(), 2);
     await page.waitForFunction(() => document.querySelectorAll('.fleet-card:first-child svg polyline').length === 10);
@@ -84,7 +87,7 @@ const { _electron: electron } = require('playwright');
     await page.locator('.fleet-card:first-child [data-kind="displacement"] svg').hover();
     assert((await page.locator('.fleet-card:first-child [data-kind="displacement"] .fleet-tooltip').textContent()).includes('µm'));
     await page.locator('#fleet-window').selectOption('300s');
-    await page.locator('#fleet-add').click();
+    await page.locator('#new-motor').click();
     await page.locator('#confirm-dialog').waitFor({ state: 'visible' });
     await page.locator('#cancel-confirm').click();
     assert((await page.locator('#mode-indicator').textContent()).includes('SIMULATION'));
@@ -165,6 +168,21 @@ const { _electron: electron } = require('playwright');
     await page.locator('#new-motor').waitFor();
     await page.waitForFunction(() => !document.getElementById('new-motor').disabled);
     await page.locator('#record-settings').click();
+    await page.locator('#record-start-mode').selectOption('monitor-only');
+    assert(await page.locator('#record-duration-label').isHidden());
+    await page.locator('#save-recording').click();
+    await page.locator('#recording-dialog').waitFor({ state: 'hidden' });
+    assert((await page.locator('#connect-all').textContent()).includes('เริ่มดูข้อมูล'));
+    assert.equal(JSON.parse(fs.readFileSync(path.join(temporary, 'recording.json'), 'utf8')).startMode, 'monitor-only');
+    await page.locator('#record-settings').click();
+    await page.locator('#record-start-mode').selectOption('scheduled');
+    await page.locator('#save-recording').click();
+    await page.locator('#recording-dialog').waitFor({ state: 'hidden' });
+    await page.evaluate(() => { recordingState.settings.startAt = new Date(Date.now() - 60000).toISOString(); });
+    await page.locator('#connect-all').click();
+    await page.locator('#recording-dialog').waitFor({ state: 'visible' });
+    assert((await page.locator('#record-form-error').textContent()).includes('เวลาบันทึกผ่านแล้ว'));
+    assert((await page.locator('#mode-indicator').textContent()).includes('OFFLINE'));
     await page.locator('#record-start-mode').selectOption('on-connect');
     await page.locator('#recording-form [name="durationMinutes"]').fill('30');
     await page.screenshot({ path: path.join(artifacts, 'recording-settings.png'), animations: 'disabled' });
@@ -194,12 +212,12 @@ const { _electron: electron } = require('playwright');
     // Exercise the complete renderer live/error/recovery lifecycle using an isolated IPC fixture.
     // The actual serial scheduler and decoder are tested with FakeClient in fleet-store.cjs.
     await app.evaluate(({ ipcMain }) => {
-      const recording = { settings: { startMode: 'manual', durationMinutes: 0, startAt: '' }, connected: true, active: false, waiting: false, count: 0 };
+      const recording = { settings: { startMode: 'on-connect', durationMinutes: 0, startAt: '' }, connected: true, active: false, waiting: false, count: 0 };
       ipcMain.removeHandler('recording:start'); ipcMain.removeHandler('recording:stop');
       ipcMain.handle('recording:start', () => ({ ok: true, recording: { ...recording, active: true, startedAt: new Date().toISOString() } }));
       ipcMain.handle('recording:stop', () => ({ ok: true, recording }));
       ipcMain.removeHandler('sensor:connect');
-      ipcMain.handle('sensor:connect', (_event, configs) => ({ ok: true, configs, recording, readings: configs.map(config => ({
+      ipcMain.handle('sensor:connect', (_event, configs) => ({ ok: true, configs, recording: { ...recording, active: true, startedAt: new Date().toISOString() }, readings: configs.map(config => ({
         motorId: config.motorId, value: 3.4, primaryAxis: 'Z', unit: 'mm/s', port: config.path, slaveId: config.slaveId,
         timestamp: new Date().toISOString(), elapsedMs: 24, recorded: true,
         channels: { temperature: 35, velocityX: 1.2, velocityY: 2.3, velocityZ: 3.4, displacementX: 4000, displacementY: 20, displacementZ: 30, accelerationX: -1, accelerationY: 1.2, accelerationZ: 1.3 },
@@ -209,11 +227,14 @@ const { _electron: electron } = require('playwright');
     await page.locator('#connect-all').click();
     await page.locator('#mode-indicator').filter({ hasText: 'ACQUIRING' }).waitFor();
     assert.equal(await page.locator('#fleet-online').textContent(), '2');
-    await page.locator('#record-start').click();
-    await page.locator('#recording-status').filter({ hasText: 'กำลังบันทึก' }).waitFor();
-    await page.locator('#record-stop').click();
-    await page.locator('#recording-status').filter({ hasText: 'ยังไม่บันทึก' }).waitFor();
+    await page.locator('#recording-status').filter({ hasText: 'กำลังอ่านและบันทึก' }).waitFor();
+    assert(await page.locator('#connect-all').isHidden()); assert(await page.locator('#disconnect').isVisible());
+    assert((await page.locator('#disconnect').textContent()).includes('หยุดอ่านและบันทึก'));
+    await page.locator('#session-actions summary').click(); await page.locator('#record-stop').click();
+    await page.locator('#recording-status').filter({ hasText: 'กำลังอ่าน · ไม่บันทึก' }).waitFor();
     assert((await page.locator('#mode-indicator').textContent()).includes('ACQUIRING'), 'stopping recording leaves acquisition running');
+    await page.locator('#session-actions summary').click(); await page.locator('#record-start').click();
+    await page.locator('#recording-status').filter({ hasText: 'กำลังอ่านและบันทึก' }).waitFor();
     await page.locator('[data-tab="monitor"]').click();
     assert.equal(await page.locator('#reading-value').textContent(), '3.40');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('sensor:status', { state: 'read-error', motorId: 'MTR-01', message: 'Test timeout' }));

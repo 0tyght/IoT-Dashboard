@@ -18,12 +18,18 @@ function controlIcon(name) {
 function controlLabel(button, label, icon) { button.replaceChildren(controlIcon(icon), document.createTextNode(label)); }
 function setupControls() {
   const labels = {
-    disconnect: ['หยุด', 'stop'], 'new-motor': ['เพิ่มมอเตอร์', 'plus'], 'edit-motor': ['ตั้งค่าการเชื่อมต่อ', 'settings'],
+    disconnect: ['หยุดอ่านและบันทึก', 'stop'], 'new-motor': ['เพิ่มมอเตอร์', 'plus'], 'edit-motor': ['ตั้งค่ามอเตอร์', 'settings'],
     'open-data': ['โฟลเดอร์ข้อมูล', 'folder'], 'help-button': ['คู่มือ', 'help'],
-    'fleet-add': ['เพิ่มมอเตอร์', 'plus'], 'fleet-empty-add': ['เพิ่มมอเตอร์', 'plus'], 'add-motor-table': ['เพิ่มมอเตอร์', 'plus'],
+    'fleet-empty-add': ['เพิ่มมอเตอร์', 'plus'],
     'load-history': ['โหลดข้อมูล', 'refresh'], 'export-csv': ['ส่งออก CSV', 'download']
   };
   for (const [id, [label, icon]] of Object.entries(labels)) controlLabel(document.getElementById(id), label, icon);
+  const sessionMenu = document.getElementById('session-actions');
+  document.addEventListener('pointerdown', event => { if (!sessionMenu.contains(event.target)) sessionMenu.open = false; });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && sessionMenu.open) { sessionMenu.open = false; sessionMenu.querySelector('summary').focus(); } });
+  sessionMenu.addEventListener('click', event => {
+    if (event.target.closest('button')) { sessionMenu.open = false; if (document.activeElement.closest('.session-options')) sessionMenu.querySelector('summary').focus(); }
+  });
   for (const [id, icon] of [['close-connection', 'close'], ['close-help', 'close'], ['refresh-ports', 'refresh']]) document.getElementById(id).replaceChildren(controlIcon(icon));
   document.getElementById('refresh-ports').setAttribute('aria-label', 'สแกน COM Port');
   document.querySelector('.search > span').replaceChildren(controlIcon('search'));
