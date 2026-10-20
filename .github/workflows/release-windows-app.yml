@@ -1,0 +1,48 @@
+name: Release Windows app
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows-app
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: windows-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:sensor
+
+      - name: Build installer and portable app
+        run: npm run dist:win
+
+      - name: Publish GitHub Release
+        working-directory: .
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "windows-app/release/VECTRA Sensor Monitor-Setup-0.3.0-x64.exe" `
+            "windows-app/release/VECTRA Sensor Monitor-Portable-0.3.0-x64.exe" `
+            --title "VECTRA Sensor Monitor 0.3.0" `
+            --notes "Windows x64 release. Use Setup for a normal installation or Portable to run without installation. The application requires the sensor manufacturer's RS485/Modbus register settings before live commissioning."
