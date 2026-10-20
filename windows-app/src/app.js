@@ -7,6 +7,7 @@ let profiles = [], ports = [], selected = '', editing = null, mode = 'offline', 
 let demoTimer, chartFrames = [], chartIndex = -1, historyGeneration = 0;
 let successful = 0, failures = 0, logs = [], dataError = false;
 let editorBaseline = '';
+let currentTab = 'fleet';
 const cache = new Map();
 const digits = (value, precision = 1) => Number.isFinite(value) ? value.toFixed(precision) : '—';
 const currentProfile = () => profiles.find(profile => profile.motorId === selected);
@@ -37,18 +38,21 @@ function updateControls() {
   $('connect-all').disabled = busy || running || !profiles.some(profile => profile.enabled !== false) || dataError;
   $('connect-all').textContent = busy ? 'กำลังดำเนินการ…' : '▶ เริ่มอ่านข้อมูล';
   $('disconnect').disabled = busy || !running;
-  for (const id of ['new-motor', 'add-motor-table', 'import-profiles']) $(id).disabled = busy || running || dataError;
-  $('edit-motor').disabled = busy || running || !currentProfile() || dataError;
+  for (const id of ['new-motor', 'add-motor-table', 'fleet-add', 'fleet-empty-add']) $(id).disabled = busy || dataError;
+  $('import-profiles').disabled = busy || running || dataError;
+  $('edit-motor').disabled = busy || !currentProfile() || dataError || isTemporaryMotor(selected);
   $('demo-mode').disabled = busy || running;
   $('export-profiles').disabled = busy || !profiles.length;
-  document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = busy || running; });
+  document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = busy || dataError || isTemporaryMotor(button.dataset.edit || button.dataset.delete); });
   $('mode-indicator').className = `mode-indicator ${mode === 'live' ? 'live' : mode === 'demo' ? 'demo-mode' : ''}`;
   $('mode-indicator').textContent = mode === 'live' ? '● ACQUIRING' : mode === 'demo' ? '● SIMULATION' : '● OFFLINE';
 }
 function setTab(tab) {
+  currentTab = tab;
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
   document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); });
   if (tab === 'history') loadHistory();
+  renderSelected();
 }
 function renderMotorList() {
   const list = $('motor-list'); list.replaceChildren();
@@ -64,6 +68,7 @@ function renderMotorList() {
   }
   if (!visible.length) list.append(node('p', profiles.length ? 'ไม่พบมอเตอร์ที่ค้นหา' : 'เพิ่มมอเตอร์เพื่อเริ่มต้น', 'empty-ports'));
   refreshMotorStates();
+  refreshFleet();
 }
 function refreshMotorStates() {
   document.querySelectorAll('.motor-item').forEach(button => {
@@ -72,7 +77,7 @@ function refreshMotorStates() {
     button.querySelector('.item-value').textContent = last ? digits(last.value) : '—';
   });
 }
-function selectMotor(id) { selected = id; frozen = false; $('pause-stream').textContent = 'Ⅱ พักกราฟ'; renderMotorList(); renderSelected(); updateControls(); }
+function selectMotor(id) { selected = id; frozen = false; $('pause-stream').textContent = 'Ⅱ พักกราฟ'; renderMotorList(); setTab('monitor'); updateControls(); }
 function renderProfiles() {
   const body = $('motors-body'); body.replaceChildren();
   const historySelection = $('history-motor').value;
@@ -85,17 +90,13 @@ function renderProfiles() {
     edit.dataset.edit = profile.motorId; remove.dataset.delete = profile.motorId;
     edit.onclick = () => openEditor(profile); remove.onclick = () => deleteMotor(profile);
     enabled.dataset.edit = profile.motorId;
-    enabled.onclick = () => action(async () => {
-      if (mode !== 'offline' || busy) return;
-      profiles = check(await api.saveProfiles(profiles.map(item => item.motorId === profile.motorId ? { ...item, enabled: item.enabled === false } : item))).profiles;
-      renderProfiles(); renderSelected();
-    });
+    enabled.onclick = () => toggleMotor(profile);
     group.append(edit, enabled, remove); actions.append(group);
     row.append(title, node('td', profile.area || '—'), node('td', profile.sensorModel === MODEL ? 'VemSee 3-axis' : 'Custom register'), node('td', `${profile.path} / ${profile.slaveId}`, 'mono'), node('td', `${profile.baudRate} · 8${profile.parity[0].toUpperCase()}${profile.stopBits}`, 'mono'), actions); body.append(row);
   }
   if (!profiles.length) emptyRow(body, 6, 'ยังไม่มีมอเตอร์ กดเพิ่มมอเตอร์เพื่อตั้งค่าการเชื่อมต่อ');
   if ([...$('history-motor').options].some(option => option.value === historySelection)) $('history-motor').value = historySelection;
-  renderMotorList(); updateControls();
+  renderMotorList(); buildFleet(); updateControls();
 }
 function renderSelected() {
   const profile = currentProfile(), state = profile ? stateFor(profile.motorId) : null, last = state?.frames.at(-1);
@@ -131,6 +132,11 @@ function renderSelected() {
     chartFrames = [...(state?.frames || [])]; drawChart();
   }
   refreshSelectionState();
+  if (currentTab === 'fleet') {
+    $('selected-title').textContent = 'ภาพรวมมอเตอร์'; $('selected-area').textContent = 'ทุกพื้นที่';
+    $('selected-subtitle').textContent = 'ค่าการสั่นสามแกนและสถานะการรับข้อมูลของมอเตอร์แต่ละตัว';
+  }
+  $('selection-state').hidden = currentTab === 'fleet';
 }
 function refreshSelectionState() {
   const profile = currentProfile(), state = profile ? stateFor(profile.motorId) : null;
@@ -142,6 +148,7 @@ function refreshSelectionState() {
   $('status-count').textContent = `รับสำเร็จ ${successful} · ผิดพลาด ${failures}`;
   $('status-bus').textContent = profile ? `${profile.path} · ${profile.baudRate} / 8${profile.parity[0].toUpperCase()}${profile.stopBits} · FC${profile.registerType === 'input' ? '04' : '03'}` : 'Modbus RTU · 8 data bits';
   refreshMotorStates();
+  refreshFleet();
 }
 function renderChannels(last) {
   const body = $('channel-body'); body.replaceChildren();
@@ -182,7 +189,7 @@ function drawChart() {
   const x = index => 56 + index / Math.max(chartFrames.length - 1, 1) * 822;
   for (let index = 0; index <= 4; index++) {
     const value = upper - index / 4 * (upper - lower), yy = 22 + index * 222 / 4;
-    svg.append(svgNode('line', { x1: 56, y1: yy, x2: 878, y2: yy, stroke: '#edf1f6', 'stroke-dasharray': index === 4 ? '' : '3 4' }), svgNode('text', { x: 44, y: yy + 4, 'text-anchor': 'end', fill: '#a0aec0', 'font-size': 10 }, digits(value)));
+    svg.append(svgNode('line', { x1: 56, y1: yy, x2: 878, y2: yy, stroke: '#343c48', 'stroke-dasharray': index === 4 ? '' : '3 4' }), svgNode('text', { x: 44, y: yy + 4, 'text-anchor': 'end', fill: '#a0aec0', 'font-size': 10 }, digits(value)));
   }
   for (const item of series) {
     const points = chartFrames.map((frame, index) => {
@@ -246,7 +253,8 @@ function renderPorts(selectedPath = form.elements.path.value) {
 async function scanPorts() { $('refresh-ports').disabled = true; try { ports = check(await api.listPorts()).ports; renderPorts(); } catch (error) { $('port-summary').textContent = error.message; } finally { $('refresh-ports').disabled = false; } }
 function resetTest() { $('test-result').className = 'test-result'; $('test-result').querySelector('b').textContent = 'ทดสอบการตั้งค่านี้ก่อนเริ่มอ่าน'; $('test-result').querySelector('p').textContent = 'ค่า Baud / Parity / Stop bits และ Slave ID ต้องตรงกับตัวเซ็นเซอร์'; }
 async function openEditor(profile) {
-  if (mode !== 'offline' || busy) return toast('หยุดการอ่านก่อนแก้ไขมอเตอร์');
+  if (busy) return;
+  if (mode !== 'offline') return stopBeforeChange(() => openEditor(profile ? profiles.find(item => item.motorId === profile.motorId) : undefined));
   if (dataError) return toast('ตรวจข้อผิดพลาดไฟล์รายชื่อก่อนบันทึก');
   editing = profile?.motorId || null; form.reset(); $('form-error').hidden = true;
   let next = 1; while (profiles.some(item => item.motorId === `MTR-${String(next).padStart(2, '0')}`)) next++;
@@ -289,11 +297,24 @@ function confirmAction(title, detail, callback) {
   $('confirm-dialog').showModal();
 }
 function deleteMotor(profile) {
-  if (mode !== 'offline' || busy) return;
+  if (!profile || busy) return;
+  if (mode !== 'offline') return stopBeforeChange(() => deleteMotor(profiles.find(item => item.motorId === profile.motorId)));
   confirmAction(`ลบ ${profile.motorId}?`, 'ลบเฉพาะการตั้งค่ามอเตอร์ ประวัติที่เก็บไว้ยังเปิดดูได้จากตัวกรองทุกมอเตอร์', async () => {
     profiles = check(await api.saveProfiles(profiles.filter(item => item.motorId !== profile.motorId))).profiles;
     if (selected === profile.motorId) selected = profiles[0]?.motorId || '';
     renderProfiles(); renderSelected(); addLog('info', profile.motorId, 'ลบจากรายชื่อมอเตอร์แล้ว');
+  });
+}
+function isTemporaryMotor(id) { return mode === 'demo' && !beforeDemo?.some(profile => profile.motorId === id); }
+function stopBeforeChange(task) {
+  confirmAction('หยุดอ่านข้อมูลเพื่อแก้ไข?', 'การแก้ไขทะเบียนมอเตอร์ต้องหยุดอ่านก่อน ข้อมูลที่บันทึกแล้วจะยังอยู่', async () => { await stopAndRestore(); await task(); });
+}
+function toggleMotor(profile) {
+  if (busy || !profile) return;
+  if (mode !== 'offline') return stopBeforeChange(() => toggleMotor(profiles.find(item => item.motorId === profile.motorId)));
+  action(async () => {
+    profiles = check(await api.saveProfiles(profiles.map(item => item.motorId === profile.motorId ? { ...item, enabled: item.enabled === false } : item))).profiles;
+    renderProfiles(); renderSelected();
   });
 }
 async function startLive() {
@@ -303,7 +324,7 @@ async function startLive() {
     const result = check(await api.connect(profiles));
     cache.clear(); successful = 0; failures = 0; frozen = false; mode = 'live';
     if (!result.configs.some(profile => profile.motorId === selected)) selected = result.configs[0].motorId;
-    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('monitor'); addLog('info', '', `เริ่มบันทึก ${result.configs.length} มอเตอร์`);
+    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', `เริ่มบันทึก ${result.configs.length} มอเตอร์`);
   } catch (error) { message(`${error.message} · ยังไม่ได้เริ่มเก็บข้อมูล ตรวจการตั้งค่าแต่ละมอเตอร์แล้วลองใหม่`); addLog('error', '', error.message); }
   finally { setBusy(false); }
 }
@@ -335,7 +356,7 @@ function startDemo() {
     }
   });
   demoTimer = setInterval(() => { phase += .18; profiles.forEach((profile, index) => addReading(demoFrame(profile, index, 40 * .18 + phase))); }, 1000);
-  renderProfiles(); renderSelected(); setTab('monitor'); addLog('info', '', 'เปิดโหมดจำลอง ข้อมูลไม่ถูกเขียนลงไฟล์ประวัติ');
+  renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', 'เปิดโหมดจำลอง ข้อมูลไม่ถูกเขียนลงไฟล์ประวัติ');
 }
 async function stopAndRestore() {
   const wasDemo = mode === 'demo'; await stop();
@@ -359,6 +380,8 @@ async function loadHistory() {
 
 document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = () => setTab(button.dataset.tab); });
 $('new-motor').onclick = $('add-motor-table').onclick = () => openEditor();
+$('fleet-add').onclick = $('fleet-empty-add').onclick = () => openEditor();
+$('fleet-window').onchange = refreshFleet;
 $('edit-motor').onclick = () => openEditor(currentProfile());
 $('welcome-setup').onclick = () => openEditor(currentProfile());
 $('close-connection').onclick = closeEditor;
@@ -369,7 +392,7 @@ $('sensor-model').onchange = () => { presetVisibility(); resetTest(); };
 $('port-select').onchange = () => renderPorts();
 $('test-sensor').onclick = testMotor;
 $('cancel-confirm').onclick = () => $('confirm-dialog').close();
-$('motor-search').oninput = renderMotorList;
+$('motor-search').oninput = () => { renderMotorList(); refreshFleet(); };
 $('connect-all').onclick = () => action(startLive);
 $('disconnect').onclick = () => action(stopAndRestore);
 $('demo-mode').onclick = startDemo;
@@ -398,6 +421,7 @@ api.onStatus(status => {
 });
 setInterval(() => {
   $('status-clock').textContent = new Date().toLocaleString('th-TH', { hour12: false });
+  refreshFleet();
   if (mode === 'live') {
     for (const profile of profiles) {
       if (profile.enabled === false) continue;

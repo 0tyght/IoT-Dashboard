@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { once } = require('node:events');
@@ -26,10 +26,11 @@ async function record(reading) {
 }
 
 app.whenReady().then(() => {
+  nativeTheme.themeSource = 'dark';
   store = new DataStore(app.getPath('userData'));
   fleet = new FleetService({ onReading: record, onStatus: status => send('sensor:status', status) });
   mainWindow = new BrowserWindow({
-    width: 1440, height: 940, minWidth: 960, minHeight: 680, backgroundColor: '#f4f6f9', show: false, autoHideMenuBar: true,
+    width: 1440, height: 940, minWidth: 960, minHeight: 680, backgroundColor: '#101215', show: false, autoHideMenuBar: true,
     icon: path.join(__dirname, '..', 'assets', 'app.ico'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });

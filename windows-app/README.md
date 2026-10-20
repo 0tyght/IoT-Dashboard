@@ -4,8 +4,9 @@ An independent Windows application for local RS485 / Modbus RTU motor monitoring
 
 ## Features
 
-- Windows style command bar, motor sidebar, connection dialog and status bar.
+- Dark monitoring interface with a per-motor row layout, amber section headers, three-axis values, connection state, last received time and a separate chart for every motor. Detailed register/history views and the Windows connection dialog remain available.
 - Add, edit, delete and search up to 64 motor profiles; store labels, locations and nameplate notes. Temporarily exclude a motor from acquisition using **พักอ่าน** during maintenance.
+- Per-motor actions are available directly in the overview. When acquisition is active, editing, adding or deleting asks to stop acquisition first. Motor health is not inferred from communications status or axis colors.
 - Multiple serial ports and multiple slave IDs on one RS485 bus. Each shared bus uses one serial client and serializes requests. Baud, parity and stop bits must match for motors sharing a port; duplicate IDs or motor tags are rejected.
 - Tests every selected motor before acquisition begins. One failed motor during an active session reports a fault while the other motors continue. Closed serial ports are reopened on the next poll attempt.
 - Velocity, displacement and acceleration X/Y/Z, plus temperature for the VemSee preset. Custom single-value register profiles also supported.
