@@ -36,7 +36,7 @@ function setBusy(value) { busy = value; updateControls(); }
 function updateControls() {
   const running = mode !== 'offline';
   $('connect-all').disabled = busy || running || !profiles.some(profile => profile.enabled !== false) || dataError;
-  $('connect-all').textContent = busy ? 'กำลังดำเนินการ…' : '▶ เริ่มอ่านข้อมูล';
+  controlLabel($('connect-all'), busy ? 'กำลังดำเนินการ…' : 'เริ่มอ่านข้อมูล', 'play');
   $('disconnect').disabled = busy || !running;
   for (const id of ['new-motor', 'add-motor-table', 'fleet-add', 'fleet-empty-add']) $(id).disabled = busy || dataError;
   $('import-profiles').disabled = busy || running || dataError;
@@ -45,12 +45,14 @@ function updateControls() {
   $('export-profiles').disabled = busy || !profiles.length;
   document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = busy || dataError || isTemporaryMotor(button.dataset.edit || button.dataset.delete); });
   $('mode-indicator').className = `mode-indicator ${mode === 'live' ? 'live' : mode === 'demo' ? 'demo-mode' : ''}`;
-  $('mode-indicator').textContent = mode === 'live' ? '● ACQUIRING' : mode === 'demo' ? '● SIMULATION' : '● OFFLINE';
+  $('mode-indicator').textContent = mode === 'live' ? 'ACQUIRING' : mode === 'demo' ? 'SIMULATION' : 'OFFLINE';
+  $('connect-all').setAttribute('aria-busy', String(busy));
 }
 function setTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
-  document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); });
+  document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
+  document.querySelector('main').scrollTop = 0;
   if (tab === 'history') loadHistory();
   renderSelected();
 }
@@ -77,7 +79,7 @@ function refreshMotorStates() {
     button.querySelector('.item-value').textContent = last ? digits(last.value) : '—';
   });
 }
-function selectMotor(id) { selected = id; frozen = false; $('pause-stream').textContent = 'Ⅱ พักกราฟ'; renderMotorList(); setTab('monitor'); updateControls(); }
+function selectMotor(id) { selected = id; frozen = false; controlLabel($('pause-stream'), 'พักกราฟ', 'pause'); renderMotorList(); setTab('monitor'); updateControls(); }
 function renderProfiles() {
   const body = $('motors-body'); body.replaceChildren();
   const historySelection = $('history-motor').value;
@@ -112,7 +114,7 @@ function renderSelected() {
   $('monitor-content').hidden = !last && mode === 'offline';
   $('empty-state-title').textContent = profiles.length ? 'ยังไม่มีข้อมูลการวัด' : 'ยังไม่มีมอเตอร์';
   $('empty-state-description').textContent = profiles.length ? 'เลือก “เริ่มอ่านข้อมูล” เพื่อทดสอบการเชื่อมต่อและรับข้อมูลจากเซ็นเซอร์' : 'เพิ่มมอเตอร์และกำหนดค่าการเชื่อมต่อเพื่อเริ่มอ่านข้อมูล';
-  $('welcome-setup').textContent = profiles.length ? '⚙ ตั้งค่าการเชื่อมต่อ' : '＋ เพิ่มมอเตอร์';
+  controlLabel($('welcome-setup'), profiles.length ? 'ตั้งค่าการเชื่อมต่อ' : 'เพิ่มมอเตอร์', profiles.length ? 'settings' : 'plus');
   $('demo-banner').hidden = mode !== 'demo';
   if (profile) {
     $('connection-name').textContent = mode === 'demo' ? 'DEMO' : profile.path;
@@ -178,7 +180,7 @@ function renderRegisters(last, profile) {
 function svgNode(tag, attributes = {}, text) { const element = document.createElementNS('http://www.w3.org/2000/svg', tag); Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value)); if (text != null) element.textContent = text; return element; }
 function chartSeries() {
   const kind = $('chart-kind').value;
-  return chartFrames.some(frame => frame.channels) ? ['X', 'Y', 'Z'].map((axis, index) => ({ key: `${kind}${axis}`, color: ['#2d73d7', '#139381', '#bb7e23'][index], label: axis })) : [{ key: 'value', color: '#2d73d7', label: 'Value' }];
+  return chartFrames.some(frame => frame.channels) ? ['X', 'Y', 'Z'].map((axis, index) => ({ key: `${kind}${axis}`, color: FLEET_COLORS[index], label: axis })) : [{ key: 'value', color: FLEET_COLORS[0], label: 'Value' }];
 }
 function drawChart() {
   const svg = $('trend-chart'); svg.replaceChildren(); $('chart-tooltip').hidden = true;
@@ -207,7 +209,7 @@ function drawChart() {
   $('minimum-value').textContent = maxima.length ? digits(Math.min(...maxima), 2) : '—';
   $('maximum-value').textContent = maxima.length ? digits(Math.max(...maxima), 2) : '—';
   $('average-value').textContent = maxima.length ? digits(maxima.reduce((sum, value) => sum + value, 0) / maxima.length, 2) : '—';
-  $('chart-live').textContent = frozen ? 'Ⅱ PAUSED' : mode === 'demo' ? '● DEMO' : mode === 'live' ? '● LIVE' : '■ STOPPED';
+  $('chart-live').textContent = frozen ? 'PAUSED' : mode === 'demo' ? 'DEMO' : mode === 'live' ? 'LIVE' : 'STOPPED';
 }
 function showChartPoint(index) {
   if (!chartFrames.length) return;
@@ -225,7 +227,7 @@ function addReading(reading) {
   state.samples++; successful++;
   if (state.status === 'fault' || state.status === 'stale') addLog('info', reading.motorId, 'กลับมารับข้อมูลได้แล้ว');
   state.status = 'online'; state.message = '';
-  if (reading.motorId === selected) renderSelected();
+  if (reading.motorId === selected && currentTab !== 'fleet') renderSelected();
   else refreshSelectionState();
 }
 function configFromForm() {
@@ -275,7 +277,12 @@ async function saveMotor(event) {
   const raw = configFromForm(), proposed = editing ? profiles.map(profile => profile.motorId === editing ? raw : profile) : [...profiles, raw];
   setDialogBusy(true);
   try {
-    const result = check(await api.saveProfiles(proposed)); profiles = result.profiles; selected = raw.motorId;
+    const previous = profiles.find(profile => profile.motorId === editing);
+    const result = check(await api.saveProfiles(proposed));
+    // Never attach old readings to a newly assigned sensor, unit, or motor ID.
+    const identityKeys = ['motorId', 'path', 'slaveId', 'sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'unit'];
+    if (previous && identityKeys.some(key => previous[key] !== raw[key])) { cache.delete(previous.motorId); cache.delete(raw.motorId); }
+    profiles = result.profiles; selected = raw.motorId;
     $('connection-dialog').close(); renderProfiles(); renderSelected(); addLog('info', raw.motorId, 'บันทึกการตั้งค่ามอเตอร์'); toast('บันทึกแล้ว กดเริ่มอ่านเพื่อทดสอบและเก็บข้อมูล');
   } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; }
   finally { setDialogBusy(false); }
@@ -301,6 +308,7 @@ function deleteMotor(profile) {
   if (mode !== 'offline') return stopBeforeChange(() => deleteMotor(profiles.find(item => item.motorId === profile.motorId)));
   confirmAction(`ลบ ${profile.motorId}?`, 'ลบเฉพาะการตั้งค่ามอเตอร์ ประวัติที่เก็บไว้ยังเปิดดูได้จากตัวกรองทุกมอเตอร์', async () => {
     profiles = check(await api.saveProfiles(profiles.filter(item => item.motorId !== profile.motorId))).profiles;
+    cache.delete(profile.motorId);
     if (selected === profile.motorId) selected = profiles[0]?.motorId || '';
     renderProfiles(); renderSelected(); addLog('info', profile.motorId, 'ลบจากรายชื่อมอเตอร์แล้ว');
   });
@@ -333,7 +341,7 @@ async function stop() {
   setBusy(true);
   try {
     if (mode === 'live') check(await api.disconnect());
-    clearInterval(demoTimer); mode = 'offline'; frozen = false; $('pause-stream').textContent = 'Ⅱ พักกราฟ';
+    clearInterval(demoTimer); mode = 'offline'; frozen = false; controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
     cache.forEach(state => { state.status = 'offline'; }); renderSelected(); addLog('info', '', 'หยุดการอ่านแล้ว');
   } finally { setBusy(false); }
 }
@@ -378,10 +386,22 @@ async function loadHistory() {
   finally { if (generation === historyGeneration) $('load-history').disabled = false; }
 }
 
-document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = () => setTab(button.dataset.tab); });
+document.querySelector('.tabs').setAttribute('role', 'tablist');
+document.querySelectorAll('[data-tab]').forEach((button, index, tabs) => {
+  button.id = `tab-${button.dataset.tab}`; button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', `${button.dataset.tab}-view`); button.tabIndex = index === 0 ? 0 : -1;
+  const panel = $(`${button.dataset.tab}-view`); panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', button.id);
+  button.onclick = () => setTab(button.dataset.tab);
+  button.onkeydown = event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    setTab(tabs[next].dataset.tab); tabs[next].focus();
+  };
+});
 $('new-motor').onclick = $('add-motor-table').onclick = () => openEditor();
 $('fleet-add').onclick = $('fleet-empty-add').onclick = () => openEditor();
 $('fleet-window').onchange = refreshFleet;
+$('fleet-filter').onchange = refreshFleet;
+$('fleet-reset-filters').onclick = () => { $('motor-search').value = ''; $('fleet-filter').value = 'all'; renderMotorList(); };
 $('edit-motor').onclick = () => openEditor(currentProfile());
 $('welcome-setup').onclick = () => openEditor(currentProfile());
 $('close-connection').onclick = closeEditor;
@@ -396,7 +416,7 @@ $('motor-search').oninput = () => { renderMotorList(); refreshFleet(); };
 $('connect-all').onclick = () => action(startLive);
 $('disconnect').onclick = () => action(stopAndRestore);
 $('demo-mode').onclick = startDemo;
-$('pause-stream').onclick = () => { frozen = !frozen; $('pause-stream').textContent = frozen ? '▶ แสดงกราฟต่อ' : 'Ⅱ พักกราฟ'; if (!frozen) renderSelected(); else $('chart-live').textContent = 'Ⅱ PAUSED'; toast(frozen ? 'พักหน้าจอแล้ว การอ่านและบันทึกข้อมูลจริงยังทำงาน' : 'กลับมาแสดงข้อมูลล่าสุด'); };
+$('pause-stream').onclick = () => { frozen = !frozen; controlLabel($('pause-stream'), frozen ? 'แสดงกราฟต่อ' : 'พักกราฟ', frozen ? 'play' : 'pause'); $('pause-stream').setAttribute('aria-pressed', String(frozen)); if (!frozen) renderSelected(); else $('chart-live').textContent = 'PAUSED'; toast(frozen ? 'พักหน้าจอแล้ว การอ่านและบันทึกข้อมูลจริงยังทำงาน' : 'กลับมาแสดงข้อมูลล่าสุด'); };
 $('chart-kind').onchange = drawChart;
 $('trend-chart').onpointermove = event => { const bounds = event.currentTarget.getBoundingClientRect(); showChartPoint(Math.round(((event.clientX - bounds.left) / bounds.width * 900 - 56) / 822 * (chartFrames.length - 1))); };
 $('trend-chart').onpointerleave = () => { $('chart-tooltip').hidden = true; $('crosshair')?.setAttribute('visibility', 'hidden'); };
@@ -432,6 +452,8 @@ setInterval(() => {
     refreshSelectionState();
   }
 }, 1000);
+setupControls();
+controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
 (async () => {
   $('history-date').value = today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 8, 'เลือกวันที่แล้วโหลดข้อมูล');
   try {
