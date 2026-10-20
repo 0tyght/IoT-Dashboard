@@ -1,4 +1,4 @@
-# Chart and interaction review — 0.10.0
+# Chart and interaction review — 0.10.1
 
 ## Fixed
 
@@ -8,6 +8,7 @@
 - Stopped drawing overview charts outside the viewport or while another tab is active. Acquisition, recording and cached readings continue independently. Live memory retains the existing caps.
 - Kept very small custom values nonzero with scientific notation, handled negative acceleration/temperature and full-range displacement, and reserved label space for larger values.
 - Cleared loaded historical curves when filters change; ignored obsolete asynchronous responses. Historical channel shape/unit comes from recordings rather than the motor's current configuration.
+- Accessible plot names also follow custom units, and custom historical plots hide the XYZ legend because those axes are not measured.
 - Clarified that pause affects only detail plots and preserves live numerical updates/recording. Events now show full date/time/milliseconds/timezone.
 
 ## 3D decision

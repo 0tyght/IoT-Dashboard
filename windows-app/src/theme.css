@@ -320,6 +320,7 @@ legend { color: #796b8b; font-size: 12px; }
 .plot-readout { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .plot-readout span + span { margin-left: 8px; }
 .detail-plots { container-type: inline-size; }
+.history-range:has(.plot-stack[data-channel-mode="custom"]) .chart-legend { display: none; }
 @container (min-width: 620px) {
   .detail-plots .plot-stack-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 }

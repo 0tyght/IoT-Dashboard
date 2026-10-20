@@ -105,6 +105,7 @@ function createPlotStack(container, { prefix, label = '', tooltipClass = 'chart-
   const stack = { plots, frames: [], svg: plots[0].svg, cursorStamp: null, source: null,
     draw(frames, profile, { reduced = false } = {}) {
       const threeAxis = profile?.sensorModel === MODEL, gaps = new Set();
+      container.dataset.channelMode = threeAxis ? 'three-axis' : 'custom';
       // Compute gaps on original samples; drawing fewer points must not look like an outage.
       if (!reduced) for (let i = 1; i < frames.length; i++) {
         const interval = frames[i].pollIntervalMs || profile?.pollInterval;
@@ -117,6 +118,7 @@ function createPlotStack(container, { prefix, label = '', tooltipClass = 'chart-
       for (const plot of plots) {
         plot.section.hidden = !threeAxis && plot.kind !== 'velocity'; plot.threeAxis = threeAxis;
         plot.title.textContent = !threeAxis ? `Custom value · ${profile?.unit || '—'}` : `${({ velocity: 'ความเร็ว', displacement: 'การกระจัด', acceleration: 'ความเร่ง', temperature: 'อุณหภูมิ' })[plot.kind]} · ${plot.kind === 'temperature' ? '°C' : Measurements.groups[plot.kind].unit}`;
+        plot.svg.setAttribute('aria-label', `${label} ${plot.title.textContent} ใช้ลูกศรซ้ายขวาเพื่ออ่านค่า`);
         plot.gapStarts = gaps;
         if (!plot.section.hidden) drawSensorPlot(plot, stack.frames, plot.kind, profile?.unit);
       }
