@@ -4,6 +4,8 @@ Live site: https://0tyght.github.io/IoT-Dashboard/
 
 Static HTML/CSS/JavaScript. GitHub Pages deploys `main` from the repository root.
 
+The same interface is also packaged as an offline-first Windows desktop app. The desktop build detects serial ports, verifies an RS485/Modbus RTU sensor response before entering the dashboard, polls the verified register, and writes readings to daily NDJSON files under the current Windows user's application-data folder.
+
 ## Features
 
 - Interactive factory map with editable motor labels and positions.
@@ -25,6 +27,27 @@ Class I–IV is a legacy reference, not a plant-approved alarm/trip configuratio
 ## Local preview
 
 Serve the repository root with a static web server (for example PHP's local development server). There is no build step.
+
+## Windows desktop application
+
+Install dependencies and launch the development build:
+
+```powershell
+npm install
+npm run desktop
+```
+
+Create an x64 Windows installer and a portable executable:
+
+```powershell
+npm run dist:win
+```
+
+Outputs are written to `release/`. A new installation opens the commissioning screen before the dashboard. Select the USB serial port and configure the sensor's documented baud rate, parity, slave ID, Modbus function, zero-based register address, data type, byte/word order and scale. Finding a COM port only confirms that Windows sees the USB adapter; the **Test sensor** step must read the configured register successfully before the live dashboard can open. The separate simulation button is intended for demonstrations without hardware.
+
+The desktop process keeps serial access outside the web page through an Electron preload allow-list. A successful configuration is stored in `sensor-config.json`; readings are appended to `data/readings-YYYY-MM-DD.ndjson`. Both locations live under Electron's per-user application-data directory and the exact data path is shown on the commissioning screen.
+
+The current desktop integration maps one verified sensor value to one selected motor. Production commissioning still requires the sensor manufacturer's Modbus register map; do not assume the default register, data type or scale.
 
 ## Tests
 

@@ -1,0 +1,70 @@
+{
+  "name": "vectra-motor-monitor",
+  "version": "0.2.0",
+  "author": "VECTRA",
+  "private": true,
+  "description": "Offline-first Windows motor vibration dashboard with RS485/Modbus sensor discovery",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "desktop": "electron .",
+    "dist:win": "electron-builder --win nsis portable",
+    "test": "node tests/storage.cjs && node tests/standards.cjs && node tests/dashboard.cjs && node tests/interaction.cjs && node tests/layout.cjs && node tests/fullscreen.cjs && node tests/sensor-codec.cjs",
+    "test:sensor": "node tests/sensor-codec.cjs",
+    "test:desktop": "node tests/desktop-smoke.cjs",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "modbus-serial": "8.0.25",
+    "serialport": "13.0.0"
+  },
+  "devDependencies": {
+    "electron": "44.9.1",
+    "electron-builder": "26.15.3",
+    "playwright": "1.64.1"
+  },
+  "build": {
+    "appId": "th.vectra.motor.monitor",
+    "productName": "VECTRA Motor Monitor",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@serialport/**"
+    ],
+    "files": [
+      "index.html",
+      "style.css",
+      "retro.css",
+      "desktop.css",
+      "motor-data.js",
+      "app.js",
+      "interaction.js",
+      "desktop-renderer.js",
+      "desktop/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+    }
+  }
+}
