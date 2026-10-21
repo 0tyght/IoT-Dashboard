@@ -36,15 +36,7 @@ function buildFleet() {
     lastTile.append(node('small', 'รับล่าสุด'), age, lastTime);
     const valueGrid = node('div', null, 'fleet-measurements'), values = [];
     const threeAxis = profile.sensorModel === MODEL;
-    for (const [kind, group] of Object.entries(Measurements.groups)) {
-      if (!threeAxis && kind !== 'velocity') continue;
-      const row = node('div', null, 'fleet-value-row');
-      ['X', 'Y', 'Z'].slice(0, threeAxis ? 3 : 1).forEach((axis, index) => {
-        const tile = node('div', null, `fleet-value axis-tile-${index}`), value = node('strong', '—'), number = node('div');
-        number.append(value, node('span', threeAxis ? group.unit : profile.unit));
-        tile.append(node('small', threeAxis ? `${group.label} ${axis}` : 'Custom value'), number); row.append(tile); values.push({ value, key: threeAxis ? `${kind}${axis}` : 'value' });
-      }); valueGrid.append(row);
-    }
+    valueGrid.hidden = !threeAxis;
     if (threeAxis) {
       const row = node('div', null, 'fleet-value-row');
       ['X', 'Y', 'Z'].forEach((axis, index) => {
@@ -88,7 +80,7 @@ function refreshFleet() {
       const frequency = key.startsWith('frequency');
       value.textContent = frequency ? frequencyDisplay(last, key.at(-1)) : digits(key === 'value' ? last?.value : last?.channels?.[key], key === 'value' ? 3 : 1);
       value.classList.toggle('frequency-unavailable', frequency && !Number.isFinite(last?.channels?.[key]));
-      value.title = frequency ? frequencySummary(last) : '';
+      value.title = frequency ? `${MeasurementConversion.text(MeasurementConversion.describe(last, 'frequency')[['X', 'Y', 'Z'].indexOf(key.at(-1))])}\n${frequencySummary(last)}` : '';
     });
     refs.frequencyNote.textContent = frequencySummary(last);
     refs.frequencyNote.dataset.state = last?.frequencyStatus || 'pending';

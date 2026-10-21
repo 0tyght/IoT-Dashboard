@@ -1,0 +1,17 @@
+'use strict';
+const assert = require('node:assert/strict');
+const Conversion = require('../src/conversions.js');
+const { decodeVemseeSnapshot } = require('../electron/sensor-codec.cjs');
+const primary = [0xffc9, 12, 23, 34, 50000, 200, 300], acceleration = [65526, 11, 12];
+const frame = { ...decodeVemseeSnapshot(primary, acceleration), rawRegisters: { primary, acceleration } };
+assert.equal(Conversion.describe(frame, 'velocity')[0].formula, 'UInt16(12) ÷ 10');
+assert.equal(Conversion.describe(frame, 'displacement')[0].result, '5000 µm');
+assert(Conversion.describe(frame, 'acceleration')[0].formula.includes('→ -10; -10 ÷ 10'));
+assert.equal(Conversion.describe(frame, 'temperature')[0].result, '-5.5 °C');
+assert.equal(Conversion.describe(frame, 'acceleration')[0].rawHex, '0xFFF6');
+assert(Conversion.describe({ channels: { velocityX: 1.2 } }, 'velocity')[0].note.includes('ไม่มีค่าดิบ'));
+const custom = { value: 1.25, unit: 'mm/s', rawRegisters: [0x4148, 0], decodeConfig: { sensorModel: 'custom', registerAddress: 100, dataType: 'float32', byteOrder: 'ABCD', scale: .1 } };
+assert.equal(Conversion.describe(custom, 'velocity', false)[0].formula, 'float32 (ABCD) × 0.1');
+assert.equal(Conversion.describe({ ...custom, decodeConfig: undefined }, 'velocity', false)[0].formula, 'ไม่มีการตั้งค่าสูตรในรายการนี้');
+assert(Conversion.describe({ frequencyByteOrder: 'unconfirmed', rawRegisters: { frequency: [16968, 0, 16968, 0, 16968, 0] } }, 'frequency')[0].formula.includes('ยังไม่ยืนยัน'));
+console.log('PASS: conversion provenance, signed/unsigned words, legacy missing raw data and custom formulas');

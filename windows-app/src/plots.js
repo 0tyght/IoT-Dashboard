@@ -50,9 +50,36 @@ function showPlotPoint(refs, index, showTooltip = true) {
   const crosshair = refs.svg.querySelector('.plot-crosshair'); crosshair?.setAttribute('x1', x); crosshair?.setAttribute('x2', x); crosshair?.setAttribute('visibility', 'visible');
   refs.tooltip.textContent = `${timestamp(frame.timestamp)}\n${refs.series.map(series => `${series.label} ${plotNumber(series.key === 'value' ? frame.value : frame.channels?.[series.key])}`).join('   ')} ${refs.unit || ''}`;
   refs.tooltip.hidden = !showTooltip;
-  if (refs.readout) refs.readout.replaceChildren(...refs.series.map(series => {
-    const item = node('span', `${series.label} ${plotNumber(series.key === 'value' ? frame.value : frame.channels?.[series.key])}`); item.style.color = series.color; return item;
-  }), document.createTextNode(` ${refs.unit || ''}`));
+  updatePlotReadout(refs, frame);
+}
+function updatePlotReadout(refs, frame) {
+  if (!refs.readout) return;
+  if (refs.valueRows?.length !== refs.series.length) {
+    refs.readout.replaceChildren();
+    refs.valueRows = refs.series.map(series => {
+      const row = node('div', null, 'plot-axis-value'), label = node('span', series.label), value = node('strong'), unit = node('small');
+      row.tabIndex = 0; row.setAttribute('role', 'group'); label.style.color = series.color; value.style.color = series.color;
+      row.append(label, value, unit); refs.readout.append(row); return { row, value, unit };
+    });
+  }
+  const conversions = MeasurementConversion.describe(frame, refs.kind, refs.threeAxis);
+  refs.series.forEach((series, index) => {
+    const tile = refs.valueRows[index];
+    tile.value.textContent = plotNumber(series.key === 'value' ? frame?.value : frame?.channels?.[series.key]); tile.unit.textContent = refs.unit || '';
+    tile.row.title = MeasurementConversion.text(conversions[index]); tile.row.setAttribute('aria-label', tile.row.title);
+  });
+  refs.valueTime.textContent = frame ? time(frame.timestamp) : 'รอข้อมูล';
+  refs.valueTime.title = frame ? timestamp(frame.timestamp) : 'ยังไม่มีข้อมูล';
+  if (!frame) { refs.inspector.open = false; refs.inspector.dataset.pinned = 'false'; }
+  if (refs.inspector.open && refs.inspector.dataset.pinned === 'true') return;
+  refs.inspectorBody.replaceChildren(node('p', frame ? timestamp(frame.timestamp) : 'ยังไม่มีข้อมูล', 'conversion-time'));
+  if (frame?.source === 'SIMULATION') refs.inspectorBody.append(node('p', 'ข้อมูลและค่าดิบจำลอง · ไม่ใช่ค่าจากเซ็นเซอร์', 'conversion-note'));
+  for (const conversion of conversions) {
+    const item = node('div', null, 'conversion-item');
+    item.append(node('strong', `${conversion.label} · ${conversion.address}`), node('p', `Raw ${conversion.raw} · ${conversion.rawHex}`, 'mono'), node('p', `${conversion.formula} → ${conversion.result}`, 'conversion-formula'));
+    if (conversion.note) item.append(node('p', conversion.note, 'conversion-note'));
+    refs.inspectorBody.append(item);
+  }
 }
 function bindPlot(refs) {
   const { svg, tooltip } = refs;
@@ -74,12 +101,25 @@ function createPlotStack(container, { prefix, label = '', tooltipClass = 'chart-
   container.replaceChildren(cursorTime, grid, note);
   for (const [kind, group] of Object.entries(Measurements.groups)) {
     const section = node('section', null, 'measurement-plot'); section.dataset.kind = kind;
-    const heading = node('div', null, 'measurement-plot-heading'), title = node('h3'), readout = node('span', '—', 'plot-readout');
-    heading.append(title, readout);
+    const heading = node('div', null, 'measurement-plot-heading'), title = node('h3'), readout = node('div', null, 'plot-readout'), valueTime = node('small', 'รอข้อมูล', 'plot-value-time');
+    const inspector = node('details', null, 'plot-inspector'), summary = node('summary', 'ค่าดิบและสูตร'), inspectorBody = node('div', null, 'plot-inspector-body');
+    summary.setAttribute('aria-label', `${label} ${group.label} ค่าดิบและสูตร`);
+    summary.title = 'ชี้เพื่อดู · กดเพื่อตรึงข้อมูลเวลานี้ · Escape เพื่อปิด';
+    inspector.append(summary, inspectorBody);
+    summary.onclick = event => {
+      event.preventDefault(); inspector.dataset.pinned = String(inspector.dataset.pinned !== 'true'); inspector.open = inspector.dataset.pinned === 'true';
+      const stamp = inspectorBody.querySelector('.conversion-time');
+      if (inspector.open && stamp && !stamp.textContent.startsWith('ตรึงข้อมูลเวลา')) stamp.prepend(document.createTextNode('ตรึงข้อมูลเวลา '));
+    };
+    inspector.onpointerenter = event => { if (event.pointerType === 'mouse') inspector.open = true; };
+    inspector.onpointerleave = () => { if (inspector.dataset.pinned !== 'true' && !inspector.contains(document.activeElement)) inspector.open = false; };
+    inspector.onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); inspector.dataset.pinned = 'false'; inspector.open = false; summary.focus(); } };
+    inspector.onfocusout = () => queueMicrotask(() => { if (!inspector.contains(document.activeElement) && inspector.dataset.pinned !== 'true') inspector.open = false; });
+    heading.append(title, readout, valueTime, inspector);
     const box = node('div', null, 'fleet-chart-box chart-wrap'), svg = svgNode('svg', { id: kind === 'velocity' ? `${prefix}-chart` : `${prefix}-${kind}-chart`, tabindex: 0, role: 'img', 'aria-label': `${label} ${group.label} ${group.unit} ใช้ลูกศรซ้ายขวาเพื่ออ่านค่า` });
     const tooltip = node('div', null, tooltipClass); tooltip.id = kind === 'velocity' ? `${prefix === 'trend' ? 'chart' : prefix}-tooltip` : `${prefix}-${kind}-tooltip`; tooltip.hidden = true;
     box.append(svg, tooltip); section.append(heading, box); grid.append(section);
-    const refs = { svg, tooltip, section, title, readout, kind, frames: [], prepared: true, hoverIndex: 0 };
+    const refs = { svg, tooltip, section, title, readout, valueTime, inspector, inspectorBody, kind, frames: [], prepared: true, hoverIndex: 0 };
     plots.push(refs); bindPlot(refs);
     refs.onPoint = index => {
       if (!refs.frames.length) return;
@@ -97,13 +137,16 @@ function createPlotStack(container, { prefix, label = '', tooltipClass = 'chart-
   function updateLatest() {
     const last = stack.frames.at(-1);
     cursorTime.textContent = last ? `ล่าสุด ${timestamp(last.timestamp)}` : 'ยังไม่มีข้อมูล · UTC+07:00';
-    for (const plot of plots) {
+    for (const plot of plots.filter(plot => !plot.section.hidden)) {
       if (last) { showPlotPoint(plot, plot.frames.length - 1, false); plot.svg.querySelector('.plot-crosshair')?.setAttribute('visibility', 'hidden'); }
-      else plot.readout.textContent = '—';
+      else updatePlotReadout(plot, null);
     }
   }
   const stack = { plots, frames: [], svg: plots[0].svg, cursorStamp: null, source: null,
     draw(frames, profile, { reduced = false } = {}) {
+      const profileKey = `${profile?.motorId || ''}:${profile?.sensorModel || ''}`;
+      if (stack.profileKey !== profileKey) for (const plot of plots) { plot.inspector.open = false; plot.inspector.dataset.pinned = 'false'; }
+      stack.profileKey = profileKey;
       const threeAxis = profile?.sensorModel === MODEL, gaps = new Set();
       container.dataset.channelMode = threeAxis ? 'three-axis' : 'custom';
       // Compute gaps on original samples; drawing fewer points must not look like an outage.

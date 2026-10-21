@@ -129,6 +129,7 @@ function renderSelected() {
     $('reading-unit').textContent = last?.unit || profile?.unit || 'mm/s';
     $('primary-axis').textContent = last?.primaryAxis ? `MAX · AXIS ${last.primaryAxis}` : 'CUSTOM';
     $('temperature').textContent = digits(last?.channels?.temperature);
+    $('temperature').title = MeasurementConversion.text(MeasurementConversion.describe(last, 'temperature')[0]);
     $('reading-time').textContent = last ? `รับล่าสุด ${timestamp(last.timestamp)}` : 'รอการตอบกลับ';
     $('sample-count').textContent = state?.samples || 0;
     $('last-response').textContent = last ? `ตั้ง ${profile.pollInterval} ms · รับจริง ${last.actualIntervalMs ?? state.actualIntervalMs ?? '—'} ms · ตอบ ${last.elapsedMs ?? 0} ms` : 'รอการตอบกลับ';
@@ -162,10 +163,12 @@ function renderChannels(last) {
   const body = $('channel-body'); body.replaceChildren();
   for (const [label, key, unit] of [['Velocity', 'velocity', 'mm/s'], ['Displacement', 'displacement', 'µm'], ['Acceleration', 'acceleration', 'm/s²'], ['Frequency', 'frequency', 'Hz']]) {
     const row = node('tr'), title = node('td', label); title.append(node('small', unit)); row.append(title);
+    const conversions = MeasurementConversion.describe(last, key);
     for (const axis of ['X', 'Y', 'Z']) {
       const missingFrequency = key === 'frequency' && !Number.isFinite(last?.channels?.[`frequency${axis}`]);
       const cell = node('td', key === 'frequency' ? frequencyDisplay(last, axis) : digits(last?.channels?.[`${key}${axis}`]), `axis-${axis.toLowerCase()}`);
-      if (key === 'frequency') cell.title = frequencySummary(last);
+      cell.title = MeasurementConversion.text(conversions[['X', 'Y', 'Z'].indexOf(axis)]);
+      if (key === 'frequency') cell.title += `\n${frequencySummary(last)}`;
       cell.classList.toggle('frequency-unavailable', missingFrequency); row.append(cell);
     }
     body.append(row);
@@ -345,6 +348,7 @@ async function stop() {
 function demoFrame(profile, index, phase) {
   const channels = { temperature: 35.2 + index + Math.sin(phase / 5) * .4, velocityX: 2.1 + index * .3 + Math.sin(phase) * .35, velocityY: 3.4 + index * .4 + Math.sin(phase + 1) * .5, velocityZ: 1.5 + index * .2 + Math.sin(phase + 2) * .25, displacementX: 32 + Math.sin(phase) * 3, displacementY: 41 + Math.sin(phase + 1) * 4, displacementZ: 22 + Math.sin(phase + 2) * 2, accelerationX: 1.2 + Math.sin(phase) * .2, accelerationY: 1.6 + Math.sin(phase + 1) * .2, accelerationZ: .9 + Math.sin(phase + 2) * .15 };
   channels.frequencyX = 49.8 + Math.sin(phase) * .2; channels.frequencyY = 50.1 + Math.sin(phase + 1) * .3; channels.frequencyZ = 49.9 + Math.sin(phase + 2) * .2;
+  Object.keys(channels).forEach(key => { channels[key] = key.startsWith('frequency') ? Math.fround(channels[key]) : Math.round(channels[key] * 10) / 10; });
   const axes = ['X', 'Y', 'Z']; const primaryAxis = axes.reduce((a, b) => channels[`velocity${a}`] > channels[`velocity${b}`] ? a : b);
   const encoded = value => Math.round(value * 10) & 65535;
   const floatWords = value => { const view = new DataView(new ArrayBuffer(4)); view.setFloat32(0, value); return [view.getUint16(0), view.getUint16(2)]; };
