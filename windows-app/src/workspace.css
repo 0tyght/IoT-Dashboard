@@ -197,6 +197,36 @@ main:has(#monitor-view:not([hidden])) > .message:not([hidden]) { flex-shrink: 0;
   .compact-frequency-panel { padding: 5px 7px; }
   #machine-data > summary { min-height: 28px; padding-top: 5px; padding-bottom: 5px; }
 }
+/* 1366×768 and 1280×720 displays leave a shorter renderer after Windows chrome. */
+@media (max-height: 720px) {
+  .shell:has(#monitor-view:not([hidden])) .appbar { height: 36px; min-height: 36px; }
+  .shell:has(#monitor-view:not([hidden])) .commandbar { height: 38px; min-height: 38px; padding-top: 3px; padding-bottom: 3px; }
+  .shell:has(#monitor-view:not([hidden])) .command-group button,
+  .shell:has(#monitor-view:not([hidden])) .session-menu > summary { min-height: 28px; padding-top: 3px; padding-bottom: 3px; }
+  .shell:has(#monitor-view:not([hidden])) .recording-strip { min-height: 24px; padding-top: 2px; padding-bottom: 2px; }
+  .shell:has(#monitor-view:not([hidden])) .statusbar { height: 20px; min-height: 20px; }
+  main:has(#monitor-view:not([hidden])) > .document-heading { min-height: 36px; }
+  main:has(#monitor-view:not([hidden])) .document-heading h1 { font-size: 19px; }
+  main:has(#monitor-view:not([hidden])) > .tabs { flex-basis: 28px; min-height: 28px; height: 28px; }
+  main:has(#monitor-view:not([hidden])) > .tabs button { min-height: 27px; padding-top: 4px; padding-bottom: 5px; }
+  main:has(#monitor-view:not([hidden])) > .graph-tools { flex-basis: 30px; min-height: 30px; height: 30px; }
+  main:has(#monitor-view:not([hidden])) .graph-tools :is(select, input) { height: 26px; min-height: 26px; padding-top: 2px; padding-bottom: 2px; }
+  #toggle-context { min-height: 26px; padding-top: 2px; padding-bottom: 2px; }
+  #monitor-content > .trend-panel > .panel-heading { min-height: 28px; padding-top: 2px; padding-bottom: 2px; }
+  #monitor-content .chart-legend { min-height: 16px; padding-top: 0; padding-bottom: 1px; }
+  #detail-plots .measurement-plot { grid-template-columns: 116px minmax(0, 1fr); padding: 0 4px; gap: 3px; }
+  #detail-plots .measurement-plot-heading { padding: 0 4px; }
+  #detail-plots .plot-axis-value { min-height: 15px; }
+  #detail-plots .plot-axis-value strong { font-size: 15px; line-height: 15px; }
+  #detail-plots .plot-value-time { font-size: 10px; }
+  #detail-plots .plot-inspector summary { min-height: 26px; padding-top: 4px; padding-bottom: 4px; }
+  #monitor-content > .motor-context { gap: 4px; }
+  #monitor-content .motor-facts { gap: 4px; }
+  #monitor-content .motor-facts .metric { padding: 3px 6px; }
+  #monitor-content .motor-facts .metric-number strong { font-size: 19px; }
+  .compact-frequency-panel { padding: 4px 6px; }
+  #machine-data > summary { min-height: 26px; padding-top: 4px; padding-bottom: 4px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .plot-stack svg :is(polyline, circle), #detail-plots .measurement-plot { transition: none; }
 }

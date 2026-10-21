@@ -1,4 +1,4 @@
-# Monitoring workspace — 0.14.1
+# Monitoring workspace — 0.14.2
 
 The user's priority is a single visible monitoring screen with stronger hierarchy and responsive behavior. The model is explicitly excluded from that screen and moved to its own lazily loaded 3D tab. No reference asset or original model project is deleted.
 
@@ -8,7 +8,7 @@ The white/violet monitoring surface extends across the registry and graph worksp
 
 Manual raw/formula popovers use the native top layer, preventing clipping by bounded graph panels. Pinning retains the displayed timestamp. Escape/outside interaction, switching tabs, hiding context and fullscreen changes close them; Escape from the isolated model frame follows the same rule. Model controls fit their separate page and fullscreen view.
 
-Validation checks all three SVGs/readout boxes and numerical frequency are inside an unscrolled main viewport at 960×680, 1366×768, 1920×1080, 1024×768 and 768×1024. It also checks registry opening/closing, axis focus, quick ranges, context toggle, raw/table popovers, standalone model lazy loading and existing acquisition/recording/CRUD/history workflows. Rendered captures inspect desktop and portrait tablet composition. The Impeccable scan's under-11px functional warnings were fixed; remaining 11px auxiliary-text and child-padded legacy wrapper advisories are assessed with the screenshots, not presented as accessibility certification.
+Validation checks all three SVGs/readout boxes and numerical frequency inside an unscrolled main viewport at 960×680, 1366×700, 1366×768, 1280×650, 1920×1080, 1024×768 and 768×1024. The 1366×700 and 1280×650 cases model the renderer area left on common Windows displays after the title bar and taskbar use space. It also checks registry opening/closing, axis focus, quick ranges, context toggle, raw/table popovers, standalone model lazy loading and existing acquisition/recording/CRUD/history workflows. Rendered captures inspect regular desktop and short laptop viewports as well as portrait tablet composition. The Impeccable scan's under-11px functional warnings were fixed; remaining 11px auxiliary-text and child-padded legacy wrapper advisories are assessed with the screenshots, not presented as accessibility certification.
 
 The multi-motor overview and historical tables can still scroll for larger data sets. The one-viewport guarantee applies to the selected motor monitor at the tested sizes. This release does not verify physical frequency order, internal sensor refresh timing, RMS/Peak semantics or ISO severity.
 

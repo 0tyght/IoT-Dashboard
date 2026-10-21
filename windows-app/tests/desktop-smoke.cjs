@@ -241,7 +241,9 @@ const { _electron: electron } = require('playwright');
     assert(fixturePlot.acceleration.includes('-12.0'));
     assert(fixturePlot.pointsInside);
     await page.evaluate(() => drawChart());
-    for (const [width, height] of [[960, 680], [1366, 768], [1920, 1080], [1024, 768], [768, 1024]]) {
+    // Include usable renderer heights after the Windows title bar and taskbar
+    // consume part of a 1366×768 / 1280×720 physical display.
+    for (const [width, height] of [[960, 680], [1366, 700], [1366, 768], [1280, 650], [1920, 1080], [1024, 768], [768, 1024]]) {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size), [width, height]);
       await page.waitForFunction(([expectedWidth, expectedHeight]) => innerWidth === expectedWidth && innerHeight === expectedHeight, [width, height]);
       // Re-enter at each width so responsive defaults are tested as a user opens a motor.
@@ -286,7 +288,7 @@ const { _electron: electron } = require('playwright');
         await page.locator('#toggle-sidebar').click();
         await page.locator('#motor-sidebar').waitFor({ state: 'hidden' });
       }
-      await page.screenshot({ path: path.join(artifacts, `monitor-${width}.png`), animations: 'disabled' });
+      await page.screenshot({ path: path.join(artifacts, `monitor-${width}x${height}.png`), animations: 'disabled' });
     }
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1440, 900));
     await page.locator('[data-tab="registers"]').click();
@@ -427,6 +429,6 @@ const { _electron: electron } = require('playwright');
     await page.waitForFunction(() => !document.getElementById('new-motor').disabled);
     assert.equal(fs.readFileSync(path.join(temporary, 'data', `readings-${date}.ndjson`), 'utf8').trim().split('\n').length, 1, 'simulation must not write readings');
     assert.deepEqual(errors, []);
-    console.log('PASS: profile CRUD, filters, keyboard tabs, responsive registry, axis emphasis, single-viewport plots at 5 desktop/tablet sizes, fault recovery, sensor reassignment and history');
+    console.log('PASS: profile CRUD, filters, keyboard tabs, responsive registry, axis emphasis, single-viewport plots at 7 desktop/tablet viewport sizes, fault recovery, sensor reassignment and history');
   } finally { await app.close(); fs.rmSync(temporary, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exit(1); });
