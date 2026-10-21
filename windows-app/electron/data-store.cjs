@@ -12,6 +12,15 @@ function dayKey(date = new Date()) {
 
 const PRESET_MODEL = 'vemsee-sn3001-wz3a-n01';
 const PRESET_CHANNELS = ['velocity', 'displacement', 'acceleration'].flatMap(kind => ['X', 'Y', 'Z'].map(axis => `${kind}${axis}`));
+const LEGACY_RUN_ID = '__legacy__';
+const RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function recordedRunId(record) { return typeof record.runId === 'string' && record.runId ? record.runId : LEGACY_RUN_ID; }
+function runDataPath(dataDirectory, runId) {
+  if (typeof runId !== 'string' || !RUN_ID_PATTERN.test(runId)) throw new Error('รหัสรอบการทำงานไม่ถูกต้อง');
+  const root = path.resolve(dataDirectory, 'runs'), target = path.resolve(root, runId);
+  if (path.dirname(target) !== root) throw new Error('ตำแหน่งโฟลเดอร์รอบการทำงานไม่ถูกต้อง');
+  return target;
+}
 function recordedModel(record) {
   return record.sensorModel || record.decodeConfig?.sensorModel || (PRESET_CHANNELS.every(key => Object.hasOwn(record.channels || {}, key)) ? PRESET_MODEL : 'custom');
 }
@@ -36,14 +45,16 @@ function historySeries(record) {
   const unit = String(record.unit || '—'), port = String(record.port || 'ไม่ระบุพอร์ต'), slaveId = record.slaveId ?? null;
   const custom = sensorModel === 'custom' ? ['registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale'].map(key => record.decodeConfig?.[key] ?? null) : null;
   const simulation = record.source === 'SIMULATION';
-  const key = JSON.stringify([sensorModel, unit, port.toUpperCase(), slaveId, custom, simulation]);
+  const runId = recordedRunId(record), runStartedAt = record.runStartedAt || '';
+  const key = JSON.stringify([sensorModel, unit, port.toUpperCase(), slaveId, custom, simulation, runId]);
   const formula = custom ? record.decodeConfig ? ` · Register ${record.decodeConfig.registerAddress} × ${record.decodeConfig.scale}` : ' · สูตรเดิมไม่ระบุ' : '';
-  return { key, sensorModel, unit, port, slaveId, label: `${simulation ? 'ข้อมูลจำลอง · ' : ''}${sensorModel === 'custom' ? 'Custom' : 'VemSee 3-axis'} · ${unit} · ${port} / ID ${slaveId ?? '—'}${formula}` };
+  return { key, sensorModel, unit, port, slaveId, runId, runStartedAt, label: `${simulation ? 'ข้อมูลจำลอง · ' : ''}${sensorModel === 'custom' ? 'Custom' : 'VemSee 3-axis'} · ${unit} · ${port} / ID ${slaveId ?? '—'}${formula}${runId === LEGACY_RUN_ID ? '' : ` · Run ${runId.slice(0, 8)}`}` };
 }
 
 class DataStore {
   constructor(directory) { this.directory = directory; this.queue = Promise.resolve(); }
   dataPath() { return path.join(this.directory, 'data'); }
+  runDataPath(runId) { return runDataPath(this.dataPath(), runId); }
   profilesPath() { return path.join(this.directory, 'motors.json'); }
   loadRecording() {
     try { return normalizeRecording(JSON.parse(fs.readFileSync(path.join(this.directory, 'recording.json'), 'utf8'))); }
@@ -74,24 +85,25 @@ class DataStore {
   }
   append(reading) {
     const write = this.queue.then(async () => {
-      await fs.promises.mkdir(this.dataPath(), { recursive: true });
+      // Validate before writing even the daily file; IDs never become arbitrary paths.
+      const runDirectory = reading.runId == null || reading.runId === '' ? null : this.runDataPath(reading.runId);
       const date = dayKey(new Date(reading.timestamp));
+      await fs.promises.mkdir(this.dataPath(), { recursive: true });
       await fs.promises.appendFile(path.join(this.dataPath(), `readings-${date}.ndjson`), `${JSON.stringify(reading)}\n`, 'utf8');
       // A distinct schema suffix avoids appending new columns to older CSV files.
-      const csv = path.join(this.dataPath(), `readings-${date}-v3.csv`);
-      try { await fs.promises.writeFile(csv, '\uFEFF' + CSV_KEYS.join(',') + '\r\n', { flag: 'wx' }); }
-      catch (error) { if (error.code !== 'EEXIST') throw error; }
-      await fs.promises.appendFile(csv, csvRow(reading), 'utf8');
+      const name = `readings-${date}-v4.csv`;
+      await appendCsv(path.join(this.dataPath(), name), reading);
+      if (runDirectory) { await fs.promises.mkdir(runDirectory, { recursive: true }); await appendCsv(path.join(runDirectory, name), reading); }
     });
     this.queue = write.catch(() => {});
     return write;
   }
-  async history({ date, endDate = date, motorId = '' }, visitor) {
+  async history({ date, endDate = date, motorId = '', runId = '' }, visitor) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error('วันที่ไม่ถูกต้อง');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(endDate)) || !Number.isFinite(Date.parse(date)) || !Number.isFinite(Date.parse(endDate)) || endDate < date) throw new Error('ช่วงวันที่ไม่ถูกต้อง');
     await this.queue;
     const files = fs.existsSync(this.dataPath()) ? (await fs.promises.readdir(this.dataPath())).filter(name => /^readings-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name) && name.slice(9, 19) >= date && name.slice(9, 19) <= endDate).sort() : [];
-    const rows = [], motorIds = new Set(); let total = 0, skipped = 0;
+    const rows = [], motorIds = new Set(), runCatalog = new Map(); let total = 0, skipped = 0;
     for (const name of files) {
       const file = path.join(this.dataPath(), name);
       const stream = fs.createReadStream(file, { encoding: 'utf8' });
@@ -103,21 +115,32 @@ class DataStore {
           try { record = JSON.parse(line); if (!record || !Number.isFinite(Date.parse(record.timestamp)) || !Number.isFinite(record.value)) throw new Error('Invalid record'); } catch { skipped += 1; continue; }
           if (typeof record.motorId === 'string' && record.motorId) motorIds.add(record.motorId);
           if (motorId && record.motorId !== motorId) continue;
+          const id = recordedRunId(record);
+          if (!runCatalog.has(id)) runCatalog.set(id, { runId: id, runStartedAt: id === LEGACY_RUN_ID ? '' : record.runStartedAt || '', firstTimestamp: record.timestamp, lastTimestamp: record.timestamp, total: 0, recordingIds: new Set(), motorIds: new Set() });
+          const run = runCatalog.get(id);
+          run.total++;
+          if (Date.parse(record.timestamp) < Date.parse(run.firstTimestamp)) run.firstTimestamp = record.timestamp;
+          if (Date.parse(record.timestamp) > Date.parse(run.lastTimestamp)) run.lastTimestamp = record.timestamp;
+          if (!run.runStartedAt && id !== LEGACY_RUN_ID && record.runStartedAt) run.runStartedAt = record.runStartedAt;
+          if (record.recordingId) run.recordingIds.add(record.recordingId);
+          if (typeof record.motorId === 'string' && record.motorId) run.motorIds.add(record.motorId);
+          if (runId && id !== runId) continue;
           total += 1;
           if (visitor) await visitor(record);
           else { rows.push(record); if (rows.length > 500) rows.shift(); }
         }
       } finally { lines.close(); stream.destroy(); }
     }
-    return { rows, total, skipped, motorIds: [...motorIds].sort() };
+    const runs = [...runCatalog.values()].sort((a, b) => Date.parse(b.lastTimestamp) - Date.parse(a.lastTimestamp)).map(run => ({ ...run, recordingIds: [...run.recordingIds].sort(), motorIds: [...run.motorIds].sort() }));
+    return { rows, total, skipped, motorIds: [...motorIds].sort(), runs };
   }
-  async chartRange({ from, to, motorId, profile, seriesKey }) {
+  async chartRange({ from, to, motorId, profile, seriesKey, runId = '' }) {
     const start = Date.parse(from), end = Date.parse(to);
     if (!motorId || typeof motorId !== 'string' || !Number.isFinite(start) || !Number.isFinite(end) || start >= end) throw new Error('เลือกมอเตอร์และช่วงเวลาเริ่ม–สิ้นสุดให้ถูกต้อง');
     if (profile && (typeof profile !== 'object' || profile.motorId !== motorId)) throw new Error('การตั้งค่ามอเตอร์ไม่ตรงกับข้อมูลที่เลือก');
     const groups = new Map(), bucketCount = 160, keys = ['value', ...CSV_KEYS.filter(key => /^(velocity|displacement|acceleration|frequency)[XYZ]$/.test(key)), 'temperature'];
     let rangeTotal = 0;
-    const summary = await this.history({ date: dayKey(new Date(start)), endDate: dayKey(new Date(end)), motorId }, record => {
+    const summary = await this.history({ date: dayKey(new Date(start)), endDate: dayKey(new Date(end)), motorId, runId }, record => {
       const stamp = Date.parse(record.timestamp); if (stamp < start || stamp > end) return;
       if (profile && !matchesCurrentProfile(record, profile)) return;
       const descriptor = historySeries(record);
@@ -142,7 +165,7 @@ class DataStore {
     });
     const ordered = [...groups.values()].sort((a, b) => Date.parse(b.lastTimestamp) - Date.parse(a.lastTimestamp));
     const group = seriesKey ? groups.get(seriesKey) : ordered[0];
-    const series = ordered.map(({ key, sensorModel, unit, port, slaveId, label, total, lastTimestamp }) => ({ key, sensorModel, unit, port, slaveId, label, total, lastTimestamp }));
+    const series = ordered.map(({ key, sensorModel, unit, port, slaveId, runId, runStartedAt, label, total, lastTimestamp }) => ({ key, sensorModel, unit, port, slaveId, runId, runStartedAt, label, total, lastTimestamp }));
     if (!group) return { rows: [], total: 0, rangeTotal, skipped: summary.skipped, reduced: false, gapStarts: [], series, seriesKey: '' };
     const selected = new Map();
     for (const bucket of group.buckets.values()) for (const record of [bucket.first, bucket.last, ...[...bucket.extrema.values()].flatMap(item => [item.low, item.high])]) selected.set(record.timestamp, record);
@@ -157,8 +180,13 @@ function csvCell(value) {
   if (/^[=+\-@\t\r]/.test(text) && !/^[-+]?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
+async function appendCsv(file, reading) {
+  try { await fs.promises.writeFile(file, '\uFEFF' + CSV_KEYS.join(',') + '\r\n', { flag: 'wx' }); }
+  catch (error) { if (error.code !== 'EEXIST') throw error; }
+  await fs.promises.appendFile(file, csvRow(reading), 'utf8');
+}
 function localTimestamp(value) { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false }).format(new Date(value)).replace(' ', 'T').replace(',', '.') + '+07:00'; }
-const CSV_KEYS = ['timestamp', 'timestampBangkok', 'motorId', 'port', 'slaveId', 'value', 'unit', 'velocityX', 'velocityY', 'velocityZ', 'temperature', 'displacementX', 'displacementY', 'displacementZ', 'accelerationX', 'accelerationY', 'accelerationZ', 'frequencyX', 'frequencyY', 'frequencyZ', 'frequencyStatus', 'frequencyByteOrder', 'frequencyMessage', 'elapsedMs', 'pollIntervalMs', 'actualIntervalMs', 'source'];
+const CSV_KEYS = ['timestamp', 'timestampBangkok', 'schemaVersion', 'runId', 'runStartedAt', 'recordingId', 'recordingStartedAt', 'motorId', 'port', 'slaveId', 'value', 'unit', 'velocityX', 'velocityY', 'velocityZ', 'temperature', 'displacementX', 'displacementY', 'displacementZ', 'accelerationX', 'accelerationY', 'accelerationZ', 'frequencyX', 'frequencyY', 'frequencyZ', 'frequencyStatus', 'frequencyByteOrder', 'frequencyMessage', 'elapsedMs', 'pollIntervalMs', 'actualIntervalMs', 'source'];
 function csvRow(record) { return CSV_KEYS.map(key => csvCell(key === 'timestampBangkok' ? record.timestamp ? localTimestamp(record.timestamp) : '' : record[key] ?? record.channels?.[key])).join(',') + '\r\n'; }
 
-module.exports = { DataStore, dayKey, CSV_KEYS, csvRow };
+module.exports = { DataStore, dayKey, CSV_KEYS, csvRow, LEGACY_RUN_ID, runDataPath };

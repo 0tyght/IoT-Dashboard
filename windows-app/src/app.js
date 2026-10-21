@@ -117,7 +117,7 @@ async function restoreSavedMotorHistory(motorId) {
 function setHistoryMotor(id) {
   const select = $('history-motor'), previous = select.value;
   select.value = [...select.options].some(option => option.value === id) ? id : '';
-  if (previous !== select.value) invalidateHistoryRange();
+  if (previous !== select.value) { resetHistoryRun(); invalidateHistoryRange(); }
 }
 function renderHistoryMotors() {
   const select = $('history-motor'), previous = select.value, configured = new Set(profiles.map(profile => profile.motorId));
@@ -125,7 +125,7 @@ function renderHistoryMotors() {
   profiles.forEach(profile => select.add(new Option(profile.motorId, profile.motorId)));
   [...historyMotorIds].filter(id => !configured.has(id)).sort().forEach(id => select.add(new Option(`${id} · ประวัติ`, id)));
   select.value = [...select.options].some(option => option.value === previous) ? previous : '';
-  if (previous !== select.value) invalidateHistoryRange();
+  if (previous !== select.value) { resetHistoryRun(); invalidateHistoryRange(); }
 }
 function renderProfiles() {
   const body = $('motors-body'); body.replaceChildren();
@@ -255,7 +255,12 @@ function drawChart() {
 }
 function addReading(reading) {
   if (!Number.isFinite(reading.value)) return;
+  if (mode === 'live' && reading.runId && recordingState.runId && reading.runId !== recordingState.runId) return;
   const state = stateFor(reading.motorId);
+  if (reading.runId && state.frames.length && state.frames.at(-1)?.runId !== reading.runId) {
+    state.frames = []; state.samples = 0; state.reduced = false; state.gapStarts = []; state.dropped = false;
+    if (reading.motorId === selected && detailPlot) { detailPlot.cursorStamp = null; detailPlot.source = null; closeWorkbenchPopovers(); }
+  }
   if (state.frames.some(frame => frame.timestamp === reading.timestamp)) return;
   const previous = state.frames.at(-1);
   state.actualIntervalMs = previous ? Date.parse(reading.timestamp) - Date.parse(previous.timestamp) : null;
@@ -425,19 +430,25 @@ async function stopAndRestore() {
   const wasDemo = mode === 'demo'; await stop();
   if (wasDemo && beforeDemo) { profiles = beforeDemo; beforeDemo = null; selected = profiles[0]?.motorId || ''; cache.clear(); renderProfiles(); renderSelected(); }
 }
-function historyFilter() { return { date: $('history-date').value, endDate: $('history-end-date').value || $('history-date').value, motorId: $('history-motor').value }; }
+function historyFilter() { return { date: $('history-date').value, endDate: $('history-end-date').value || $('history-date').value, motorId: $('history-motor').value, runId: $('history-run')?.value || '' }; }
 async function loadHistory() {
   const generation = ++historyGeneration; $('load-history').disabled = true;
   try {
     const result = check(await api.history(historyFilter())); if (generation !== historyGeneration) return;
     (result.motorIds || []).forEach(id => historyMotorIds.add(id)); renderHistoryMotors();
+    if (renderHistoryRuns(result.runs || [])) {
+      restoreHistoryRange(); invalidateHistoryRange();
+      await loadHistory();
+      if (currentTab === 'history' && $('history-motor').value) $('load-range').click();
+      return;
+    }
     const body = $('history-body'); body.replaceChildren();
     $('history-summary').textContent = `${result.total.toLocaleString()} รายการ · แสดงล่าสุด ${result.rows.length} รายการ${result.skipped ? ` · ข้ามบรรทัดเสียหาย ${result.skipped}` : ''}`;
     for (const frame of result.rows.reverse()) {
       const row = node('tr');
-      row.append(node('td', timestamp(frame.timestamp), 'mono'), node('td', frame.motorId), ...[...Measurements.keys.slice(0, 9), 'temperature', ...Measurements.keys.slice(9)].map(key => node('td', digits(frame.channels?.[key], key.startsWith('frequency') ? 2 : 1), 'mono')), node('td', frame.frequencyStatus === 'ok' ? 'Hz พร้อมใช้' : frame.frequencyStatus === 'unconfirmed' ? 'รอยืนยัน Float' : frame.frequencyStatus ? 'Hz ไม่พร้อม' : 'ไม่มี Hz ในข้อมูลรุ่นเดิม'), node('td', `${digits(frame.value, 2)} ${frame.unit}`, 'mono'), node('td', `${frame.port} / ${frame.slaveId}`)); body.append(row);
+      row.append(node('td', timestamp(frame.timestamp), 'mono'), historyIdentityCell(frame.runId, frame.runStartedAt, 'รอบอ่าน'), historyIdentityCell(frame.recordingId, frame.recordingStartedAt, 'รอบบันทึก'), node('td', frame.motorId), ...[...Measurements.keys.slice(0, 9), 'temperature', ...Measurements.keys.slice(9)].map(key => node('td', digits(frame.channels?.[key], key.startsWith('frequency') ? 2 : 1), 'mono')), node('td', frame.frequencyStatus === 'ok' ? 'Hz พร้อมใช้' : frame.frequencyStatus === 'unconfirmed' ? 'รอยืนยัน Float' : frame.frequencyStatus ? 'Hz ไม่พร้อม' : 'ไม่มี Hz ในข้อมูลรุ่นเดิม'), node('td', `${digits(frame.value, 2)} ${frame.unit}`, 'mono'), node('td', `${frame.port} / ${frame.slaveId}`)); body.append(row);
     }
-    if (!result.rows.length) emptyRow(body, 18, 'ไม่มีข้อมูลที่บันทึกในวันที่และมอเตอร์ที่เลือก');
+    if (!result.rows.length) emptyRow(body, 20, 'ไม่มีข้อมูลที่บันทึกในวันที่และมอเตอร์ที่เลือก');
   } catch (error) { if (generation === historyGeneration) { $('history-summary').textContent = error.message; toast(error.message); } }
   finally { if (generation === historyGeneration) $('load-history').disabled = false; }
 }
@@ -511,11 +522,12 @@ setupControls();
 setupAssetView();
 setupWorkbench();
 setupAcquisitionUI();
+setupSpectralUI();
 detailPlot = createPlotStack($('detail-plots'), { prefix: 'trend', label: 'มอเตอร์ที่เลือก' });
 new ResizeObserver(() => { if ($('trend-chart').clientWidth) drawChart(); }).observe($('trend-chart'));
 controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
 (async () => {
-  $('history-date').value ||= today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 18, 'เลือกวันที่แล้วโหลดข้อมูล');
+  $('history-date').value ||= today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 20, 'เลือกวันที่แล้วโหลดข้อมูล');
   try {
     const initial = check(await api.initialize()); profiles = initial.profiles; selected = profiles[0]?.motorId || '';
     if (initial.recording) renderRecording(initial.recording);

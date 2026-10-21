@@ -1,0 +1,77 @@
+/* Spectrum tools share the monitor's white/violet instrument palette. */
+main:has(#analysis-view:not([hidden])) > .document-heading { display:none; }
+#analysis-view { min-width:0; }
+.spectral-heading { display:flex; justify-content:space-between; align-items:start; gap:12px; margin:12px 0 8px; }
+.spectral-heading h2 { margin:0; color:#30384d; font-size:20px; }
+.spectral-heading p { margin:3px 0 0; color:#616879; font-size:12px; }
+.spectral-source { font-size:11px; padding:4px 8px; border:1px solid #cfc8f2; border-radius:4px; color:#50439c; background:#f6f4ff; white-space:nowrap; }
+.spectral-capability { margin:0 0 8px; padding:8px 10px; background:#f6f7fb; color:#515a6c; font-size:12px; border-radius:4px; }
+.spectral-toolbar,.spectral-config { display:flex; flex-wrap:wrap; align-items:end; gap:8px; margin:8px 0; }
+.spectral-toolbar label,.spectral-config label { display:grid; gap:3px; color:#545c70; font-size:11px; }
+.spectral-toolbar input { width:115px; }
+.spectral-toolbar select,.spectral-config select { min-width:86px; }
+.spectral-toolbar button { align-self:end; }
+.spectral-toolbar .spectral-file { margin:auto 0 auto auto; font-size:12px; overflow-wrap:anywhere; max-width:40%; }
+.spectral-status { font-size:12px; color:#555e70; min-height:18px; margin:6px 0; }
+.spectral-status.error { color:#ab3343; }
+.spectral-empty { border:1px dashed #ccc5eb; padding:30px 22px; border-radius:6px; margin-top:12px; }
+.spectral-empty h3 { font-size:16px; margin:0 0 8px; }
+.spectral-empty p { margin:5px 0; max-width:75ch; font-size:12px; color:#596174; }
+.spectral-empty code { color:#5141a6; font-size:12px; }
+.spectral-metadata { display:flex; flex-wrap:wrap; gap:5px 18px; margin-left:auto; font-size:11px; color:#5c6374; align-self:center; }
+.spectral-metadata b { font-weight:600; color:#343e55; font-variant-numeric:tabular-nums; }
+.spectral-topplots { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.spectral-plot { min-width:0; border:1px solid #e0dcef; border-radius:6px; background:#fff; overflow:hidden; }
+.spectral-plot h3 { font-size:12px; font-weight:600; margin:7px 10px 0; color:#43485e; }
+.spectral-plot canvas { display:block; width:100%; height:148px; touch-action:none; }
+.spectral-plot p { font-size:11px; margin:0 10px 6px; color:#636a7c; min-height:15px; }
+.spectral-waterfall { margin-top:10px; padding:0; min-width:0; }
+.spectral-waterfall .panel-heading { padding:7px 10px; margin:0; flex-wrap:wrap; gap:8px; }
+.spectral-waterfall h3 { margin:0; font-size:13px; }
+.spectral-waterfall .inline-controls { flex-wrap:wrap; gap:5px; }
+.spectral-waterfall select { max-width:150px; }
+#spectral-surface { display:block; width:100%; height:270px; touch-action:none; cursor:grab; outline-offset:-3px; }
+#spectral-surface:active { cursor:grabbing; }
+#spectral-surface:focus-visible { outline:2px solid #7865e9; }
+.spectral-readout { padding:5px 10px; margin:0; font-size:12px; color:#424b60; background:#f7f6fc; min-height:25px; font-variant-numeric:tabular-nums; }
+.spectral-frame { display:flex; flex-direction:row; align-items:center; gap:10px; padding:4px 10px; border-top:1px solid #eeeaf8; }
+.spectral-frame input { flex:1; width:auto; height:20px; min-height:20px; padding:0; min-width:60px; accent-color:#6252e9; }
+.spectral-frame output { font-size:11px; min-width:140px; font-variant-numeric:tabular-nums; text-align:right; }
+.spectral-footnote { font-size:11px; color:#60687b; margin:6px 0; }
+.spectral-waterfall:fullscreen { display:flex; flex-direction:column; background:#fff; padding:12px; }
+.spectral-waterfall:fullscreen #spectral-surface { flex:1; min-height:0; height:auto; }
+.history-run-label { min-width:0; }
+#history-run { min-width:120px; max-width:260px; }
+#recording-run { flex-shrink:0; font-variant-numeric:tabular-nums; }
+@media (max-width:1100px) { .spectral-config { gap:6px; } .spectral-metadata { margin-left:0; width:100%; } .spectral-toolbar .spectral-file { max-width:100%; margin-left:0; } }
+@media (max-width:780px) { .spectral-topplots { grid-template-columns:1fr; } .spectral-heading { flex-wrap:wrap; } #spectral-surface { height:260px; } .spectral-toolbar input { width:105px; } #history-run { max-width:210px; } }
+@media (prefers-reduced-motion:no-preference) { .spectral-source { transition:background-color .15s ease-out; } }
+@media (min-width:1101px) and (min-height:680px) {
+  .shell:has(#analysis-view:not([hidden])) .appbar { height:40px; min-height:40px; }
+  .shell:has(#analysis-view:not([hidden])) .commandbar { height:44px; min-height:44px; padding:5px 14px; }
+  .shell:has(#analysis-view:not([hidden])) .statusbar { height:22px; min-height:22px; }
+  main:has(#analysis-view:not([hidden])) { display:flex; flex-direction:column; gap:4px; overflow:hidden; padding:6px 12px 8px; }
+  main:has(#analysis-view:not([hidden])) > .tabs { flex:0 0 32px; margin:0; height:32px; min-height:32px; gap:20px; overflow-y:hidden; }
+  main:has(#analysis-view:not([hidden])) > .tabs button { min-height:30px; font-size:12px; padding:4px 1px 7px; }
+  #analysis-view:not([hidden]) { display:flex; flex-direction:column; flex:1; min-height:0; }
+  .spectral-heading { flex-shrink:0; margin:3px 0; align-items:center; }
+  .spectral-heading h2 { font-size:17px; }
+  .spectral-heading p { display:none; }
+  .spectral-capability { flex-shrink:0; padding:5px 8px; margin:3px 0; font-size:11px; }
+  .spectral-toolbar { flex-shrink:0; margin:3px 0; gap:7px; }
+  .spectral-toolbar :is(button,input,select), .spectral-config select { min-height:28px; height:28px; padding:3px 7px; font-size:12px; }
+  .spectral-status { flex-shrink:0; margin:3px 0; font-size:11px; }
+  #spectral-results:not([hidden]) { display:flex; flex-direction:column; flex:1; min-height:0; gap:6px; }
+  .spectral-config { flex-shrink:0; margin:0; }
+  .spectral-metadata { gap:5px 10px; font-size:11px; }
+  .spectral-topplots { flex:0 0 120px; min-height:0; }
+  .spectral-plot { display:flex; flex-direction:column; min-height:0; }
+  .spectral-plot canvas { flex:1; height:auto; min-height:0; }
+  .spectral-waterfall { display:flex; flex-direction:column; flex:1; min-height:195px; margin:0; }
+  #spectral-surface { flex:1; min-height:115px; height:auto; }
+  .spectral-waterfall .panel-heading { flex-shrink:0; padding:4px 8px; }
+  .spectral-waterfall :is(button,select) { min-height:27px; height:27px; padding:3px 6px; font-size:11px; }
+  .spectral-readout { flex-shrink:0; font-size:11px; padding:3px 8px; min-height:21px; }
+  .spectral-frame { flex-shrink:0; padding:3px 8px; }
+  .spectral-footnote { flex-shrink:0; margin:0; font-size:11px; }
+}

@@ -3,6 +3,7 @@ node_modules/
 /windows-app/release/
 /windows-app/assets/app.ico
 .artifacts/
+.test-tmp/
 .DS_Store
 Thumbs.db
 *.log

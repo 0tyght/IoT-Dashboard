@@ -21,6 +21,7 @@ An independent Windows application for local RS485 / Modbus RTU motor monitoring
 - One primary Start command verifies sensors, starts acquisition and records automatically by default. One Stop disconnects acquisition and waits for pending file writes. Select explicit monitor-only or scheduled recording from the mode button; optional recording duration keeps monitoring after it expires, with an explicit status. Legacy manual-start settings follow the new combined Start action. The More menu preserves immediate recording start, recording-only stop, data folder and simulation. Scheduling requires the application to be open and connected; it does not wake Windows or connect automatically.
 - Automatic daily CSV **and** NDJSON storage when recording is active. CSV includes UTC and Bangkok timestamps with milliseconds, all nine vibration channels, temperature, frequency X/Y/Z and frequency quality/format, source, response time and requested/actual receive periods. CSV uses UTF-8 BOM and CRLF for Excel. Daily rollover uses Asia/Bangkok.
 - Multi-day history/motor filters, arbitrary timestamp-range historical charts, and complete filtered CSV export through a Windows save dialog. History displays the latest 500 matching rows; CSV exports all matching rows.
+- A separate Analysis view accepts uniformly sampled waveform CSV for FFT, PSD and time-frequency displays. It does not reinterpret the preset sensor's overall readings as a waveform. Imported data and generated demonstrations retain distinct source labels.
 - JSON configuration backup/import, confirmation before replacement or deletion, bounded event log and corrupt-file reporting without overwriting unreadable profiles.
 - Simulation is explicit and never writes simulated readings into production history.
 - Error, stale data, offline and receiving states describe communications quality. No automatic vibration severity / ISO judgment is applied.
@@ -50,9 +51,22 @@ The x64 installer and portable executable are created in `release/`. Git tags ma
 6. The requested polling period is configurable per motor from 250 ms to one hour in connection settings. It targets start-to-start request timing; shared bus work and response time can make actual reception slower. Overview and details show the measured receive period separately.
 7. Use **หยุดบันทึก** to stop saving and continue monitoring; **หยุด** stops acquisition and recording. Select motors from the sidebar and use Register, History and Events to diagnose readings. Stop acquisition before changing profiles or recording conditions.
 
-Readings are acknowledged as recorded only after both NDJSON and CSV appends succeed. Records include the computer's receive timestamp, motor ID, source port, slave ID, response duration, requested and measured receive periods, unit, raw registers and all decoded channels. Configuration is written using a temporary file plus rename. Storage errors are visible and the current reading remains available with `recordingState: error`; intentional monitoring without storage uses `monitor-only`. The two files are not one filesystem transaction: a CSV write failure can leave the NDJSON record present. Export can recover CSV data from that source after the disk problem is resolved.
+Readings are acknowledged as recorded only after all required daily NDJSON, daily CSV and per-run CSV appends succeed. Records include the computer's receive timestamp, motor ID, source port, slave ID, response duration, requested and measured receive periods, unit, raw registers and all decoded channels. Configuration is written using a temporary file plus rename. Storage errors are visible and the current reading remains available with `recordingState: error`; intentional monitoring without storage uses `monitor-only`. These writes are not one filesystem transaction: a later CSV write failure can leave earlier files present. Export can recover CSV data from the daily NDJSON source after the disk problem is resolved; check partial files before combining copies.
 
-The application shows the storage location in History and recording settings and has an open-folder command. It uses Electron's per-user application-data directory. Configuration is `motors.json` plus `recording.json`; readings are `data/readings-YYYY-MM-DD.ndjson` and `data/readings-YYYY-MM-DD-v3.csv`, with file dates in Asia/Bangkok. The CSV suffix identifies the schema, avoiding mixed headers from older versions. Existing v2 CSV files remain unchanged; old records without frequency display blank Hz. Existing `sensor-config.json` installations migrate in memory and save as the registry when edited. Only one application instance may use a data directory.
+The application shows the storage location in History and recording settings and has an open-folder command. It uses Electron's per-user application-data directory. Configuration is `motors.json` plus `recording.json`; daily readings are `data/readings-YYYY-MM-DD.ndjson` and `data/readings-YYYY-MM-DD-v4.csv`, with file dates in Asia/Bangkok. The CSV suffix identifies the schema, avoiding mixed headers from older versions. Existing v2/v3 CSV files remain unchanged; old records without frequency display blank Hz. Existing `sensor-config.json` installations migrate in memory and save as the registry when edited. Only one application instance may use a data directory.
+
+### Runs and recording intervals
+
+Schema v4 adds `runId`, `runStartedAt`, `recordingId` and `recordingStartedAt`. These values come from `RecordingService` in the backend, using generated UUIDs and UTC timestamps; they are not inferred from a graph range or the current motor selection.
+
+- A successful acquisition connection creates a new `runId`. Disconnecting and starting acquisition again creates another run, even for the same motors. Automatic retries of an individual port within that acquisition run do not create another run.
+- Each transition into active recording creates a new `recordingId`. Stopping recording and starting it again while acquisition continues keeps the same `runId` and uses a new `recordingId`.
+- Monitor-only readings carry their acquisition run identity but are not appended to history and have blank recording fields. Verification readings received before recording starts are not saved retroactively.
+- Saved rows capture both identities before asynchronous file writes. A late write retains its original run and recording identity.
+
+Each run also has CSV copies under `data/runs/<runId>/readings-YYYY-MM-DD-v4.csv`. A run crossing Bangkok midnight has more than one daily CSV in that folder. The daily NDJSON files remain the history journal; there is no separate NDJSON per run. Daily CSV and run-folder CSV contain copies of the same records, so concatenating both would duplicate readings. A run without a saved reading has no run folder to open.
+
+History obtains the run catalog and filters from the backend's saved records. Historical chart series include run identity so separate acquisition runs are not joined merely because a motor and COM port match. Older records without `runId` remain available in an explicit legacy group (`__legacy__`); the application cannot reconstruct their original acquisition boundaries or recording IDs.
 
 Modbus RTU is request/response: the sensor replies when the computer polls it ([Modbus serial guide](https://www.modbus.org/docs/Modbus_over_serial_line_V1_02.pdf), section 2.1). The supplied model's 10–5000 Hz vibration response range is not its register update interval. The exact internal update period has not been established from the supplied manual or verified hardware; polling faster does not prove a fresh internal measurement. The UI exposes this distinction rather than claiming a factory update rate.
 
@@ -74,8 +88,67 @@ Frequency at 0021H–0026H is read as six raw words. The supplied pages do not e
 
 Wiring from the supplied manual: brown VCC 10–30 VDC, black GND, yellow 485-A, blue 485-B. USB adapter detection does not identify the sensor model or confirm sensor communication.
 
+## FFT, PSD and waterfall analysis
+
+The current SN-3001-WZ3A-N01 profile reads temperature, nine per-axis overall vibration values and three frequency scalars. The frequency registers contain one Float32 number per axis, not an array of spectral bins. `rawRegisters` contains the encoded register words for those summary measurements; it is not a sequence of instantaneous vibration samples. Neither the supplied manual pages nor the implemented register profile establish a waveform transfer command or an exported spectrum. This is a limit of the documented input currently available, not proof that every firmware variant lacks another vendor interface.
+
+The stated **10–5000 Hz vibration response bandwidth is not the sensor's sample rate**, register refresh period or the application's polling rate. Changing the Modbus polling interval does not produce a verified high-rate waveform. An FFT of the stored overall values would describe how those summary values change at the polling cadence, not the motor's vibration spectrum up to 5 kHz. The Analysis importer therefore rejects VECTRA history/record CSV, including `velocityX`, `accelerationX`, frequency and schema/record headers. Renaming an overall column to `x` does not turn its contents into waveform samples.
+
+### Accepted waveform CSV
+
+Use a waveform export from an acquisition device with a known hardware sampling rate, physical unit and sample timing. The importer supports UTF-8 BOM, quoted comma-separated fields, decimal/scientific numbers and one to three channels named `x`, `y`, `z` (case-insensitive). A single channel may instead be named `value`, which is represented as channel X. Missing cells, non-finite values and inconsistent row widths are rejected.
+
+With numeric elapsed time in seconds:
+
+```csv
+time_s,x,y,z
+0.000,0.000,0.200,0.100
+0.001,0.309,0.350,0.220
+0.002,0.588,0.480,0.310
+0.003,0.809,0.570,0.360
+```
+
+This excerpt implies a sample rate of 1000 samples/s. `elapsed_time_s` / `elapsedtime_s` are also accepted; `time_ms` and `elapsed_time_ms` use milliseconds. All numeric time intervals must be uniform; repeated times, gaps and irregular timing fail validation. If a sample rate is also entered, it must agree with the rate implied by the CSV to within 1%. The importer does not fill gaps or resample. Elapsed time alone does not establish a UTC acquisition timestamp.
+
+With sample index and one channel:
+
+```csv
+sample,value
+0,0.000
+1,0.154
+2,0.294
+3,0.405
+```
+
+For this form, enter the device's verified sample rate explicitly, for example **2048 Hz** if that was the hardware setting for the capture. `index` is also accepted; indices must be consecutive integers. Files containing only `x/y/z` or `value` require an explicit sample rate and use row order as sample order. The CSV does not establish its amplitude unit; select the unit used by the acquisition device. An unspecified unit is `a.u.` rather than an inferred engineering unit.
+
+These four-row examples illustrate the format only. Actual analysis requires at least the selected FFT size of samples. The parser accepts at most **262,144 samples per channel**, three channels and **32 MiB** of CSV; a large or malformed file fails explicitly.
+
+### Sampling and spectral settings
+
+- `Fs` is the waveform acquisition rate in samples per second. Nyquist frequency is `Fs / 2`; usable vibration bandwidth also depends on the acquisition device and its anti-alias filter. A 5 kHz response specification alone does not provide an `Fs` value to enter.
+- `N` is the FFT size, a power of two from **64 to 8192**. Bin spacing is `Δf = Fs / N`, and one window covers `N / Fs` seconds. A finer bin grid does not by itself prove that nearby components can be resolved; the window and captured duration matter.
+- Analysis subtracts the mean separately from every frame before applying a **periodic Hann** window (default) or a **rectangular** window. Hann reduces boundary leakage but broadens spectral peaks. Rectangular retains narrower coherent-bin peaks and has stronger leakage when the frame does not contain an integer number of periods.
+- `overlap` is a fraction from 0 to less than 1. The implementation rounds `N × overlap` to an integer overlap count and returns the actual hop size `H = N − overlapSamples`. There is no zero-padding or interpolation.
+
+The one-sided **amplitude spectrum** reports peak amplitude in the input unit. Its normalization is `2 × |FFT| / Σw` for interior bins and `|FFT| / Σw` at DC and Nyquist. It is not an overall RMS measurement, and an off-bin peak can be lower or spread across adjacent bins even after window normalization. DC is removed by the per-frame mean subtraction.
+
+The one-sided **PSD** reports input-unit squared per hertz, for example `(m/s²)²/Hz`. Its normalization is `2 × |FFT|² / (Fs × Σw²)` for interior bins, with no doubling at DC or Nyquist. It is a density, not another amplitude unit. Integrating PSD across frequency estimates mean-square power for the selected window; the square root of a selected band's integrated PSD gives a band RMS estimate. `meanPSD` averages complete frame periodograms, following the mean Welch approach.
+
+### Waterfall, spectrogram and provenance
+
+A waterfall needs multiple spectra: each complete STFT frame produces a spectrum at its actual window-center time, with frequency in Hz and amplitude in the selected input unit. A spectrogram uses the same frame times and frequency bins with the selected peak amplitude or PSD represented by color. The PSD line above it is the mean periodogram across all complete frames; the waterfall and spectrogram retain individual frame values. The depth/time axis is elapsed waveform time, not the categorical X/Y/Z motor axis. One FFT frame is a single spectrum and cannot establish a time-varying waterfall.
+
+Only complete windows are analyzed. Trailing samples that cannot complete a frame are reported as `omittedSamples`; no synthetic tail is added. For display, the 3D waterfall draws up to 96 evenly distributed frames plus the selected frame, and states the displayed/total count. All computed frames remain selectable with the time slider. Frequency display buckets retain the maximum at its actual bin frequency. The maximum analysis size is **512 frames**. When a capture would exceed that limit, analysis asks for a shorter segment, larger FFT size or less overlap instead of silently skipping frames. Frame times are relative to the imported waveform; the UI must not substitute the computer's import time as the sensor's acquisition time.
+
+Imported waveform results use the `waveform-csv` source. Generated examples must remain labelled **TEST SIGNAL / ข้อมูลทดสอบ**, separate from imported captures and production sensor history. They demonstrate the analyzer and do not represent a measurement or establish a live FFT capability for the current RS485 profile. The current analysis workflow does not append imported or generated waveforms to the overall-reading recording journal.
+
+The pure `SpectralAnalysis` module is available as a browser global and CommonJS export. Run its numerical/parser checks with `node tests/spectral-analysis.cjs`. Tests verify known 50/120 Hz signals, amplitude and PSD normalization, DC/Nyquist handling, agreement with an independent direct DFT, timing rejection and resource limits.
+
+Primary references: [LabDeck vibration analysis](https://labdeck.com/vibrations-analysis/), [LabDeck spectral analysis](https://labdeck.com/spectral-analysis/), [SciPy periodogram scaling](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.periodogram.html), [SciPy Welch averaging](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.welch.html), and [SciPy STFT frames and hop size](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.stft.html).
+
 ## Validation and limits
 
 Unit tests use a fake Modbus client to verify serialization, per-motor failure isolation, initial connection rollback and no late reads after stopping. Filesystem tests verify configuration validation, signed/unsigned decoding, history filtering, corrupt-line recovery and CSV escaping. UI tests use isolated temporary application data, fixture serial ports and explicit simulation; they verify profile CRUD, live/error/recovery states, all three axes, raw tables, history, pointer charts and 960/1366/1920 layouts.
 
-Physical sensor response, installed USB drivers, RMS/Peak semantics and mounting direction still require commissioning on the target computer. The app does not infer bearing faults, create an FFT from overall values, apply alarm thresholds or operate a motor trip. It is a local acquisition tool; the data is not automatically shared with the website or other computers.
+Physical sensor response, installed USB drivers, RMS/Peak semantics and mounting direction still require commissioning on the target computer. The app does not infer bearing faults, create an FFT from overall values, apply alarm thresholds or operate a motor trip. Imported waveform analysis uses the supplied capture's timing and units; it does not validate the capture device's calibration or anti-alias filtering. It is a local acquisition tool; the data is not automatically shared with the website or other computers.

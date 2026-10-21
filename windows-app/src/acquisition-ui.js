@@ -3,13 +3,50 @@ let recordingState = { settings: { startMode: 'on-connect', startAt: '', duratio
 let historyPlot, rangeFrames = [], rangeGeneration = 0, rangeProfile = null, rangeReduced = false, rangeGapStarts = [];
 let invalidateHistoryRange = () => {};
 let recordActionBusy = false;
+let historyRuns = [];
+let restoreHistoryRange = () => {};
+function shortIdentity(value) { return typeof value === 'string' && value ? value.slice(0, 8) : '—'; }
+function runDateLabel(value) {
+  return value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value)) : 'ไม่ระบุเวลาเริ่ม';
+}
+function hasRunFolder(runId) { return typeof runId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(runId); }
+function updateRunFolderButton() {
+  const button = $('open-run-folder'), runId = $('history-run')?.value;
+  if (!button) return;
+  button.disabled = !hasRunFolder(runId);
+  button.title = button.disabled ? 'เลือกรอบอ่านที่มีรหัส เพื่อเปิดโฟลเดอร์ CSV ของรอบนั้น' : `เปิด CSV ของรอบ ${runId}`;
+}
+function renderHistoryRuns(runs = []) {
+  const select = $('history-run'); if (!select) return false;
+  const previous = select.value; historyRuns = runs;
+  select.replaceChildren(new Option('ทุกรอบ', ''));
+  for (const run of runs) {
+    const label = run.runId === '__legacy__' ? `ข้อมูลเดิม · ไม่ระบุรอบ · ${run.total.toLocaleString()} ค่า` : `${runDateLabel(run.runStartedAt || run.firstTimestamp)} · ${shortIdentity(run.runId)} · ${run.total.toLocaleString()} ค่า`;
+    const option = new Option(label, run.runId);
+    option.title = run.runId === '__legacy__' ? 'ข้อมูลจากรุ่นเดิมที่ยังไม่มีรหัสรอบอ่าน' : `รอบอ่าน ${run.runId}\nเริ่ม ${runDateLabel(run.runStartedAt || run.firstTimestamp)} (UTC+07:00)`;
+    select.add(option);
+  }
+  select.value = [...select.options].some(option => option.value === previous) ? previous : '';
+  updateRunFolderButton();
+  return previous !== select.value;
+}
+function resetHistoryRun() {
+  restoreHistoryRange();
+  if ($('history-run')) $('history-run').value = '';
+  renderHistoryRuns([]);
+}
+function historyIdentityCell(value, startedAt, label) {
+  const cell = node('td', value ? shortIdentity(value) : 'ข้อมูลเดิม', 'mono');
+  cell.title = value ? `${label} ${value}${startedAt ? `\nเริ่ม ${runDateLabel(startedAt)} (UTC+07:00)` : ''}` : `ข้อมูลเดิมที่ไม่ระบุ${label}`;
+  return cell;
+}
 function storageLabel(last, savedHistory = false) {
   if (mode === 'demo') return 'ข้อมูลจำลอง';
   if (!last) return 'ยังไม่มีข้อมูล';
   if (savedHistory) return 'ข้อมูลจากไฟล์ประวัติ';
   if (last.recordingState === 'before-start') return 'ค่าทดสอบก่อนเริ่มบันทึก';
   if (last.recordingState === 'monitor-only') return 'ดูอย่างเดียว · ไม่บันทึก';
-  return last.recorded === false ? 'บันทึกไม่สำเร็จ' : 'บันทึก CSV แล้ว';
+  return last.recorded === true || last.recordingState === 'saved' ? 'บันทึก CSV แล้ว' : last.recorded === false ? 'บันทึกไม่สำเร็จ' : 'ข้อมูลที่อ่านได้ · ไม่ยืนยันการบันทึก';
 }
 function renderRecording(state) {
   if (state) recordingState = state;
@@ -19,6 +56,13 @@ function renderRecording(state) {
   $('recording-strip').hidden = mode === 'offline' && !recordingState.count && !recordingState.lastError;
   $('recording-status').textContent = mode === 'demo' ? 'ข้อมูลจำลอง · ไม่บันทึก' : recordingState.lastError ? 'บันทึกไม่สำเร็จ' : !live ? 'จบรอบการทำงาน' : recordingState.active ? 'กำลังอ่านและบันทึก' : recordingState.scheduleMissed ? 'เลยเวลาที่ตั้งไว้ · ยังไม่บันทึก' : recordingState.waiting ? 'กำลังอ่าน · รอเวลาบันทึก' : recordingState.stopReason === 'duration' ? 'ครบเวลาบันทึก · กำลังอ่านต่อ' : 'กำลังอ่าน · ไม่บันทึก';
   $('recording-status').className = mode === 'demo' ? '' : recordingState.lastError ? 'storage-fault' : recordingState.active ? 'recording-active' : '';
+  const runLabel = $('recording-run');
+  if (runLabel) {
+    runLabel.hidden = !recordingState.runId || mode === 'demo';
+    runLabel.textContent = recordingState.runId ? `รอบ ${runDateLabel(recordingState.runStartedAt)} · ${shortIdentity(recordingState.runId)}` : '';
+    runLabel.title = recordingState.runId ? `รอบอ่าน ${recordingState.runId}\nเริ่ม ${runDateLabel(recordingState.runStartedAt)} (UTC+07:00)${recordingState.recordingId ? `\nรอบบันทึก ${recordingState.recordingId}\nเริ่มบันทึก ${runDateLabel(recordingState.recordingStartedAt)}` : '\nยังไม่เริ่มบันทึกในรอบนี้'}` : '';
+    runLabel.dataset.runId = recordingState.runId || '';
+  }
   $('recording-detail').textContent = mode === 'demo' ? 'ใช้ทดสอบหน้าจอเท่านั้น' : recordingState.lastError ? `${recordingState.lastError} · ${live ? 'อ่านข้อมูลต่อ' : 'หยุดแล้ว'} · ตรวจโฟลเดอร์และพื้นที่ดิสก์` : recordingState.active ? `${recordingState.count.toLocaleString()} แถว${recordingState.lastSavedAt ? ` · บันทึกล่าสุด ${timestamp(recordingState.lastSavedAt)}` : ' · รอค่ารอบแรก'}${recordingState.endsAt ? ` · สิ้นสุด ${time(recordingState.endsAt)}` : ''}` : recordingState.waiting ? `เริ่ม ${timestamp(settings.startAt)}` : !live ? `${recordingState.count.toLocaleString()} แถว${recordingState.lastSavedAt ? ` · บันทึกล่าสุด ${timestamp(recordingState.lastSavedAt)}` : ''}` : recordingState.scheduleMissed ? 'เพิ่มเติม → เริ่มบันทึกทันที หรือหยุดเพื่อตั้งเวลาใหม่' : 'เริ่มบันทึกได้จากเมนูเพิ่มเติม';
   $('record-start').hidden = !live || recordingState.active;
   $('record-stop').hidden = !live || (!recordingState.active && !recordingState.waiting);
@@ -45,6 +89,22 @@ function recordingModeFields() {
 }
 function inputLocal(value) { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 19); }
 function setupAcquisitionUI() {
+  const runLabel = node('span'); runLabel.id = 'recording-run'; runLabel.hidden = true;
+  $('recording-status').after(runLabel);
+  const historyControls = $('history-view').querySelector('.section-toolbar .inline-controls');
+  const runSelectLabel = node('label', 'รอบอ่าน', 'history-run-label'), runSelect = node('select');
+  runSelect.id = 'history-run'; runSelect.setAttribute('aria-label', 'กรองรอบอ่าน'); runSelect.add(new Option('ทุกรอบ', '')); runSelectLabel.append(runSelect);
+  $('history-motor').after(runSelectLabel);
+  const openRunFolder = node('button', 'โฟลเดอร์รอบนี้'); openRunFolder.id = 'open-run-folder'; openRunFolder.type = 'button'; openRunFolder.disabled = true;
+  historyControls.append(openRunFolder);
+  openRunFolder.onclick = () => action(async () => {
+    const runId = runSelect.value; if (!hasRunFolder(runId)) return;
+    openRunFolder.disabled = true;
+    try { check(await api.openRunDataPath(runId)); }
+    finally { updateRunFolderButton(); }
+  });
+  const historyHeader = $('history-view').querySelector('.data-table thead tr');
+  historyHeader.children[1].before(node('th', 'รอบอ่าน'), node('th', 'รอบบันทึก'));
   const recordingForm = $('recording-form');
   $('record-settings').onclick = () => {
     const settings = recordingState.settings;
@@ -76,6 +136,10 @@ function setupAcquisitionUI() {
   };
   // Leave a small clock-skew margin so a sample written while the view opens is included.
   const rangeEnd = Date.now() + 60000; $('range-from').value = bangkokDateTime(rangeEnd - 24 * 3600000); $('range-to').value = bangkokDateTime(rangeEnd);
+  let rangeBeforeRun = null;
+  restoreHistoryRange = () => {
+    if (rangeBeforeRun) { $('range-from').value = rangeBeforeRun.from; $('range-to').value = rangeBeforeRun.to; rangeBeforeRun = null; }
+  };
   $('history-date').value = $('range-from').value.slice(0, 10);
   const historyView = $('history-view'), rangePanel = historyView.querySelector('.history-range');
   const seriesLabel = node('label', 'ชุดข้อมูลที่บันทึก'), seriesSelect = node('select');
@@ -83,7 +147,7 @@ function setupAcquisitionUI() {
   rangePanel.querySelector('.history-range-controls').insertBefore(seriesLabel, $('load-range'));
   historyView.querySelector('.table-scroll').before(rangePanel);
   historyPlot = createPlotStack($('history-plots'), { prefix: 'history', label: 'ย้อนหลัง' });
-  const viewControls = node('div', null, 'history-view-switch'), twoD = node('button', 'กราฟเส้น', 'active'), threeD = node('button', 'พื้นผิว 3D');
+  const viewControls = node('div', null, 'history-view-switch'), twoD = node('button', 'กราฟเส้น', 'active'), threeD = node('button', 'แนวโน้ม 3D');
   twoD.type = 'button'; threeD.type = 'button'; twoD.id = 'history-view-lines'; threeD.id = 'history-view-surface'; twoD.setAttribute('aria-pressed', 'true'); threeD.setAttribute('aria-pressed', 'false');
   viewControls.append(twoD, threeD); $('history-view').querySelector('.history-range .panel-heading').append(viewControls);
   const surface = createHistorySurface($('history-plots'), { frames: () => rangeFrames, profile: () => rangeProfile, reduced: () => rangeReduced, gapStarts: () => rangeGapStarts });
@@ -103,8 +167,18 @@ function setupAcquisitionUI() {
     $('load-range').disabled = false; $('range-summary').textContent = $('history-motor').value ? 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟย้อนหลัง' : 'เลือกมอเตอร์เพื่อเปิดกราฟย้อนหลัง · ตารางด้านล่างแสดงได้ทุกมอเตอร์';
   };
   invalidateHistoryRange = clearRange;
-  for (const id of ['range-from', 'range-to']) $(id).onchange = clearRange;
-  $('history-motor').onchange = () => { clearRange(); if (currentTab === 'history') { loadHistory(); if ($('history-motor').value) $('load-range').click(); } };
+  for (const id of ['range-from', 'range-to']) $(id).onchange = () => { rangeBeforeRun = null; clearRange(); };
+  $('history-motor').onchange = () => { resetHistoryRun(); clearRange(); if (currentTab === 'history') { loadHistory(); if ($('history-motor').value) $('load-range').click(); } };
+  runSelect.onchange = () => {
+    const run = historyRuns.find(item => item.runId === runSelect.value);
+    if (run && Number.isFinite(Date.parse(run.firstTimestamp)) && Number.isFinite(Date.parse(run.lastTimestamp))) {
+      rangeBeforeRun ||= { from: $('range-from').value, to: $('range-to').value };
+      $('range-from').value = bangkokDateTime(Date.parse(run.firstTimestamp));
+      $('range-to').value = bangkokDateTime(Date.parse(run.lastTimestamp) + 1000);
+    } else restoreHistoryRange();
+    updateRunFolderButton(); clearRange();
+    if (currentTab === 'history') { loadHistory(); if ($('history-motor').value) $('load-range').click(); }
+  };
   seriesSelect.onchange = () => { clearRange({ keepSeries: true }); $('load-range').click(); };
   new ResizeObserver(() => { if ($('history-chart').clientWidth) drawHistory(); }).observe($('history-chart'));
   $('load-range').onclick = async () => {
@@ -112,7 +186,7 @@ function setupAcquisitionUI() {
     rangePanel.dataset.loaded = 'loading';
     $('load-range').disabled = true; $('range-summary').textContent = 'กำลังโหลดจากไฟล์…';
     try {
-      const result = check(await api.chartRange({ motorId, seriesKey: seriesSelect.value || undefined, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
+      const result = check(await api.chartRange({ motorId, runId: runSelect.value || undefined, seriesKey: seriesSelect.value || undefined, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
       if (generation !== rangeGeneration) return;
       rangeFrames = result.rows; rangeReduced = Boolean(result.reduced); rangeGapStarts = result.gapStarts || [];
       seriesSelect.replaceChildren(); (result.series || []).forEach(series => seriesSelect.add(new Option(`${series.label} · ${series.total.toLocaleString()} ค่า`, series.key)));
@@ -122,7 +196,8 @@ function setupAcquisitionUI() {
       rangeProfile = rangeFrames.length ? { motorId, sensorModel: recordedSeries?.sensorModel || (rangeFrames[0].channels ? MODEL : 'custom'), unit: recordedSeries?.unit || rangeFrames[0].unit } : null;
       drawHistory(); surface.draw();
       rangePanel.dataset.loaded = 'true';
-      $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${historyPlot.frames.length.toLocaleString()} จุด${result.series?.length > 1 ? ` · ชุดที่เลือกจาก ${result.series.length} รูปแบบข้อมูล` : ''}${result.reduced || historyPlot.frames.length < result.rows.length ? ' (ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
+      const runSummary = recordedSeries?.runId && recordedSeries.runId !== '__legacy__' ? ` · รอบ ${shortIdentity(recordedSeries.runId)}` : recordedSeries?.runId === '__legacy__' ? ' · ข้อมูลเดิมไม่ระบุรอบ' : '';
+      $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${historyPlot.frames.length.toLocaleString()} จุด${runSummary}${result.series?.length > 1 ? ` · ชุดที่เลือกจาก ${result.series.length} รูปแบบข้อมูล` : ''}${result.reduced || historyPlot.frames.length < result.rows.length ? ' (ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
     } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; rangeGapStarts = []; drawHistory(); surface.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
     finally { if (generation === rangeGeneration) $('load-range').disabled = false; }
   };

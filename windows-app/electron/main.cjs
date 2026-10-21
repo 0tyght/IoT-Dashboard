@@ -71,6 +71,18 @@ app.whenReady().then(() => {
     const error = await shell.openPath(store.dataPath());
     return { ok: !error, message: error };
   });
+  handle('data:open-run-folder', async runId => {
+    const directory = store.runDataPath(runId);
+    if (!fs.existsSync(directory)) throw new Error('รอบนี้ยังไม่มีไฟล์ที่บันทึก');
+    const error = await shell.openPath(directory); return { ok: !error, message: error };
+  });
+  handle('analysis:import-waveform', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, { title: 'เปิด Waveform CSV', properties: ['openFile'], filters: [{ name: 'Waveform CSV', extensions: ['csv'] }] });
+    if (result.canceled) return { ok: true, canceled: true };
+    const file = result.filePaths[0];
+    if ((await fs.promises.stat(file)).size > 32 * 1024 * 1024) throw new Error('Waveform CSV ต้องมีขนาดไม่เกิน 32 MB');
+    return { ok: true, fileName: path.basename(file), text: await fs.promises.readFile(file, 'utf8') };
+  });
   handle('data:export', async filter => {
     const result = await dialog.showSaveDialog(mainWindow, { title: 'ส่งออกข้อมูล CSV', defaultPath: `VECTRA-${filter.date}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] });
     if (result.canceled) return { ok: true, canceled: true };

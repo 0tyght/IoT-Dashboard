@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   stopRecording: () => ipcRenderer.invoke('recording:stop'),
   exportData: filter => ipcRenderer.invoke('data:export', filter),
   openDataPath: () => ipcRenderer.invoke('data:open-folder'),
+  openRunDataPath: runId => ipcRenderer.invoke('data:open-run-folder', runId),
+  importWaveform: () => ipcRenderer.invoke('analysis:import-waveform'),
   exportProfiles: () => ipcRenderer.invoke('profiles:export'),
   importProfiles: () => ipcRenderer.invoke('profiles:import'),
   onReading: subscribe('sensor:reading'),
