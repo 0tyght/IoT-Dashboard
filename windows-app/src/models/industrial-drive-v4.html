@@ -28,6 +28,7 @@ header,.info,.badge,.download,.help{display:none!important}
 .toolbar{bottom:10px;background:#fff;border:1px solid #e5e7ef;border-radius:5px;padding:3px;box-shadow:none;backdrop-filter:none}
 .toolbar button{font-size:12px;padding:7px 10px;border-radius:4px}
 .toolbar button.active{background:#6252e9;color:#fff}
+@media(max-width:360px){.toolbar{bottom:5px;gap:1px;padding:3px;border-radius:4px;max-width:calc(100% - 8px)}.toolbar button{font-size:10px;padding:5px 6px;min-height:28px}.toolbar .sep{margin:5px 1px}.toolbar .reset{padding:5px 7px}}
 button:focus-visible,#view:focus-visible{outline:2px solid #7865e9;outline-offset:2px}
 </style>
 </head>
@@ -36,7 +37,7 @@ button:focus-visible,#view:focus-visible{outline:2px solid #7865e9;outline-offse
 <header class="panel"><div class="eyebrow"><span class="dot"></span> V4 / CORRECTED BASE FRAME</div><h1>ชุดเครื่องกำเนิดไฟฟ้าและมอเตอร์ · V4</h1><p>ปาก C เปิดออกด้านนอก · เสาวางบนปีกกรอบ · กลางฐานโล่ง<br>ฐาน 5 ซม. + ชุดรองมอเตอร์ 15 ซม. · ลบสายด้านข้างแล้ว</p></header>
 <div class="info"><strong id="stats">กำลังเตรียมโมเดล</strong><br><span id="dimensions"></span><br><span>ผิวในตัวดูนี้เป็นแบบย่อ ไม่แสดง normal texture</span></div>
 <div class="help">ลากเพื่อหมุน · ล้อเลื่อนเพื่อซูม · คลิกขวาหรือ Shift + ลากเพื่อเลื่อน · สองนิ้วเพื่อซูมและเลื่อน</div>
-<nav class="toolbar panel" aria-label="มุมมองโมเดล"><button class="active" data-view="reference">มุมภาพอ้างอิง</button><button data-view="front">ด้านหน้า</button><button data-view="top">ด้านบน</button><span class="sep"></span><button class="reset" id="reset" title="กลับมุมเริ่มต้น (R)" aria-label="กลับมุมเริ่มต้น">↺</button></nav>
+<nav class="toolbar panel" aria-label="มุมมองโมเดล"><button class="active" data-view="reference" title="มุมภาพอ้างอิง">มุมอ้างอิง</button><button data-view="front" title="มุมด้านหน้า">หน้า</button><button data-view="top" title="มุมด้านบน">บน</button><span class="sep"></span><button class="reset" id="reset" title="กลับมุมเริ่มต้น (R)" aria-label="กลับมุมเริ่มต้น">↺</button></nav>
 <div class="badge"><b>หมุนดูได้โดยไม่ใช้อินเทอร์เน็ต</b><br>โมเดลสำหรับเกมและแอป 3D · ไม่ใช่แบบผลิตชิ้นงาน</div>
 <a class="download" id="download" download="industrial_drive_game_v4.glb" href="#"><span>↓</span> บันทึก GLB V4</a>
 <div id="loading"><span>กำลังเปิดโมเดล 3D…</span></div>

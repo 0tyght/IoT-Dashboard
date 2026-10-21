@@ -119,6 +119,15 @@ const { _electron: electron } = require('playwright');
     assert.equal(await page.locator('[data-tab="monitor"]').getAttribute('aria-selected'), 'true');
     assert.equal(await page.locator('[role="tab"][tabindex="0"]').count(), 1);
     await page.locator('#monitor-content').waitFor({ state: 'visible' });
+    const velocityAxisX = page.locator('#detail-plots [data-kind="velocity"] .plot-axis-value').first();
+    const visibleTraceCount = await page.locator('#detail-plots .measurement-plot:not([hidden]) svg polyline').count();
+    assert.equal(visibleTraceCount, 9, 'all three axes remain present in all three plots');
+    await velocityAxisX.focus();
+    await page.waitForFunction(() => document.getElementById('detail-plots').dataset.focusedAxis === 'X');
+    assert.equal(await page.locator('#detail-plots .measurement-plot:not([hidden]) svg polyline').count(), visibleTraceCount, 'axis emphasis does not remove traces');
+    assert((await velocityAxisX.getAttribute('aria-label')).includes('Velocity X'), 'the emphasized value retains its measurement name');
+    await page.locator('#pause-stream').focus();
+    await page.waitForFunction(() => !document.getElementById('detail-plots').dataset.focusedAxis);
     assert.equal(await page.locator('#channel-body tr').count(), 4);
     assert(await page.locator('#new-motor').isEnabled());
     assert.equal(await page.locator('#register-body tr').count(), 13);
@@ -138,6 +147,11 @@ const { _electron: electron } = require('playwright');
     assert(frequencyStates.summary.includes('ตั้งค่ามอเตอร์'));
     assert.equal(frequencyStates.zero, '0.00');
     assert.equal(frequencyStates.error, 'อ่านไม่ได้');
+    assert.equal(await page.locator('#monitor-view #model-panel').count(), 0, 'the monitoring workspace does not contain the 3D model');
+    assert.equal(await page.locator('#asset-model').getAttribute('src'), null, '3D assets are not loaded before the model page is opened');
+    await page.locator('[data-tab="model"]').click();
+    await page.locator('#model-view').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#model-view #model-panel').count(), 1, 'the reference model has its own page');
     await page.waitForFunction(() => ['ready', 'fallback'].includes(document.getElementById('model-panel').dataset.modelState));
     if (await page.locator('#model-panel').getAttribute('data-model-state') === 'ready') {
       const model = page.frameLocator('#asset-model');
@@ -151,6 +165,10 @@ const { _electron: electron } = require('playwright');
       await page.locator('#retry-model').click();
       await page.waitForFunction(() => document.getElementById('model-panel').dataset.modelState === 'ready');
     } else assert((await page.locator('#model-status').textContent()).includes('ภาพนิ่ง'));
+    await page.screenshot({ path: path.join(artifacts, 'model-separate-page.png'), animations: 'disabled' });
+    await page.locator('[data-tab="monitor"]').click();
+    await page.locator('#monitor-content').waitFor({ state: 'visible' });
+    assert(await page.locator('#model-panel').isHidden(), 'returning to monitoring leaves the model on its separate page');
     await page.evaluate(() => { document.querySelector('main').scrollTop = 0; });
     await page.screenshot({ path: path.join(artifacts, 'motor-model-context.png'), animations: 'disabled' });
     const conversionMenu = page.locator('#detail-plots [data-kind="velocity"] .plot-inspector');
@@ -169,6 +187,19 @@ const { _electron: electron } = require('playwright');
     await conversionMenu.locator('summary').press('Enter');
     assert(await conversionMenu.evaluate(element => element.open), 'keyboard opens conversion menu');
     await conversionMenu.locator('summary').press('Escape');
+    await page.locator('#machine-data > summary').click();
+    await page.waitForFunction(() => document.querySelector('#machine-data .channels-panel').matches(':popover-open'));
+    await page.locator('#trend-chart').focus(); await page.keyboard.press('Escape');
+    assert(!(await page.locator('#machine-data').evaluate(element => element.open)), 'Escape from the chart closes the machine-data popover');
+    await page.locator('#toggle-context').click();
+    assert(await page.locator('.motor-context').isHidden());
+    assert.equal(await page.locator('#toggle-context').getAttribute('aria-expanded'), 'false');
+    await page.locator('#toggle-context').click();
+    await page.locator('.motor-context').waitFor({ state: 'visible' });
+    await page.locator('#graph-shortcuts [data-window="60s"]').click();
+    assert.equal(await page.locator('#fleet-window').inputValue(), '60s');
+    assert(await page.evaluate(() => chartFrames.length > 0 && Date.parse(chartFrames.at(-1).timestamp) - Date.parse(chartFrames[0].timestamp) <= 60000), 'quick range changes the actual chart window');
+    await page.locator('#graph-shortcuts [data-window="300s"]').click();
     await page.locator('#expand-charts').click();
     await page.waitForFunction(() => document.fullscreenElement?.classList.contains('trend-panel'));
     assert.equal(await page.locator('#detail-plots .measurement-plot:visible').count(), 3);
@@ -210,12 +241,52 @@ const { _electron: electron } = require('playwright');
     assert(fixturePlot.acceleration.includes('-12.0'));
     assert(fixturePlot.pointsInside);
     await page.evaluate(() => drawChart());
-    for (const [width, height] of [[960, 680], [1366, 768], [1920, 1080]]) {
+    for (const [width, height] of [[960, 680], [1366, 768], [1920, 1080], [1024, 768], [768, 1024]]) {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size), [width, height]);
-      await page.waitForTimeout(120);
+      await page.waitForFunction(([expectedWidth, expectedHeight]) => innerWidth === expectedWidth && innerHeight === expectedHeight, [width, height]);
+      // Re-enter at each width so responsive defaults are tested as a user opens a motor.
+      await page.locator('[data-tab="fleet"]').click();
+      await page.locator('[data-tab="monitor"]').click();
+      await page.locator('#monitor-content').waitFor({ state: 'visible' });
+      await page.evaluate(() => { delete window.__vectraMonitorLayoutProbe; });
+      await page.waitForFunction(() => {
+        const nodes = [document.querySelector('main'), document.getElementById('monitor-content'), ...document.querySelectorAll('#detail-plots .measurement-plot:not([hidden]) svg')];
+        if (nodes.some(element => !element || element.clientWidth <= 0 || element.clientHeight <= 0)) return false;
+        const key = JSON.stringify(nodes.map(element => { const rect = element.getBoundingClientRect(); return [rect.x, rect.y, rect.width, rect.height].map(value => Math.round(value * 10)); }));
+        const probe = window.__vectraMonitorLayoutProbe;
+        if (!probe || probe.key !== key) { window.__vectraMonitorLayoutProbe = { key, frames: 0 }; return false; }
+        return ++probe.frames >= 3;
+      });
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${width} page overflow`);
       assert(await page.locator('#disconnect').isVisible());
-      await page.screenshot({ path: path.join(artifacts, `monitor-${width}.png`) });
+      assert.equal(await page.locator('#detail-plots .measurement-plot:not([hidden]) svg').count(), 3);
+      assert.equal(await page.locator('#detail-plots .measurement-plot:not([hidden]) .plot-readout').count(), 3);
+      assert.equal(await page.locator('#compact-frequency strong').count(), 3);
+      assert(await page.locator('#compact-frequency strong').evaluateAll(values => values.every(value => Number.isFinite(Number(value.textContent)) && value.textContent.trim())), `${width} frequency values are rendered`);
+      const viewportLayout = await page.evaluate(() => {
+        const main = document.querySelector('main'), mainRect = main.getBoundingClientRect();
+        const elements = [...document.querySelectorAll('#detail-plots .measurement-plot:not([hidden]) svg, #detail-plots .measurement-plot:not([hidden]) .plot-readout, #compact-frequency strong')];
+        return {
+          horizontal: main.scrollWidth - main.clientWidth,
+          vertical: main.scrollHeight - main.clientHeight,
+          scrollTop: main.scrollTop,
+          outside: elements.map(element => {
+            const rect = element.getBoundingClientRect();
+            return { element: element.id || element.className, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, visible: rect.width > 0 && rect.height > 0 && rect.left >= mainRect.left - 1 && rect.right <= mainRect.right + 1 && rect.top >= mainRect.top - 1 && rect.bottom <= mainRect.bottom + 1 };
+          }).filter(element => !element.visible)
+        };
+      });
+      assert(viewportLayout.horizontal <= 1 && viewportLayout.vertical <= 1 && viewportLayout.scrollTop === 0 && !viewportLayout.outside.length, `${width}×${height} monitor must fit one viewport: ${JSON.stringify(viewportLayout)}`);
+      if (width < 1180) {
+        assert(await page.locator('#motor-sidebar').isHidden(), `${width} registry auto-collapses on entering monitor`);
+        assert.equal(await page.locator('#toggle-sidebar').getAttribute('aria-expanded'), 'false');
+        await page.locator('#toggle-sidebar').click();
+        await page.locator('#motor-sidebar').waitFor({ state: 'visible' });
+        assert.equal(await page.locator('#toggle-sidebar').getAttribute('aria-expanded'), 'true');
+        await page.locator('#toggle-sidebar').click();
+        await page.locator('#motor-sidebar').waitFor({ state: 'hidden' });
+      }
+      await page.screenshot({ path: path.join(artifacts, `monitor-${width}.png`), animations: 'disabled' });
     }
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1440, 900));
     await page.locator('[data-tab="registers"]').click();
@@ -356,6 +427,6 @@ const { _electron: electron } = require('playwright');
     await page.waitForFunction(() => !document.getElementById('new-motor').disabled);
     assert.equal(fs.readFileSync(path.join(temporary, 'data', `readings-${date}.ndjson`), 'utf8').trim().split('\n').length, 1, 'simulation must not write readings');
     assert.deepEqual(errors, []);
-    console.log('PASS: profile CRUD, filters, keyboard tabs, sidebar, responsive pixel-sized charts, fault recovery, sensor reassignment, history and 3 screen sizes');
+    console.log('PASS: profile CRUD, filters, keyboard tabs, responsive registry, axis emphasis, single-viewport plots at 5 desktop/tablet sizes, fault recovery, sensor reassignment and history');
   } finally { await app.close(); fs.rmSync(temporary, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exit(1); });

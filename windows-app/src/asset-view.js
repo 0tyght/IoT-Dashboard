@@ -12,16 +12,16 @@ function setupAssetView() {
       frame.hidden = true; $('model-poster').hidden = false;
       $('retry-model').hidden = false;
       $('model-status').textContent = 'แสดงภาพนิ่ง · อุปกรณ์นี้เปิด WebGL 2 ไม่ได้'; panel.dataset.modelState = 'fallback';
-    } else if (event.data?.type === 'vectra-exit-model-fullscreen' && document.fullscreenElement === panel) {
-      document.exitFullscreen().catch(error => toast(error.message));
+    } else if (event.data?.type === 'vectra-exit-model-fullscreen') {
+      if (!closeWorkbenchPopovers(true) && document.fullscreenElement === panel) document.exitFullscreen().catch(error => toast(error.message));
     }
   });
   $('expand-model').onclick = () => action(() => togglePanelFullscreen(panel));
   $('retry-model').onclick = () => { panel.dataset.modelState = 'loading'; $('retry-model').hidden = true; frame.hidden = false; $('model-status').textContent = 'กำลังเปิดโมเดล 3D…'; frame.src = 'models/industrial-drive-v4.html'; };
   $('expand-charts').onclick = () => action(() => togglePanelFullscreen($('detail-plots').closest('.trend-panel')));
   document.addEventListener('fullscreenchange', () => {
-    $('expand-model').textContent = document.fullscreenElement === panel ? 'ย่อโมเดล' : 'ขยายโมเดล';
-    $('expand-charts').textContent = document.fullscreenElement?.classList.contains('trend-panel') ? 'ย่อกราฟ' : 'ขยายกราฟ';
+    controlLabel($('expand-model'), document.fullscreenElement === panel ? 'ย่อโมเดล' : 'ขยาย', 'expand');
+    controlLabel($('expand-charts'), document.fullscreenElement?.classList.contains('trend-panel') ? 'ย่อกราฟ' : 'ขยายกราฟ', 'expand');
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && document.fullscreenElement) { event.preventDefault(); document.exitFullscreen().catch(error => toast(error.message)); }
@@ -32,7 +32,7 @@ async function togglePanelFullscreen(panel) {
 }
 function ensureAssetView() {
   const frame = $('asset-model');
-  if (currentTab === 'monitor' && !frame.hasAttribute('src') && !$('monitor-content').hidden) {
+  if (currentTab === 'model' && !frame.hasAttribute('src')) {
     frame.hidden = false; frame.src = 'models/industrial-drive-v4.html';
   }
 }

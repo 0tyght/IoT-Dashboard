@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { once } = require('node:events');
@@ -28,8 +28,9 @@ app.whenReady().then(() => {
   recording = new RecordingService({ onChange: state => send('recording:state', state), onError: (motorId, message) => send('sensor:status', { state: 'storage-error', motorId, message }) });
   recordingTimer = setInterval(() => recording.tick(), 250);
   fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)), onStatus: status => send('sensor:status', status) });
+  const available = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
-    width: 1440, height: 940, minWidth: 960, minHeight: 680, backgroundColor: '#f7f8fb', show: false, autoHideMenuBar: true,
+    width: Math.min(1440, available.width), height: Math.min(940, available.height), minWidth: Math.min(768, available.width), minHeight: Math.min(680, available.height), backgroundColor: '#f7f8fb', show: false, autoHideMenuBar: true,
     icon: path.join(__dirname, '..', 'assets', 'app.ico'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });

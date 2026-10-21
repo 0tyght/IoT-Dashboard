@@ -105,6 +105,7 @@ function renderProfiles() {
   renderMotorList(); buildFleet(); updateControls();
 }
 function renderSelected() {
+  updateWorkbenchLayout();
   const profile = currentProfile(), state = profile ? stateFor(profile.motorId) : null, last = state?.frames.at(-1);
   const threeAxis = profile?.sensorModel === MODEL;
   $('metric-type').textContent = threeAxis ? 'VELOCITY' : 'VALUE';
@@ -137,6 +138,7 @@ function renderSelected() {
     renderChannels(last); renderRegisters(last, profile);
     $('frequency-note').hidden = !threeAxis; $('frequency-note').textContent = frequencySummary(last);
     $('frequency-note').dataset.state = last?.frequencyStatus || 'pending';
+    updateWorkbenchValues(last, threeAxis);
     if (!frozen) { chartFrames = graphWindow(state?.frames || [], $('trend-chart').clientWidth); if (currentTab === 'monitor') drawChart(); }
   }
   refreshSelectionState();
@@ -144,7 +146,11 @@ function renderSelected() {
     $('selected-title').textContent = 'ภาพรวมมอเตอร์'; $('selected-area').textContent = 'ทุกพื้นที่';
     $('selected-subtitle').textContent = 'ค่าการสั่นสามแกนและสถานะการรับข้อมูลของมอเตอร์แต่ละตัว';
   }
-  $('selection-state').hidden = currentTab === 'fleet';
+  if (currentTab === 'model') {
+    $('selected-title').textContent = 'โมเดลชุดทดลอง 3D'; $('selected-area').textContent = 'REFERENCE ASSET';
+    $('selected-subtitle').textContent = 'โมเดล V4 อ้างอิง · ยังไม่ผูกกับมอเตอร์และจุดวัดจริง';
+  }
+  $('selection-state').hidden = ['fleet', 'model'].includes(currentTab);
   ensureAssetView();
 }
 function refreshSelectionState() {
@@ -419,7 +425,7 @@ $('motor-search').oninput = () => { renderMotorList(); refreshFleet(); };
 $('connect-all').onclick = () => action(startLive);
 $('disconnect').onclick = () => action(stopAndRestore);
 $('demo-mode').onclick = startDemo;
-$('pause-stream').onclick = () => { frozen = !frozen; controlLabel($('pause-stream'), frozen ? 'แสดงกราฟต่อ' : 'พักกราฟ', frozen ? 'play' : 'pause'); $('pause-stream').setAttribute('aria-pressed', String(frozen)); if (!frozen) renderSelected(); else { $('chart-live').textContent = 'PAUSED'; $('chart-description').textContent = 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ'; } toast(frozen ? 'พักเฉพาะกราฟแล้ว ค่าล่าสุดและการบันทึกยังอัปเดต' : 'กลับมาแสดงข้อมูลล่าสุด'); };
+$('pause-stream').onclick = () => { frozen = !frozen; controlLabel($('pause-stream'), frozen ? 'แสดงกราฟต่อ' : 'พักกราฟ', frozen ? 'play' : 'pause'); $('pause-stream').setAttribute('aria-pressed', String(frozen)); if (!frozen) renderSelected(); else { $('chart-live').textContent = 'PAUSED'; $('chart-description').textContent = 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ'; } };
 
 
 
@@ -456,6 +462,7 @@ setInterval(() => {
 }, 1000);
 setupControls();
 setupAssetView();
+setupWorkbench();
 setupAcquisitionUI();
 detailPlot = createPlotStack($('detail-plots'), { prefix: 'trend', label: 'มอเตอร์ที่เลือก' });
 new ResizeObserver(() => { if ($('trend-chart').clientWidth) drawChart(); }).observe($('trend-chart'));

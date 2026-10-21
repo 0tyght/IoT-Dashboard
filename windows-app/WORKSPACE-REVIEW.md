@@ -1,0 +1,15 @@
+# Monitoring workspace — 0.14.0
+
+The user's priority is a single visible monitoring screen with stronger hierarchy and responsive behavior. The model is explicitly excluded from that screen and moved to its own lazily loaded 3D tab. No reference asset or original model project is deleted.
+
+The layout reserves remaining viewport height for three equal graph rows. Each retains its own left-hand axis values, sample time and raw/formula menu. Temperature, frequency and connection/acquisition metadata form a compact context rail; on portrait tablets they move above the full-width plots. The duplicate channel table and nameplate are available in a floating panel. A context toggle gives the plots more width; actual one/five/thirty-minute shortcuts change the plotted window. Below 1180 px the registry is an overlay drawer. The Windows app starts within the primary display's work area and supports a 768 px minimum width.
+
+The white/violet graph surface is contrasted by the slate registry. Hover or keyboard focus on an axis emphasizes the corresponding traces across all graphs without removing other measurements. Keyboard focus takes priority. Linked time cursors and chart pause remain; redundant pause toasts are removed because they obscured lower plots. Reduced motion is respected.
+
+Manual raw/formula popovers use the native top layer, preventing clipping by bounded graph panels. Pinning retains the displayed timestamp. Escape/outside interaction, switching tabs, hiding context and fullscreen changes close them; Escape from the isolated model frame follows the same rule. Model controls fit their separate page and fullscreen view.
+
+Validation checks all three SVGs/readout boxes and numerical frequency are inside an unscrolled main viewport at 960×680, 1366×768, 1920×1080, 1024×768 and 768×1024. It also checks registry opening/closing, axis focus, quick ranges, context toggle, raw/table popovers, standalone model lazy loading and existing acquisition/recording/CRUD/history workflows. Rendered captures inspect desktop and portrait tablet composition. The Impeccable scan's under-11px functional warnings were fixed; remaining 11px auxiliary-text and child-padded legacy wrapper advisories are assessed with the screenshots, not presented as accessibility certification.
+
+The multi-motor overview and historical tables can still scroll for larger data sets. The one-viewport guarantee applies to the selected motor monitor at the tested sizes. This release does not verify physical frequency order, internal sensor refresh timing, RMS/Peak semantics or ISO severity.
+
+The detector also flags the legacy base dialog shadow in styles.css while evaluating a page with a dark registry. The active theme overrides that base shadow; the rendered dialogs remain white with an offset shadow. The table/dialog wrappers delegate inset spacing to their cells and child sections. These legacy findings do not justify adding duplicate padding or replacing the established form layout.

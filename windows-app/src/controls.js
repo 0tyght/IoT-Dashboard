@@ -8,7 +8,9 @@ const controlPaths = {
   close: 'M6 6 18 18M18 6 6 18', refresh: 'M20 7V3M20 7H16M20 7A8 8 0 1 0 0 10',
   search: 'M21 21 16 16M18 10A8 8 0 1 1 2 10A8 8 0 0 1 18 10',
   download: 'M12 3V16M7 11 12 16 17 11M4 17V21H20V17',
-  pause: 'M8 5V19M16 5V19', menu: 'M4 6H20M4 12H20M4 18H20'
+  pause: 'M8 5V19M16 5V19', menu: 'M4 6H20M4 12H20M4 18H20',
+  expand: 'M8 3H3V8M16 3H21V8M3 16V21H8M21 16V21H16',
+  panel: 'M3 4H21V20H3ZM15 4V20', info: 'M12 11V17M12 7H12.01M22 12A10 10 0 1 1 2 12A10 10 0 0 1 22 12'
 };
 function controlIcon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
