@@ -5,7 +5,7 @@ const Measurements = (() => {
     displacement: { label: 'Displacement', unit: 'µm' },
     acceleration: { label: 'Acceleration', unit: 'm/s²' }
   };
-  const keys = Object.keys(groups).flatMap(kind => ['X', 'Y', 'Z'].map(axis => `${kind}${axis}`));
+  const keys = [...Object.keys(groups).flatMap(kind => ['X', 'Y', 'Z'].map(axis => `${kind}${axis}`)), 'frequencyX', 'frequencyY', 'frequencyZ'];
   function windowFrames(frames, spec, count = 1000, width = 600) {
     if (!frames.length) return [];
     if (spec === 'session') return frames;
@@ -17,7 +17,7 @@ const Measurements = (() => {
   // Keep the first/last and extrema of every channel, rather than averaging away peaks.
   function thinFrames(frames, budget = 1600) {
     if (frames.length <= budget) return frames;
-    const selected = new Set(), bucketSize = Math.ceil(frames.length / Math.max(1, Math.floor(budget / 24)));
+    const selected = new Set(), bucketSize = Math.ceil(frames.length / Math.max(1, Math.floor(budget / (2 * (keys.length + 2) + 2))));
     for (let offset = 0; offset < frames.length; offset += bucketSize) {
       const end = Math.min(frames.length, offset + bucketSize); selected.add(offset); selected.add(end - 1);
       for (const key of ['value', ...keys, 'temperature']) {

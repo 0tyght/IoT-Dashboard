@@ -1,7 +1,8 @@
 'use strict';
 
 const ModbusRTU = require('modbus-serial');
-const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, registerCount } = require('./sensor-codec.cjs');
+const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, decodeVemseeFrequency, registerCount } = require('./sensor-codec.cjs');
+const frequencyUnsupported = new WeakMap();
 
 function normalizeFleet(raw) {
   if (!Array.isArray(raw) || !raw.length || raw.length > 64) throw new Error('เลือกมอเตอร์ 1–64 ตัว');
@@ -40,7 +41,20 @@ async function readSnapshot(client, config) {
   if (config.sensorModel === 'vemsee-sn3001-wz3a-n01') {
     const primary = await read(0, 7);
     const acceleration = await read(10, 3);
-    return { ...decodeVemseeSnapshot(primary, acceleration), rawRegisters: { primary, acceleration } };
+    const snapshot = decodeVemseeSnapshot(primary, acceleration), rawRegisters = { primary, acceleration };
+    const key = `${config.slaveId}:${config.registerType}`, unsupported = frequencyUnsupported.get(client) || new Set();
+    let frequency;
+    try {
+      if (unsupported.has(key)) frequency = { frequencyStatus: 'unsupported', frequencyByteOrder: config.frequencyByteOrder, frequencyMessage: 'อุปกรณ์ไม่รองรับ Register ความถี่ในการเชื่อมต่อรอบนี้' };
+      else { rawRegisters.frequency = await read(0x21, 6); frequency = decodeVemseeFrequency(rawRegisters.frequency, config.frequencyByteOrder); }
+    } catch (error) {
+      const notSupported = [1, 2].includes(error.modbusCode);
+      if (notSupported) { unsupported.add(key); frequencyUnsupported.set(client, unsupported); }
+      frequency = { frequencyStatus: notSupported ? 'unsupported' : 'read-error', frequencyByteOrder: config.frequencyByteOrder, frequencyMessage: `อ่าน Hz ไม่สำเร็จ: ${error.message}` };
+    }
+    const channels = { ...snapshot.channels, frequencyX: null, frequencyY: null, frequencyZ: null, ...frequency.channels };
+    const { channels: extraChannels, ...frequencyInfo } = frequency;
+    return { ...snapshot, ...frequencyInfo, channels, rawRegisters };
   }
   const registers = await read(config.registerAddress, registerCount(config.dataType));
   return { value: decodeRegisters(registers, config), unit: config.unit, rawRegisters: registers, channels: null };
@@ -107,7 +121,7 @@ class FleetService {
   }
 
   reading(config, snapshot, elapsedMs) {
-    return { ...snapshot, schemaVersion: 2, sensorModel: config.sensorModel, motorId: config.motorId, timestamp: new Date().toISOString(), timestampSource: 'computer-received', source: 'RS485 / Modbus RTU', port: config.path, slaveId: config.slaveId, elapsedMs, pollIntervalMs: config.pollInterval, actualIntervalMs: null };
+    return { ...snapshot, schemaVersion: 3, sensorModel: config.sensorModel, motorId: config.motorId, timestamp: new Date().toISOString(), timestampSource: 'computer-received', source: 'RS485 / Modbus RTU', port: config.path, slaveId: config.slaveId, elapsedMs, pollIntervalMs: config.pollInterval, actualIntervalMs: null };
   }
 
   schedule(bus, generation, delay) {

@@ -2,7 +2,7 @@
 
 Scope: `windows-app/src`. The repository-root website is a separate application.
 
-The latest user request replaces the dark/amber theme with the supplied white and violet vibration-dashboard reference (`codex-clipboard-1310d809-2def-4225-b2c6-a02d1c04b72f.png`). Keep the established acquisition and recording workflows, motor management, nine channels, timestamps and historical views. Use direct Thai product language without slogans.
+The supplied white and violet vibration-dashboard reference (`codex-clipboard-1310d809-2def-4225-b2c6-a02d1c04b72f.png`) defines the visual world. Keep acquisition, recording, motor management, timestamps and history. The latest refinement uses three full-width vibration plots, numerical temperature/frequency and the user's V4 reference assembly. Use direct Thai product language without slogans.
 
 ## Palette and surfaces
 
@@ -16,8 +16,10 @@ The latest user request replaces the dark/amber theme with the supplied white an
 ## Layout and interaction
 
 - White header and one primary session action: Start while idle, Stop while running. The button's label describes the selected mode. A compact status strip appears during a session or to show its saved result; hide it on a fresh idle screen. Motor registry on the left; violet active tabs and a collapsible registry.
-- Overview motor panels group identity/actions, status, full receive timestamp, all nine vibration values, timing and storage. Four plots are always present for the VemSee preset: velocity X/Y/Z, displacement X/Y/Z, acceleration X/Y/Z and temperature. No metric selector hides channels. Overview uses a 2×2 plot grid; detail uses 2×2 when its container is at least 620 px wide, otherwise a vertical stack. At 1200 px and below, values and charts stack.
-- At 1750 px and above, motor details use three columns: compact measurements/connection metadata, central trend, and right-hand nine-channel table/nameplate. Intermediate widths retain the four-metric row and responsive trend/data panels.
+- Overview, detail and history show three plots in a single vertical column: velocity, displacement and acceleration, each with X/Y/Z and independent units. Every plot spans the available width. Temperature is numerical only. Frequency X/Y/Z is numerical with its own quality/format explanation; no selector hides measured axes.
+- Motor details place the interactive V4 reference assembly beside metrics, the four-family channel table and nameplate above the full-width plots. Below 1250 px this context stacks; metric summaries wrap. The model is explicitly unassociated with physical motors or sensor positions. Fullscreen model and fullscreen plots have an explicit exit action and Escape support; three fullscreen plots share the viewport equally.
+- The self-contained model is isolated in an iframe with scripts only, no parent origin or application API access. Rotation, zoom, pan, preset cameras and reset are available. A real asset poster and retry action handle WebGL failure. Loading is deferred until detail is opened; no network runtime is required.
+- Frequency words are read separately so unsupported frequency registers do not discard the nine primary vibration values. The default unconfirmed Float order shows raw words and blank Hz; only an explicitly selected format enables conversion. Keep errors, old records and simulated frequency visibly distinct.
 - Segoe UI/Tahoma supports Windows and Thai. Controls and main labels 12–13 px, auxiliary metadata at least 11 px. Use tabular figures; SVG axes stay 11 rendered pixels on resize.
 - Visible focus, text-labelled actions, 32 px minimum motor actions, keyboard tabs with arrows/Home/End and standard Windows inputs. Dialog motion lasts 150 ms and respects reduced motion.
 - Default to a single “เริ่มอ่านและบันทึก” command: validate motors, acquire and record. “หยุดอ่านและบันทึก” disconnects and drains file writes. The mode button offers automatic recording, explicit monitor-only or scheduled recording with optional duration. Legacy manual-start settings follow the new combined Start action; existing explicit monitor-only settings stay read-only. No background recording starts without the user pressing Start.

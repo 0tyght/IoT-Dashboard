@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, registerCount } = require('../electron/sensor-codec.cjs');
+const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, decodeVemseeFrequency, registerCount } = require('../electron/sensor-codec.cjs');
 
 const base = normalizeConfig({ path: 'COM3', sensorModel: 'custom', slaveId: 2, registerAddress: 100, dataType: 'float32', byteOrder: 'ABCD', scale: 1 });
 assert.equal(base.baudRate, 9600);
@@ -49,3 +49,16 @@ assert.throws(() => normalizeConfig({ path: 'COM3', dataType: 'float32', registe
 assert.throws(() => normalizeConfig({ path: 'COM3', stopBits: 3 }), /Stop bits/);
 
 console.log('PASS: sensor configuration validation and register decoding');
+
+const frequencyRegisters = [50, 60, 1200.25].flatMap(value => { const data = Buffer.alloc(4); data.writeFloatBE(value); return [data.readUInt16BE(0), data.readUInt16BE(2)]; });
+assert.equal(vemsee.frequencyByteOrder, 'unconfirmed');
+assert.equal(decodeVemseeFrequency(frequencyRegisters).channels.frequencyX, null, 'never guess float order from a plausible decoded value');
+assert.deepEqual(decodeVemseeFrequency(frequencyRegisters, 'ABCD').channels, { frequencyX: 50, frequencyY: 60, frequencyZ: 1200.25 });
+for (const order of ['ABCD', 'CDAB', 'BADC', 'DCBA']) {
+  const maps = { ABCD: [0, 1, 2, 3], CDAB: [2, 3, 0, 1], BADC: [1, 0, 3, 2], DCBA: [3, 2, 1, 0] };
+  const words = [50, 60, 1200.25].flatMap(value => { const data = Buffer.alloc(4); data.writeFloatBE(value); const swapped = Buffer.from(maps[order].map(index => data[index])); return [swapped.readUInt16BE(0), swapped.readUInt16BE(2)]; });
+  assert.equal(decodeVemseeFrequency(words, order).channels.frequencyZ, 1200.25);
+}
+assert.throws(() => normalizeConfig({ path: 'COM3', frequencyByteOrder: 'guess' }), /ความถี่/);
+assert.throws(() => decodeVemseeFrequency([1, 2]), /0021H/);
+assert.equal(decodeVemseeFrequency([0x7f80, 0, 0, 0, 0, 0], 'ABCD').frequencyStatus, 'invalid');

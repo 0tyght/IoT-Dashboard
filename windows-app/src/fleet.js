@@ -45,8 +45,16 @@ function buildFleet() {
         tile.append(node('small', threeAxis ? `${group.label} ${axis}` : 'Custom value'), number); row.append(tile); values.push({ value, key: threeAxis ? `${kind}${axis}` : 'value' });
       }); valueGrid.append(row);
     }
+    if (threeAxis) {
+      const row = node('div', null, 'fleet-value-row');
+      ['X', 'Y', 'Z'].forEach((axis, index) => {
+        const tile = node('div', null, `fleet-value axis-tile-${index}`), value = node('strong', '—'), number = node('div');
+        number.append(value, node('span', 'Hz')); tile.append(node('small', `Frequency ${axis}`), number); row.append(tile); values.push({ value, key: `frequency${axis}` });
+      }); valueGrid.append(row);
+    }
     const footer = node('div', null, 'fleet-reading-footer'), temperature = node('span'), samples = node('span'), storage = node('span');
-    const cadence = node('p', null, 'fleet-cadence'); footer.append(temperature, samples, storage); readings.append(connection, lastTile, valueGrid, cadence, footer);
+    const frequencyNote = node('p', null, 'fleet-frequency-note'); frequencyNote.hidden = !threeAxis;
+    const cadence = node('p', null, 'fleet-cadence'); footer.append(temperature, samples, storage); readings.append(connection, lastTile, valueGrid, frequencyNote, cadence, footer);
     const trend = node('section', null, 'fleet-trend'), trendHead = node('div', null, 'fleet-trend-heading');
     trendHead.append(node('strong', threeAxis ? 'แนวโน้มทุกช่องวัด' : `Custom value · ${profile.unit}`));
     const coverage = node('span', '', 'graph-coverage'); trendHead.append(coverage);
@@ -56,7 +64,7 @@ function buildFleet() {
     if (threeAxis) ['X', 'Y', 'Z'].forEach((axis, index) => { const label = node('span', `แกน ${axis}`); label.prepend(node('i', null, `fleet-line-${index}`)); legend.append(label); });
     trend.append(trendHead, legend, chartBox); body.append(readings, trend); card.append(header, body);
     const problem = node('p', null, 'fleet-problem'); problem.hidden = true; card.append(problem); $('fleet-list').append(card);
-    const refs = { card, values, age, lastTime, connection, connectionText, temperature, samples, storage, cadence, problem, plotStack, coverage, inViewport: false, lastKey: '' };
+    const refs = { card, values, age, lastTime, connection, connectionText, temperature, samples, storage, cadence, problem, plotStack, coverage, frequencyNote, inViewport: false, lastKey: '' };
     refs.redraw = () => {
       const frames = graphWindow(stateFor(profile.motorId).frames, plotStack.svg.clientWidth); plotStack.draw(frames, profile);
       coverage.textContent = `${frames.length.toLocaleString()} ค่า${plotStack.frames.length < frames.length ? ` (${plotStack.frames.length} จุด)` : ''}${frames.length ? ` · ${time(frames[0].timestamp)}–${time(frames.at(-1).timestamp)}` : ''}`;
@@ -76,7 +84,9 @@ function refreshFleet() {
     if (!refs.card.hidden) visible++;
     refs.card.classList.toggle('fleet-fault', status.kind === 'fault'); refs.card.classList.toggle('fleet-retained', mode === 'offline' || profile.enabled === false);
     refs.problem.hidden = status.kind !== 'fault'; refs.problem.textContent = status.kind === 'fault' ? state.message || 'ไม่ได้รับข้อมูลใหม่ · ตรวจพอร์ตและการตั้งค่าการสื่อสาร' : '';
-    refs.values.forEach(({ value, key }) => { value.textContent = digits(key === 'value' ? last?.value : last?.channels?.[key], key === 'value' ? 3 : 1); });
+    refs.values.forEach(({ value, key }) => { value.textContent = digits(key === 'value' ? last?.value : last?.channels?.[key], key === 'value' ? 3 : key.startsWith('frequency') ? 2 : 1); });
+    refs.frequencyNote.textContent = frequencySummary(last);
+    refs.frequencyNote.dataset.state = last?.frequencyStatus || 'pending';
     refs.connection.className = `fleet-connection ${status.kind}`; refs.connectionText.textContent = status.text;
     refs.temperature.textContent = `อุณหภูมิ ${digits(last?.channels?.temperature)} °C`; refs.samples.textContent = `${state.samples.toLocaleString()} ค่า`;
     refs.storage.textContent = storageLabel(last); refs.storage.classList.toggle('storage-fault', last?.recordingState === 'error');

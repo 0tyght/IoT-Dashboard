@@ -134,6 +134,8 @@ function renderSelected() {
     $('last-response').textContent = last ? `ตั้ง ${profile.pollInterval} ms · รับจริง ${last.actualIntervalMs ?? state.actualIntervalMs ?? '—'} ms · ตอบ ${last.elapsedMs ?? 0} ms` : 'รอการตอบกลับ';
     $('record-state').textContent = storageLabel(last);
     renderChannels(last); renderRegisters(last, profile);
+    $('frequency-note').hidden = !threeAxis; $('frequency-note').textContent = frequencySummary(last);
+    $('frequency-note').dataset.state = last?.frequencyStatus || 'pending';
     if (!frozen) { chartFrames = graphWindow(state?.frames || [], $('trend-chart').clientWidth); if (currentTab === 'monitor') drawChart(); }
   }
   refreshSelectionState();
@@ -142,6 +144,7 @@ function renderSelected() {
     $('selected-subtitle').textContent = 'ค่าการสั่นสามแกนและสถานะการรับข้อมูลของมอเตอร์แต่ละตัว';
   }
   $('selection-state').hidden = currentTab === 'fleet';
+  ensureAssetView();
 }
 function refreshSelectionState() {
   const profile = currentProfile(), state = profile ? stateFor(profile.motorId) : null;
@@ -157,7 +160,7 @@ function refreshSelectionState() {
 }
 function renderChannels(last) {
   const body = $('channel-body'); body.replaceChildren();
-  for (const [label, key, unit] of [['Velocity', 'velocity', 'mm/s'], ['Displacement', 'displacement', 'µm'], ['Acceleration', 'acceleration', 'm/s²']]) {
+  for (const [label, key, unit] of [['Velocity', 'velocity', 'mm/s'], ['Displacement', 'displacement', 'µm'], ['Acceleration', 'acceleration', 'm/s²'], ['Frequency', 'frequency', 'Hz']]) {
     const row = node('tr'), title = node('td', label); title.append(node('small', unit)); row.append(title);
     for (const axis of ['X', 'Y', 'Z']) row.append(node('td', digits(last?.channels?.[`${key}${axis}`]), `axis-${axis.toLowerCase()}`));
     body.append(row);
@@ -173,6 +176,10 @@ function renderRegisters(last, profile) {
       const raw = address < 7 ? last.rawRegisters?.primary?.[address] : last.rawRegisters?.acceleration?.[address - 10];
       const row = node('tr'); row.append(node('td', hex(address), 'mono'), node('td', 40001 + address, 'mono'), node('td', label), node('td', raw ?? '—', 'mono'), node('td', raw == null ? '—' : hex(raw), 'mono'), node('td', digits(last.channels?.[key]), 'numeric'), node('td', unit)); body.append(row);
     }
+    ['X', 'Y', 'Z'].forEach((axis, index) => {
+      const address = 0x21 + index * 2, raw = last.rawRegisters?.frequency?.slice(index * 2, index * 2 + 2), row = node('tr');
+      row.append(node('td', `${hex(address)} / ${hex(address + 1)}`, 'mono'), node('td', `${40001 + address} / ${40002 + address}`, 'mono'), node('td', `Frequency ${axis} · Float32 ${last.frequencyByteOrder || 'ยังไม่ยืนยัน'}`), node('td', raw?.join(' / ') || '—', 'mono'), node('td', raw?.map(hex).join(' / ') || '—', 'mono'), node('td', digits(last.channels?.[`frequency${axis}`], 2), 'numeric'), node('td', 'Hz')); body.append(row);
+    });
   } else {
     (last.rawRegisters || []).forEach((raw, index) => {
       const address = (profile?.registerAddress || 0) + index, row = node('tr');
@@ -253,7 +260,7 @@ async function saveMotor(event) {
     const previous = profiles.find(profile => profile.motorId === editing);
     const result = check(await api.saveProfiles(proposed));
     // Never attach old readings to a newly assigned sensor, unit, or motor ID.
-    const identityKeys = ['motorId', 'path', 'slaveId', 'sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'unit'];
+    const identityKeys = ['motorId', 'path', 'slaveId', 'sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'frequencyByteOrder', 'scale', 'unit'];
     if (previous && identityKeys.some(key => previous[key] !== raw[key])) { cache.delete(previous.motorId); cache.delete(raw.motorId); }
     profiles = result.profiles; selected = raw.motorId;
     $('connection-dialog').close(); renderProfiles(); renderSelected(); addLog('info', raw.motorId, 'บันทึกการตั้งค่ามอเตอร์'); toast('บันทึกแล้ว กดเริ่มอ่านเพื่อทดสอบและเก็บข้อมูล');
@@ -325,9 +332,11 @@ async function stop() {
 }
 function demoFrame(profile, index, phase) {
   const channels = { temperature: 35.2 + index + Math.sin(phase / 5) * .4, velocityX: 2.1 + index * .3 + Math.sin(phase) * .35, velocityY: 3.4 + index * .4 + Math.sin(phase + 1) * .5, velocityZ: 1.5 + index * .2 + Math.sin(phase + 2) * .25, displacementX: 32 + Math.sin(phase) * 3, displacementY: 41 + Math.sin(phase + 1) * 4, displacementZ: 22 + Math.sin(phase + 2) * 2, accelerationX: 1.2 + Math.sin(phase) * .2, accelerationY: 1.6 + Math.sin(phase + 1) * .2, accelerationZ: .9 + Math.sin(phase + 2) * .15 };
+  channels.frequencyX = 49.8 + Math.sin(phase) * .2; channels.frequencyY = 50.1 + Math.sin(phase + 1) * .3; channels.frequencyZ = 49.9 + Math.sin(phase + 2) * .2;
   const axes = ['X', 'Y', 'Z']; const primaryAxis = axes.reduce((a, b) => channels[`velocity${a}`] > channels[`velocity${b}`] ? a : b);
   const encoded = value => Math.round(value * 10) & 65535;
-  return { motorId: profile.motorId, value: channels[`velocity${primaryAxis}`], channels: profile.sensorModel === MODEL ? channels : null, rawRegisters: profile.sensorModel === MODEL ? { primary: [channels.temperature, channels.velocityX, channels.velocityY, channels.velocityZ, channels.displacementX, channels.displacementY, channels.displacementZ].map(encoded), acceleration: [channels.accelerationX, channels.accelerationY, channels.accelerationZ].map(encoded) } : [encoded(channels.velocityY)], primaryAxis: profile.sensorModel === MODEL ? primaryAxis : null, unit: profile.sensorModel === MODEL ? 'mm/s' : profile.unit, timestamp: new Date().toISOString(), source: 'SIMULATION', port: 'DEMO', slaveId: profile.slaveId, elapsedMs: 18 + index, recorded: false };
+  const floatWords = value => { const view = new DataView(new ArrayBuffer(4)); view.setFloat32(0, value); return [view.getUint16(0), view.getUint16(2)]; };
+  return { motorId: profile.motorId, value: channels[`velocity${primaryAxis}`], channels: profile.sensorModel === MODEL ? channels : null, rawRegisters: profile.sensorModel === MODEL ? { primary: [channels.temperature, channels.velocityX, channels.velocityY, channels.velocityZ, channels.displacementX, channels.displacementY, channels.displacementZ].map(encoded), acceleration: [channels.accelerationX, channels.accelerationY, channels.accelerationZ].map(encoded), frequency: ['frequencyX', 'frequencyY', 'frequencyZ'].flatMap(key => floatWords(channels[key])) } : [encoded(channels.velocityY)], primaryAxis: profile.sensorModel === MODEL ? primaryAxis : null, unit: profile.sensorModel === MODEL ? 'mm/s' : profile.unit, timestamp: new Date().toISOString(), source: 'SIMULATION', frequencyStatus: profile.sensorModel === MODEL ? 'ok' : undefined, frequencyByteOrder: 'ABCD', port: 'DEMO', slaveId: profile.slaveId, elapsedMs: 18 + index, recorded: false };
 }
 let beforeDemo = null;
 function startDemo() {
@@ -357,9 +366,9 @@ async function loadHistory() {
     $('history-summary').textContent = `${result.total.toLocaleString()} รายการ · แสดงล่าสุด ${result.rows.length} รายการ${result.skipped ? ` · ข้ามบรรทัดเสียหาย ${result.skipped}` : ''}`;
     for (const frame of result.rows.reverse()) {
       const row = node('tr');
-      row.append(node('td', timestamp(frame.timestamp), 'mono'), node('td', frame.motorId), ...[...Measurements.keys, 'temperature'].map(key => node('td', digits(frame.channels?.[key]), 'mono')), node('td', `${digits(frame.value, 2)} ${frame.unit}`, 'mono'), node('td', `${frame.port} / ${frame.slaveId}`)); body.append(row);
+      row.append(node('td', timestamp(frame.timestamp), 'mono'), node('td', frame.motorId), ...[...Measurements.keys.slice(0, 9), 'temperature', ...Measurements.keys.slice(9)].map(key => node('td', digits(frame.channels?.[key], key.startsWith('frequency') ? 2 : 1), 'mono')), node('td', frame.frequencyStatus === 'ok' ? 'Hz พร้อมใช้' : frame.frequencyStatus === 'unconfirmed' ? 'รอยืนยัน Float' : frame.frequencyStatus ? 'Hz ไม่พร้อม' : 'ไม่มี Hz ในข้อมูลรุ่นเดิม'), node('td', `${digits(frame.value, 2)} ${frame.unit}`, 'mono'), node('td', `${frame.port} / ${frame.slaveId}`)); body.append(row);
     }
-    if (!result.rows.length) emptyRow(body, 14, 'ไม่มีข้อมูลที่บันทึกในวันที่และมอเตอร์ที่เลือก');
+    if (!result.rows.length) emptyRow(body, 18, 'ไม่มีข้อมูลที่บันทึกในวันที่และมอเตอร์ที่เลือก');
   } catch (error) { if (generation === historyGeneration) { $('history-summary').textContent = error.message; toast(error.message); } }
   finally { if (generation === historyGeneration) $('load-history').disabled = false; }
 }
@@ -423,19 +432,20 @@ setInterval(() => {
     for (const profile of profiles) {
       if (profile.enabled === false) continue;
       const state = stateFor(profile.motorId), last = state.frames.at(-1);
-      const busBudget = profiles.filter(item => item.path.toUpperCase() === profile.path.toUpperCase()).reduce((sum, item) => sum + item.timeout * (item.sensorModel === MODEL ? 2 : 1), 0);
+      const busBudget = profiles.filter(item => item.path.toUpperCase() === profile.path.toUpperCase()).reduce((sum, item) => sum + item.timeout * (item.sensorModel === MODEL ? 3 : 1), 0);
       if (last && Date.now() - Date.parse(last.timestamp) > Math.max(profile.pollInterval * 3, busBudget + profile.pollInterval + 2000) && state.status !== 'stale') { state.status = 'stale'; addLog('error', profile.motorId, 'ข้อมูลเก่า เกินช่วงรอของรอบการอ่าน'); }
     }
     refreshSelectionState();
   }
 }, 1000);
 setupControls();
+setupAssetView();
 setupAcquisitionUI();
 detailPlot = createPlotStack($('detail-plots'), { prefix: 'trend', label: 'มอเตอร์ที่เลือก' });
 new ResizeObserver(() => { if ($('trend-chart').clientWidth) drawChart(); }).observe($('trend-chart'));
 controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
 (async () => {
-  $('history-date').value = today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 14, 'เลือกวันที่แล้วโหลดข้อมูล');
+  $('history-date').value = today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 18, 'เลือกวันที่แล้วโหลดข้อมูล');
   try {
     const initial = check(await api.initialize()); profiles = initial.profiles; selected = profiles[0]?.motorId || '';
     if (initial.recording) renderRecording(initial.recording);

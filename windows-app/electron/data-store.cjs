@@ -47,7 +47,7 @@ class DataStore {
       const date = dayKey(new Date(reading.timestamp));
       await fs.promises.appendFile(path.join(this.dataPath(), `readings-${date}.ndjson`), `${JSON.stringify(reading)}\n`, 'utf8');
       // A distinct schema suffix avoids appending new columns to older CSV files.
-      const csv = path.join(this.dataPath(), `readings-${date}-v2.csv`);
+      const csv = path.join(this.dataPath(), `readings-${date}-v3.csv`);
       try { await fs.promises.writeFile(csv, '\uFEFF' + CSV_KEYS.join(',') + '\r\n', { flag: 'wx' }); }
       catch (error) { if (error.code !== 'EEXIST') throw error; }
       await fs.promises.appendFile(csv, csvRow(reading), 'utf8');
@@ -82,7 +82,7 @@ class DataStore {
   async chartRange({ from, to, motorId }) {
     const start = Date.parse(from), end = Date.parse(to);
     if (!motorId || typeof motorId !== 'string' || !Number.isFinite(start) || !Number.isFinite(end) || start >= end) throw new Error('เลือกมอเตอร์และช่วงเวลาเริ่ม–สิ้นสุดให้ถูกต้อง');
-    const buckets = new Map(), bucketCount = 160, keys = ['value', ...CSV_KEYS.filter(key => /^(velocity|displacement|acceleration)[XYZ]$/.test(key)), 'temperature'];
+    const buckets = new Map(), bucketCount = 160, keys = ['value', ...CSV_KEYS.filter(key => /^(velocity|displacement|acceleration|frequency)[XYZ]$/.test(key)), 'temperature'];
     let total = 0;
     const summary = await this.history({ date: dayKey(new Date(start)), endDate: dayKey(new Date(end)), motorId }, record => {
       const stamp = Date.parse(record.timestamp); if (stamp < start || stamp > end) return;
@@ -109,7 +109,7 @@ function csvCell(value) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 function localTimestamp(value) { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false }).format(new Date(value)).replace(' ', 'T').replace(',', '.') + '+07:00'; }
-const CSV_KEYS = ['timestamp', 'timestampBangkok', 'motorId', 'port', 'slaveId', 'value', 'unit', 'velocityX', 'velocityY', 'velocityZ', 'temperature', 'displacementX', 'displacementY', 'displacementZ', 'accelerationX', 'accelerationY', 'accelerationZ', 'elapsedMs', 'pollIntervalMs', 'actualIntervalMs', 'source'];
+const CSV_KEYS = ['timestamp', 'timestampBangkok', 'motorId', 'port', 'slaveId', 'value', 'unit', 'velocityX', 'velocityY', 'velocityZ', 'temperature', 'displacementX', 'displacementY', 'displacementZ', 'accelerationX', 'accelerationY', 'accelerationZ', 'frequencyX', 'frequencyY', 'frequencyZ', 'frequencyStatus', 'frequencyByteOrder', 'frequencyMessage', 'elapsedMs', 'pollIntervalMs', 'actualIntervalMs', 'source'];
 function csvRow(record) { return CSV_KEYS.map(key => csvCell(key === 'timestampBangkok' ? record.timestamp ? localTimestamp(record.timestamp) : '' : record[key] ?? record.channels?.[key])).join(',') + '\r\n'; }
 
 module.exports = { DataStore, dayKey, CSV_KEYS, csvRow };

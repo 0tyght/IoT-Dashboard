@@ -54,9 +54,10 @@ const Measurements = require('../src/measurements.js');
     const firstDay = dayKey(new Date(frames[0].timestamp)), lastDay = dayKey(new Date(frames.at(-1).timestamp));
     assert.notEqual(firstDay, lastDay, 'fixture crosses Bangkok midnight');
     for (const date of [firstDay, lastDay]) {
-      const csv = fs.readFileSync(path.join(store.dataPath(), `readings-${date}-v2.csv`), 'utf8');
+      const csv = fs.readFileSync(path.join(store.dataPath(), `readings-${date}-v3.csv`), 'utf8');
       assert.equal(csv.split(CSV_KEYS.join(',')).length - 1, 1, 'one header per daily file despite concurrent appends');
       assert(csv.includes('+07:00')); assert(csv.includes('"1004"'));
+      assert(csv.includes('frequencyX,frequencyY,frequencyZ,frequencyStatus,frequencyByteOrder'));
     }
     const range = await store.chartRange({ from: frames[0].timestamp, to: frames.at(-1).timestamp, motorId: 'MTR-01' });
     assert.equal(range.total, 600); assert(range.rows.some(frame => frame.channels.accelerationX === -99)); assert(range.rows.some(frame => frame.channels.displacementZ === 4999));

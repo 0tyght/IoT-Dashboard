@@ -330,18 +330,14 @@ legend { color: #796b8b; font-size: 12px; }
 .plot-readout span + span { margin-left: 8px; }
 .detail-plots { container-type: inline-size; }
 .history-range:has(.plot-stack[data-channel-mode="custom"]) .chart-legend { display: none; }
-@container (min-width: 620px) {
-  .detail-plots .plot-stack-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
-}
 .plot-stack .chart-wrap { margin: 0 8px; }
-.plot-stack .fleet-chart-box svg, .plot-stack #trend-chart, .plot-stack #history-chart { width: 100%; height: 145px; min-height: 145px; max-height: none; display: block; cursor: crosshair; }
-.plot-stack [data-kind="temperature"] svg { height: 132px; min-height: 132px; }
+.plot-stack .fleet-chart-box svg, .plot-stack #trend-chart, .plot-stack #history-chart { width: 100%; height: 185px; min-height: 185px; max-height: none; display: block; cursor: crosshair; }
 .fleet-trend { justify-content: flex-start; gap: 8px; }
 .fleet-trend-heading strong { font-size: 12px; font-weight: 600; }
 .fleet-readings { justify-content: flex-start; gap: 18px; }
 .fleet-measurements { gap: 22px; }
 .fleet-reading-footer { margin-top: auto; }
-.fleet-plots .plot-stack-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.fleet-plots .plot-stack-grid { grid-template-columns: minmax(0, 1fr); }
 .fleet-plots .measurement-plot { border-top: 1px solid var(--line); }
 .fleet-plots .measurement-plot-heading { padding: 0 6px; }
 .fleet-plots .chart-wrap { margin: 0; }
@@ -352,4 +348,51 @@ legend { color: #796b8b; font-size: 12px; }
 }
 @media (min-width: 1750px) {
   .fleet-card-body { grid-template-columns: minmax(350px, .65fr) minmax(620px, 1.35fr); }
+}
+
+/* Context stays above the plots; each of the three plots owns a full row. */
+#monitor-content { display: block; }
+.motor-context { display: grid; grid-template-columns: minmax(330px, .85fr) minmax(480px, 1.35fr); gap: 18px; margin-bottom: 18px; align-items: start; }
+.motor-facts { min-width: 0; }
+.motor-facts .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.motor-facts .metric { padding: 12px; }
+.motor-facts .metric-label { flex-wrap: wrap; font-size: 11px; letter-spacing: 0; }
+.motor-facts .metric-number { margin: 10px 0; }
+.motor-facts .metric-number strong { font-size: 27px; }
+.motor-facts .metric-foot, .motor-facts .connection-metric > p { font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.motor-facts .connection-metric > strong { font-size: 17px; }
+.motor-facts .channels-panel { display: block; }
+.motor-facts .channels-panel .panel-heading { padding: 12px 16px 6px; }
+.motor-facts .channel-table td { padding-top: 9px; padding-bottom: 9px; }
+.motor-facts .channel-table th { padding-top: 7px; padding-bottom: 7px; }
+.motor-facts .context-note { padding-top: 8px; padding-bottom: 8px; }
+.motor-facts .asset-note { padding-top: 8px; padding-bottom: 12px; }
+.motor-facts .asset-note p { margin: 0; }
+.frequency-note { color: var(--muted); font-size: 12px; line-height: 1.6; padding: 8px 16px; margin: 0; background: var(--bg); overflow-wrap: anywhere; }
+.model-panel { min-width: 0; }
+.model-panel .panel-heading { padding: 14px 16px 10px; }
+.model-panel button { font-size: 12px; }
+.model-viewport { position: relative; height: 320px; background: var(--bg); }
+.model-viewport img, .model-viewport iframe { width: 100%; height: 100%; display: block; border: 0; }
+.model-viewport img { position: absolute; object-fit: contain; }
+.model-viewport iframe { position: absolute; inset: 0; }
+.model-status, .model-caption { font-size: 11px; color: var(--muted); line-height: 1.7; margin: 0; padding: 6px 16px; }
+.model-caption { border-top: 1px solid var(--line); }
+.model-panel:fullscreen { width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--paper); border-radius: 0; }
+.model-panel:fullscreen .model-viewport { flex: 1; min-height: 0; height: auto; }
+.trend-panel:fullscreen { width: 100%; height: 100%; overflow: auto; background: var(--paper); border-radius: 0; }
+.trend-panel:fullscreen .plot-stack .fleet-chart-box svg, .trend-panel:fullscreen .plot-stack #trend-chart { height: max(132px, calc((100vh - 260px) / 3)); min-height: 132px; }
+.frequency-note[data-state="read-error"], .frequency-note[data-state="invalid"], .fleet-frequency-note[data-state="read-error"], .fleet-frequency-note[data-state="invalid"] { background: #fff8e9; color: #7d5b12; }
+.fleet-card-body { display: flex; flex-direction: column; gap: 18px; }
+.fleet-readings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fleet-last { justify-content: flex-end; text-align: right; }
+.fleet-measurements, .fleet-cadence, .fleet-reading-footer, .fleet-frequency-note { grid-column: 1 / -1; }
+.fleet-measurements { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.fleet-frequency-note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.fleet-card:has(.plot-stack[data-channel-mode="custom"]) .fleet-measurements { grid-template-columns: minmax(0, 1fr); }
+.fleet-plots .plot-readout { flex-basis: auto; }
+@media (max-width: 1250px) {
+  .motor-context { grid-template-columns: minmax(0, 1fr); }
+  .model-viewport { height: 300px; }
+  .fleet-measurements { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

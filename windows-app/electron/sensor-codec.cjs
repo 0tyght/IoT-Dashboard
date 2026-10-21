@@ -22,6 +22,8 @@ function normalizeConfig(input = {}) {
   if (!Object.hasOwn(REGISTER_COUNTS, dataType)) throw new Error('ชนิดข้อมูลไม่รองรับ');
   const byteOrder = String(input.byteOrder || 'ABCD').toUpperCase();
   if (!ALLOWED_ORDERS.has(byteOrder)) throw new Error('Byte order ไม่รองรับ');
+  const frequencyByteOrder = String(input.frequencyByteOrder || 'unconfirmed');
+  if (frequencyByteOrder !== 'unconfirmed' && !ALLOWED_ORDERS.has(frequencyByteOrder)) throw new Error('รูปแบบข้อมูลความถี่ไม่รองรับ');
   const baudRate = Number(input.baudRate || 9600);
   if (!ALLOWED_BAUD_RATES.has(baudRate)) throw new Error('Baud rate ไม่รองรับ');
   const parity = String(input.parity || 'none').toLowerCase();
@@ -49,6 +51,7 @@ function normalizeConfig(input = {}) {
     registerAddress,
     dataType,
     byteOrder,
+    frequencyByteOrder,
     scale,
     pollInterval: numberInRange(input.pollInterval ?? 2000, 'รอบอ่านข้อมูล', 250, 3600000, true),
     motorId,
@@ -56,7 +59,7 @@ function normalizeConfig(input = {}) {
     name: String(input.name || '').trim().slice(0, 80),
     area: String(input.area || '').trim().slice(0, 60),
     nameplate: String(input.nameplate || '').trim().slice(0, 2000),
-    unit: String(input.unit || 'mm/s RMS').trim().slice(0, 32) || 'mm/s RMS',
+    unit: String(input.unit || 'mm/s').trim().slice(0, 32) || 'mm/s',
     timeout: numberInRange(input.timeout ?? 1500, 'Timeout', 200, 30000, true)
   };
 }
@@ -118,4 +121,19 @@ function registerCount(dataType) {
   return REGISTER_COUNTS[dataType] || 1;
 }
 
-module.exports = { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, registerCount };
+function decodeVemseeFrequency(registers, byteOrder = 'unconfirmed') {
+  const empty = { frequencyX: null, frequencyY: null, frequencyZ: null };
+  if (!Array.isArray(registers) || registers.length !== 6 || registers.some(value => !Number.isInteger(value) || value < 0 || value > 65535)) throw new Error('ข้อมูล Register 0021H–0026H ไม่ครบ');
+  if (byteOrder === 'unconfirmed') return { channels: empty, frequencyStatus: 'unconfirmed', frequencyByteOrder: byteOrder, frequencyMessage: 'อ่านค่าดิบแล้ว · รอยืนยันลำดับข้อมูล Float ก่อนแสดง Hz' };
+  if (!ALLOWED_ORDERS.has(byteOrder)) throw new Error('รูปแบบข้อมูลความถี่ไม่รองรับ');
+  const channels = {};
+  try {
+    ['X', 'Y', 'Z'].forEach((axis, index) => {
+      const value = decodeRegisters(registers.slice(index * 2, index * 2 + 2), { dataType: 'float32', byteOrder, scale: 1 });
+      if (value < 0 || value > 5000 || (value > 0 && value < 10)) throw new Error(`ความถี่ ${axis} อยู่นอกช่วงข้อมูลที่รองรับ · ตรวจลำดับ Float และรุ่นเซ็นเซอร์`);
+      channels[`frequency${axis}`] = value;
+    });
+    return { channels, frequencyStatus: 'ok', frequencyByteOrder: byteOrder, frequencyMessage: '' };
+  } catch (error) { return { channels: empty, frequencyStatus: 'invalid', frequencyByteOrder: byteOrder, frequencyMessage: error.message }; }
+}
+module.exports = { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, decodeVemseeFrequency, registerCount };

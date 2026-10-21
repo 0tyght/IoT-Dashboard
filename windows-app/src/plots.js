@@ -72,7 +72,7 @@ function createPlotStack(container, { prefix, label = '', tooltipClass = 'chart-
   const cursorTime = node('p', 'ชี้กราฟหรือใช้ปุ่มลูกศรเพื่อเทียบเวลา · UTC+07:00', 'plot-cursor-time');
   const note = node('p', 'แต่ละกราฟใช้สเกลตามหน่วยของตัวเอง · เวลาคือเวลาคอมพิวเตอร์รับข้อมูล', 'plot-note');
   container.replaceChildren(cursorTime, grid, note);
-  for (const [kind, group] of Object.entries({ ...Measurements.groups, temperature: { label: 'Temperature', unit: '°C' } })) {
+  for (const [kind, group] of Object.entries(Measurements.groups)) {
     const section = node('section', null, 'measurement-plot'); section.dataset.kind = kind;
     const heading = node('div', null, 'measurement-plot-heading'), title = node('h3'), readout = node('span', '—', 'plot-readout');
     heading.append(title, readout);
