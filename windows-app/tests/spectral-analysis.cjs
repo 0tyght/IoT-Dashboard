@@ -101,8 +101,8 @@ assert.equal(Spectral.parseCSV('x\n' + Array(Spectral.limits.maxSamples).fill('1
 
 assert.throws(() => Spectral.analyze(waveform, { sampleRateHz: 0 }), /มากกว่า 0/);
 assert.throws(() => Spectral.analyze(Array(64).fill(0), { sampleRateHz: Number.MIN_VALUE, fftSize: 64 }), /นอกช่วง/);
-assert.throws(() => Spectral.analyze(waveform, { sampleRateHz: 1024, fftSize: 1000 }), /กำลังสอง/);
-assert.throws(() => Spectral.analyze(waveform, { sampleRateHz: 1024, fftSize: 32 }), /กำลังสอง/);
+assert.throws(() => Spectral.analyze(waveform, { sampleRateHz: 1024, fftSize: 1000 }), /กำลังของ 2/);
+assert.throws(() => Spectral.analyze(waveform, { sampleRateHz: 1024, fftSize: 32 }), /กำลังของ 2/);
 assert.throws(() => Spectral.analyze(waveform.slice(0, 63), { sampleRateHz: 1024, fftSize: 64 }), /อย่างน้อย/);
 assert.throws(() => Spectral.analyze(Array(64).fill(NaN), { sampleRateHz: 1024, fftSize: 64 }), /ตัวเลข/);
 assert.throws(() => Spectral.analyze(Array(64).fill(null), { sampleRateHz: 1024, fftSize: 64 }), /ตัวเลข/);
