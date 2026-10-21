@@ -22,3 +22,7 @@ The user's self-contained WebGL2 preview and reference poster are copied into sr
 - Physical sensor/USB-driver testing is still required on the destination computer. The preview uses explicitly simulated readings.
 
 0.12.1 makes the plot fixture check atomic within one renderer task. In the first GitHub run, the live simulation/resize redraw could replace an injected extreme-value fixture between separate test IPC calls. The revised check retains the same gap/extreme/bounds assertions without allowing another render between injection and observation.
+
+## Follow-up: missing Hz diagnosis
+
+The user reports the unconfirmed-order message on their actual installation. This state is produced after a successful six-word frequency read, before conversion; it does not identify the correct order. Source changes now replace blank frequency tiles/cells with explicit unconfirmed, read-error, unsupported, invalid or missing labels; real zero remains 0.00. The connection test includes all vibration families, temperature, frequency status and six raw frequency words, and scrolls its result into view. UI fixtures verify labels, zero handling, raw diagnostics and result visibility. These source changes do not select a hardware format or claim that physical Hz has been verified. Await the actual six words and vendor/reference confirmation; no new installer is published in this diagnostic follow-up.

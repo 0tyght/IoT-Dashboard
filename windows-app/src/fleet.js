@@ -84,7 +84,12 @@ function refreshFleet() {
     if (!refs.card.hidden) visible++;
     refs.card.classList.toggle('fleet-fault', status.kind === 'fault'); refs.card.classList.toggle('fleet-retained', mode === 'offline' || profile.enabled === false);
     refs.problem.hidden = status.kind !== 'fault'; refs.problem.textContent = status.kind === 'fault' ? state.message || 'ไม่ได้รับข้อมูลใหม่ · ตรวจพอร์ตและการตั้งค่าการสื่อสาร' : '';
-    refs.values.forEach(({ value, key }) => { value.textContent = digits(key === 'value' ? last?.value : last?.channels?.[key], key === 'value' ? 3 : key.startsWith('frequency') ? 2 : 1); });
+    refs.values.forEach(({ value, key }) => {
+      const frequency = key.startsWith('frequency');
+      value.textContent = frequency ? frequencyDisplay(last, key.at(-1)) : digits(key === 'value' ? last?.value : last?.channels?.[key], key === 'value' ? 3 : 1);
+      value.classList.toggle('frequency-unavailable', frequency && !Number.isFinite(last?.channels?.[key]));
+      value.title = frequency ? frequencySummary(last) : '';
+    });
     refs.frequencyNote.textContent = frequencySummary(last);
     refs.frequencyNote.dataset.state = last?.frequencyStatus || 'pending';
     refs.connection.className = `fleet-connection ${status.kind}`; refs.connectionText.textContent = status.text;

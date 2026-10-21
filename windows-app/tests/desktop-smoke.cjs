@@ -47,6 +47,17 @@ const { _electron: electron } = require('playwright');
     await page.getByRole('button', { name: 'แก้ไข MTR-01', exact: true }).click();
     await page.locator('[name="name"]').fill('Cooling water pump 01');
     await page.locator('[name="area"]').fill('Utility / Pump room');
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('sensor:test');
+      ipcMain.handle('sensor:test', () => ({ ok: true, frequencyStatus: 'unconfirmed', channels: { temperature: 30, velocityX: 1, velocityY: 2, velocityZ: 3, displacementX: 10, displacementY: 20, displacementZ: 30, accelerationX: 1, accelerationY: 2, accelerationZ: 3, frequencyX: null, frequencyY: null, frequencyZ: null }, rawRegisters: { frequency: [16968, 0, 17008, 0, 17036, 0] } }));
+    });
+    await page.locator('#test-sensor').click();
+    await page.locator('#test-result.success').waitFor();
+    const connectionResult = await page.locator('#test-result p').textContent();
+    assert(connectionResult.includes('Displacement X 10.0') && connectionResult.includes('Acceleration X 1.0'));
+    assert(connectionResult.includes('Frequency X รอยืนยัน') && connectionResult.includes('16968, 0, 17008, 0, 17036, 0'));
+    assert(await page.locator('#test-result').evaluate(element => { const rect = element.getBoundingClientRect(), container = document.querySelector('.dialog-content').getBoundingClientRect(); return rect.top >= container.top && rect.bottom <= container.bottom + 1; }), 'connection result scrolls into the dialog viewport');
+    await page.screenshot({ path: path.join(artifacts, 'frequency-connection-test.png'), animations: 'disabled' });
     await page.locator('[name="frequencyByteOrder"]').selectOption('ABCD');
     await page.locator('.nameplate-editor summary').click();
     await page.locator('[name="nameplate"]').fill('Motor: 4 kW / 1450 rpm\nSensor position: DE');
@@ -110,6 +121,22 @@ const { _electron: electron } = require('playwright');
     assert.equal(await page.locator('#channel-body tr').count(), 4);
     assert(await page.locator('#new-motor').isEnabled());
     assert.equal(await page.locator('#register-body tr').count(), 13);
+    const frequencyStates = await page.evaluate(() => {
+      const reading = stateFor(currentProfile().motorId).frames.at(-1);
+      const missing = { ...reading, source: 'RS485 / Modbus RTU', frequencyStatus: 'unconfirmed', channels: { ...reading.channels, frequencyX: null, frequencyY: null, frequencyZ: null } };
+      renderChannels(missing);
+      const result = {
+        labels: [...document.querySelectorAll('#channel-body tr:last-child td.frequency-unavailable')].map(cell => cell.textContent),
+        summary: frequencySummary(missing),
+        zero: frequencyDisplay({ ...missing, frequencyStatus: 'ok', channels: { frequencyX: 0 } }, 'X'),
+        error: frequencyDisplay({ ...missing, frequencyStatus: 'read-error' }, 'X')
+      };
+      renderChannels(reading); return result;
+    });
+    assert.deepEqual(frequencyStates.labels, ['รอยืนยัน', 'รอยืนยัน', 'รอยืนยัน']);
+    assert(frequencyStates.summary.includes('ตั้งค่ามอเตอร์'));
+    assert.equal(frequencyStates.zero, '0.00');
+    assert.equal(frequencyStates.error, 'อ่านไม่ได้');
     await page.waitForFunction(() => ['ready', 'fallback'].includes(document.getElementById('model-panel').dataset.modelState));
     if (await page.locator('#model-panel').getAttribute('data-model-state') === 'ready') {
       const model = page.frameLocator('#asset-model');

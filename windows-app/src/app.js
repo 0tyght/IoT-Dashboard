@@ -162,7 +162,12 @@ function renderChannels(last) {
   const body = $('channel-body'); body.replaceChildren();
   for (const [label, key, unit] of [['Velocity', 'velocity', 'mm/s'], ['Displacement', 'displacement', 'µm'], ['Acceleration', 'acceleration', 'm/s²'], ['Frequency', 'frequency', 'Hz']]) {
     const row = node('tr'), title = node('td', label); title.append(node('small', unit)); row.append(title);
-    for (const axis of ['X', 'Y', 'Z']) row.append(node('td', digits(last?.channels?.[`${key}${axis}`]), `axis-${axis.toLowerCase()}`));
+    for (const axis of ['X', 'Y', 'Z']) {
+      const missingFrequency = key === 'frequency' && !Number.isFinite(last?.channels?.[`frequency${axis}`]);
+      const cell = node('td', key === 'frequency' ? frequencyDisplay(last, axis) : digits(last?.channels?.[`${key}${axis}`]), `axis-${axis.toLowerCase()}`);
+      if (key === 'frequency') cell.title = frequencySummary(last);
+      cell.classList.toggle('frequency-unavailable', missingFrequency); row.append(cell);
+    }
     body.append(row);
   }
 }
@@ -273,10 +278,17 @@ async function testMotor() {
   try {
     const result = check(await api.testConnection(config));
     $('test-result').className = 'test-result success'; $('test-result').querySelector('b').textContent = '✓ เซ็นเซอร์ตอบ Modbus สำเร็จ';
-    $('test-result').querySelector('p').textContent = result.channels ? `Velocity X ${digits(result.channels.velocityX)} / Y ${digits(result.channels.velocityY)} / Z ${digits(result.channels.velocityZ)} mm/s\nTemperature ${digits(result.channels.temperature)} °C · ตรวจว่ารุ่นเซ็นเซอร์ตรงกับ preset ก่อนใช้งาน` : `${digits(result.value, 3)} ${result.unit} · Raw: ${result.rawRegisters.join(', ')}`;
+    $('test-result').querySelector('p').textContent = result.channels ? [
+      ...[['Velocity', 'velocity', 'mm/s'], ['Displacement', 'displacement', 'µm'], ['Acceleration', 'acceleration', 'm/s²']].map(([label, key, unit]) => `${label} X ${digits(result.channels[`${key}X`])} / Y ${digits(result.channels[`${key}Y`])} / Z ${digits(result.channels[`${key}Z`])} ${unit}`),
+      `Temperature ${digits(result.channels.temperature)} °C`,
+      `Frequency X ${frequencyDisplay(result, 'X')} / Y ${frequencyDisplay(result, 'Y')} / Z ${frequencyDisplay(result, 'Z')} Hz`,
+      frequencySummary(result),
+      result.rawRegisters?.frequency?.length === 6 ? `Raw Hz 0021H–0026H: ${result.rawRegisters.frequency.join(', ')}` : 'ยังไม่มีค่าดิบความถี่ตอบกลับ',
+      'ตรวจว่ารุ่นเซ็นเซอร์ตรงกับ preset ก่อนใช้งาน'
+    ].join('\n') : `${digits(result.value, 3)} ${result.unit} · Raw: ${result.rawRegisters.join(', ')}`;
     addLog('info', config.motorId, `ทดสอบสำเร็จ ${config.path} / Slave ${config.slaveId}`);
   } catch (error) { $('test-result').className = 'test-result error'; $('test-result').querySelector('b').textContent = 'เซ็นเซอร์ไม่ตอบตามค่าที่ตั้ง'; $('test-result').querySelector('p').textContent = `${error.message}\nตรวจไฟเลี้ยง A/B, Slave ID, Baud rate และโปรแกรมอื่นที่ใช้พอร์ตนี้`; addLog('error', config.motorId, error.message); }
-  finally { setDialogBusy(false); }
+  finally { setDialogBusy(false); $('test-result').scrollIntoView({ block: 'nearest', behavior: 'instant' }); }
 }
 function confirmAction(title, detail, callback) {
   $('confirm-title').textContent = title; $('confirm-message').textContent = detail;
