@@ -38,21 +38,21 @@ main:has(#monitor-view:not([hidden])) > .message:not([hidden]) { flex-shrink: 0;
 .shell.context-collapsed #monitor-content > .motor-context { display: none; }
 
 /* A quiet registry gives the selected motor and the graphs a clear reading order. */
-.shell:has(#monitor-view:not([hidden])) .sidebar { color: #e1e7f2; background: #222b3d; border-color: #333f56; }
+.shell:has(#monitor-view:not([hidden])) .sidebar { color: #414657; background: #fff; border-color: #e7e8ef; }
 .shell:has(#monitor-view:not([hidden])) .sidebar .side-heading { padding: 15px 12px 12px; }
 .shell:has(#monitor-view:not([hidden])) .sidebar .side-heading h2 { font-size: 14px; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .count { color: #e6dfff; background: #3d395f; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .search { color: #bbc7da; background: #2a354b; border-color: #43506a; margin: 0 10px 10px; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .search :is(input, span) { color: #e0e7f2; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .search input::placeholder { color: #b4c0d3; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item { color: #e4eaf3; padding: 10px 8px; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item :is(small, .item-value) { color: #b5c3da; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item:hover:not(:disabled) { background: #2d3a52; border-color: #455673; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected { background: #3c365f; border-color: #7967bc; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected strong { color: #fff; }
-.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected .item-value { color: #e1d9ff; }
-.shell:has(#monitor-view:not([hidden])) .sidebar-bottom { padding: 10px; background: #222b3d; border-color: #3b4760; }
-.shell:has(#monitor-view:not([hidden])) .sidebar-bottom :is(p, p span, .legend) { color: #b9c5d8; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .count { color: #6252e9; background: #f2f0ff; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .search { color: #74788a; background: #fff; border-color: #e2e3eb; margin: 0 10px 10px; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .search :is(input, span) { color: #414657; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .search input::placeholder { color: #85899a; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item { color: #414657; padding: 10px 8px; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item :is(small, .item-value) { color: #777c8d; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item:hover:not(:disabled) { background: #faf9ff; border-color: #e8e5f6; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected { background: #f3f1ff; border-color: #d8d2f6; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected strong { color: #5142bf; }
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected .item-value { color: #5142bf; }
+.shell:has(#monitor-view:not([hidden])) .sidebar-bottom { padding: 10px; background: #fff; border-color: #e7e8ef; }
+.shell:has(#monitor-view:not([hidden])) .sidebar-bottom :is(p, p span, .legend) { color: #74788a; }
 
 /* Three equal rows use the remaining height instead of pushing the last plot down. */
 #monitor-content > .trend-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; border-color: #d6d0eb; box-shadow: 0 3px 14px #30395108; }

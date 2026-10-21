@@ -1,10 +1,10 @@
-# Monitoring workspace — 0.14.0
+# Monitoring workspace — 0.14.1
 
 The user's priority is a single visible monitoring screen with stronger hierarchy and responsive behavior. The model is explicitly excluded from that screen and moved to its own lazily loaded 3D tab. No reference asset or original model project is deleted.
 
 The layout reserves remaining viewport height for three equal graph rows. Each retains its own left-hand axis values, sample time and raw/formula menu. Temperature, frequency and connection/acquisition metadata form a compact context rail; on portrait tablets they move above the full-width plots. The duplicate channel table and nameplate are available in a floating panel. A context toggle gives the plots more width; actual one/five/thirty-minute shortcuts change the plotted window. Below 1180 px the registry is an overlay drawer. The Windows app starts within the primary display's work area and supports a 768 px minimum width.
 
-The white/violet graph surface is contrasted by the slate registry. Hover or keyboard focus on an axis emphasizes the corresponding traces across all graphs without removing other measurements. Keyboard focus takes priority. Linked time cursors and chart pause remain; redundant pause toasts are removed because they obscured lower plots. Reduced motion is respected.
+The white/violet monitoring surface extends across the registry and graph workspace. Hover or keyboard focus on an axis emphasizes the corresponding traces across all graphs without removing other measurements. Keyboard focus takes priority. Linked time cursors and chart pause remain; redundant pause toasts are removed because they obscured lower plots. Reduced motion is respected.
 
 Manual raw/formula popovers use the native top layer, preventing clipping by bounded graph panels. Pinning retains the displayed timestamp. Escape/outside interaction, switching tabs, hiding context and fullscreen changes close them; Escape from the isolated model frame follows the same rule. Model controls fit their separate page and fullscreen view.
 
