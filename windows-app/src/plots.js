@@ -58,7 +58,7 @@ function updatePlotReadout(refs, frame) {
   if (refs.valueRows?.length !== refs.series.length) {
     refs.readout.replaceChildren();
     refs.valueRows = refs.series.map(series => {
-      const row = node('div', null, 'plot-axis-value'), label = node('span', series.label), value = node('strong'), unit = node('small');
+      const row = node('div', null, 'plot-axis-value'), label = node('span', series.label === 'Value' ? 'ค่า' : series.label), value = node('strong'), unit = node('small');
       row.tabIndex = 0; row.setAttribute('role', 'group'); label.style.color = series.color; value.style.color = series.color;
       row.dataset.axis = series.label;
       row.onpointerenter = () => refs.onAxis?.(series.label);
@@ -157,14 +157,15 @@ function createPlotStack(container, { prefix, label = '', tooltipClass = 'chart-
     }
   }
   const stack = { plots, frames: [], svg: plots[0].svg, cursorStamp: null, source: null,
-    draw(frames, profile, { reduced = false } = {}) {
+    draw(frames, profile, { reduced = false, gapStarts = [] } = {}) {
       const profileKey = `${profile?.motorId || ''}:${profile?.sensorModel || ''}`;
       if (stack.profileKey !== profileKey) {
         delete container.dataset.focusedAxis; delete container.dataset.activeKind;
         for (const plot of plots) { plot.inspector.open = false; plot.inspector.dataset.pinned = 'false'; }
       }
       stack.profileKey = profileKey;
-      const threeAxis = profile?.sensorModel === MODEL, gaps = new Set();
+      const stamps = new Set(frames.map(frame => frame.timestamp));
+      const threeAxis = profile?.sensorModel === MODEL, gaps = new Set(gapStarts.filter(stamp => stamps.has(stamp)));
       container.dataset.channelMode = threeAxis ? 'three-axis' : 'custom';
       // Compute gaps on original samples; drawing fewer points must not look like an outage.
       if (!reduced) for (let i = 1; i < frames.length; i++) {
@@ -173,8 +174,11 @@ function createPlotStack(container, { prefix, label = '', tooltipClass = 'chart-
       }
       // Preserve both sides of a gap when thinning so a line never bridges it.
       const selected = new Set(Measurements.thinFrames(frames));
-      if (gaps.size) frames.forEach((frame, i) => { if (gaps.has(frame.timestamp)) { selected.add(frame); selected.add(frames[i - 1]); } });
-      stack.frames = [...selected].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      if (gaps.size) frames.forEach((frame, i) => { if (gaps.has(frame.timestamp)) { selected.add(frame); if (i) selected.add(frames[i - 1]); } });
+      for (let i = 1; i < frames.length; i++) if (['value', ...Measurements.keys, 'temperature'].some(key => Number.isFinite(frames[i - 1][key] ?? frames[i - 1].channels?.[key]) !== Number.isFinite(frames[i][key] ?? frames[i].channels?.[key]))) {
+        selected.add(frames[i - 1]); selected.add(frames[i]);
+      }
+      stack.frames = [...selected].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
       for (const plot of plots) {
         plot.section.hidden = !threeAxis && plot.kind !== 'velocity'; plot.threeAxis = threeAxis;
         plot.title.textContent = !threeAxis ? `Custom value · ${profile?.unit || '—'}` : `${({ velocity: 'ความเร็ว', displacement: 'การกระจัด', acceleration: 'ความเร่ง', temperature: 'อุณหภูมิ' })[plot.kind]} · ${plot.kind === 'temperature' ? '°C' : Measurements.groups[plot.kind].unit}`;

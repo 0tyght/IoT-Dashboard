@@ -76,6 +76,7 @@ main:has(#monitor-view:not([hidden])) > .message:not([hidden]) { flex-shrink: 0;
 #detail-plots .plot-axis-value span { margin: 0; font-size: 11px; line-height: 1; }
 #detail-plots .plot-axis-value strong { font-size: 18px; line-height: 18px; letter-spacing: -.015em; }
 #detail-plots .plot-axis-value small { grid-column: auto; font-size: 11px; line-height: 1.2; }
+#detail-plots[data-channel-mode="custom"] .plot-axis-value { grid-template-columns: 22px minmax(0, 1fr) auto; }
 #detail-plots .plot-axis-value:focus-visible { background: #eee9ff; outline-offset: 1px; }
 #detail-plots .plot-value-time { grid-column: 1; font-size: 11px; line-height: 1.2; margin: 0; }
 #detail-plots .plot-inspector { grid-column: 2; min-width: 0; }
@@ -218,7 +219,7 @@ main:has(#monitor-view:not([hidden])) > .message:not([hidden]) { flex-shrink: 0;
   #detail-plots .measurement-plot-heading { padding: 0 4px; }
   #detail-plots .plot-axis-value { min-height: 15px; }
   #detail-plots .plot-axis-value strong { font-size: 15px; line-height: 15px; }
-  #detail-plots .plot-value-time { font-size: 10px; }
+  #detail-plots .plot-value-time { font-size: 11px; }
   #detail-plots .plot-inspector summary { min-height: 26px; padding-top: 4px; padding-bottom: 4px; }
   #monitor-content > .motor-context { gap: 4px; }
   #monitor-content .motor-facts { gap: 4px; }

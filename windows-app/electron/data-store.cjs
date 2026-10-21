@@ -10,6 +10,37 @@ function dayKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
+const PRESET_MODEL = 'vemsee-sn3001-wz3a-n01';
+const PRESET_CHANNELS = ['velocity', 'displacement', 'acceleration'].flatMap(kind => ['X', 'Y', 'Z'].map(axis => `${kind}${axis}`));
+function recordedModel(record) {
+  return record.sensorModel || record.decodeConfig?.sensorModel || (PRESET_CHANNELS.every(key => Object.hasOwn(record.channels || {}, key)) ? PRESET_MODEL : 'custom');
+}
+function matchesCurrentProfile(record, profile) {
+  if (record.source === 'SIMULATION' || record.recorded === false) return false;
+  if (typeof record.port !== 'string' || record.port.toUpperCase() !== String(profile.path).toUpperCase() || record.slaveId !== profile.slaveId || record.unit !== profile.unit) return false;
+  const model = recordedModel(record);
+  if (model !== profile.sensorModel) return false;
+  if (model === PRESET_MODEL && !PRESET_CHANNELS.every(key => Object.hasOwn(record.channels || {}, key))) return false;
+  // A legacy custom value does not identify the register or formula that produced it.
+  // It remains available in History, but cannot be attached to the current sensor automatically.
+  if (model === 'custom' && ['registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'unit'].some(key => record.decodeConfig?.[key] === undefined)) return false;
+  for (const key of ['sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'unit']) {
+    if (record.decodeConfig?.[key] !== undefined && record.decodeConfig[key] !== profile[key]) return false;
+  }
+  if (record.frequencyByteOrder && profile.frequencyByteOrder && record.frequencyByteOrder !== profile.frequencyByteOrder) return false;
+  return true;
+}
+
+function historySeries(record) {
+  const sensorModel = recordedModel(record);
+  const unit = String(record.unit || '—'), port = String(record.port || 'ไม่ระบุพอร์ต'), slaveId = record.slaveId ?? null;
+  const custom = sensorModel === 'custom' ? ['registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale'].map(key => record.decodeConfig?.[key] ?? null) : null;
+  const simulation = record.source === 'SIMULATION';
+  const key = JSON.stringify([sensorModel, unit, port.toUpperCase(), slaveId, custom, simulation]);
+  const formula = custom ? record.decodeConfig ? ` · Register ${record.decodeConfig.registerAddress} × ${record.decodeConfig.scale}` : ' · สูตรเดิมไม่ระบุ' : '';
+  return { key, sensorModel, unit, port, slaveId, label: `${simulation ? 'ข้อมูลจำลอง · ' : ''}${sensorModel === 'custom' ? 'Custom' : 'VemSee 3-axis'} · ${unit} · ${port} / ID ${slaveId ?? '—'}${formula}` };
+}
+
 class DataStore {
   constructor(directory) { this.directory = directory; this.queue = Promise.resolve(); }
   dataPath() { return path.join(this.directory, 'data'); }
@@ -60,7 +91,7 @@ class DataStore {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(endDate)) || !Number.isFinite(Date.parse(date)) || !Number.isFinite(Date.parse(endDate)) || endDate < date) throw new Error('ช่วงวันที่ไม่ถูกต้อง');
     await this.queue;
     const files = fs.existsSync(this.dataPath()) ? (await fs.promises.readdir(this.dataPath())).filter(name => /^readings-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name) && name.slice(9, 19) >= date && name.slice(9, 19) <= endDate).sort() : [];
-    const rows = []; let total = 0, skipped = 0;
+    const rows = [], motorIds = new Set(); let total = 0, skipped = 0;
     for (const name of files) {
       const file = path.join(this.dataPath(), name);
       const stream = fs.createReadStream(file, { encoding: 'utf8' });
@@ -70,6 +101,7 @@ class DataStore {
           if (!line.trim()) continue;
           let record;
           try { record = JSON.parse(line); if (!record || !Number.isFinite(Date.parse(record.timestamp)) || !Number.isFinite(record.value)) throw new Error('Invalid record'); } catch { skipped += 1; continue; }
+          if (typeof record.motorId === 'string' && record.motorId) motorIds.add(record.motorId);
           if (motorId && record.motorId !== motorId) continue;
           total += 1;
           if (visitor) await visitor(record);
@@ -77,19 +109,30 @@ class DataStore {
         }
       } finally { lines.close(); stream.destroy(); }
     }
-    return { rows, total, skipped };
+    return { rows, total, skipped, motorIds: [...motorIds].sort() };
   }
-  async chartRange({ from, to, motorId }) {
+  async chartRange({ from, to, motorId, profile, seriesKey }) {
     const start = Date.parse(from), end = Date.parse(to);
     if (!motorId || typeof motorId !== 'string' || !Number.isFinite(start) || !Number.isFinite(end) || start >= end) throw new Error('เลือกมอเตอร์และช่วงเวลาเริ่ม–สิ้นสุดให้ถูกต้อง');
-    const buckets = new Map(), bucketCount = 160, keys = ['value', ...CSV_KEYS.filter(key => /^(velocity|displacement|acceleration|frequency)[XYZ]$/.test(key)), 'temperature'];
-    let total = 0;
+    if (profile && (typeof profile !== 'object' || profile.motorId !== motorId)) throw new Error('การตั้งค่ามอเตอร์ไม่ตรงกับข้อมูลที่เลือก');
+    const groups = new Map(), bucketCount = 160, keys = ['value', ...CSV_KEYS.filter(key => /^(velocity|displacement|acceleration|frequency)[XYZ]$/.test(key)), 'temperature'];
+    let rangeTotal = 0;
     const summary = await this.history({ date: dayKey(new Date(start)), endDate: dayKey(new Date(end)), motorId }, record => {
       const stamp = Date.parse(record.timestamp); if (stamp < start || stamp > end) return;
-      total++;
+      if (profile && !matchesCurrentProfile(record, profile)) return;
+      const descriptor = historySeries(record);
+      if (!groups.has(descriptor.key)) groups.set(descriptor.key, { ...descriptor, total: 0, lastTimestamp: record.timestamp, buckets: new Map(), gapPairs: [], continuityFrames: new Map(), previous: null });
+      const group = groups.get(descriptor.key), previous = group.previous;
+      const interval = record.pollIntervalMs || previous?.pollIntervalMs || profile?.pollInterval;
+      if (previous && interval > 0 && stamp - Date.parse(previous.timestamp) > interval * 3) group.gapPairs.push([previous, record]);
+      if (previous && keys.some(key => Number.isFinite(previous[key] ?? previous.channels?.[key]) !== Number.isFinite(record[key] ?? record.channels?.[key]))) {
+        group.continuityFrames.set(previous.timestamp, previous); group.continuityFrames.set(record.timestamp, record);
+      }
+      if (!previous || stamp >= Date.parse(previous.timestamp)) { group.previous = record; group.lastTimestamp = record.timestamp; }
+      group.total++; rangeTotal++;
       const index = Math.min(bucketCount - 1, Math.floor((stamp - start) / (end - start) * bucketCount));
-      if (!buckets.has(index)) buckets.set(index, { first: record, last: record, extrema: new Map() });
-      const bucket = buckets.get(index); bucket.last = record;
+      if (!group.buckets.has(index)) group.buckets.set(index, { first: record, last: record, extrema: new Map() });
+      const bucket = group.buckets.get(index); bucket.last = record;
       for (const key of keys) {
         const value = record[key] ?? record.channels?.[key]; if (!Number.isFinite(value)) continue;
         const extrema = bucket.extrema.get(key);
@@ -97,9 +140,15 @@ class DataStore {
         else { if (value < extrema.min) { extrema.min = value; extrema.low = record; } if (value > extrema.max) { extrema.max = value; extrema.high = record; } }
       }
     });
+    const ordered = [...groups.values()].sort((a, b) => Date.parse(b.lastTimestamp) - Date.parse(a.lastTimestamp));
+    const group = seriesKey ? groups.get(seriesKey) : ordered[0];
+    const series = ordered.map(({ key, sensorModel, unit, port, slaveId, label, total, lastTimestamp }) => ({ key, sensorModel, unit, port, slaveId, label, total, lastTimestamp }));
+    if (!group) return { rows: [], total: 0, rangeTotal, skipped: summary.skipped, reduced: false, gapStarts: [], series, seriesKey: '' };
     const selected = new Map();
-    for (const bucket of buckets.values()) for (const record of [bucket.first, bucket.last, ...[...bucket.extrema.values()].flatMap(item => [item.low, item.high])]) selected.set(record.timestamp, record);
-    return { rows: [...selected.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp)), total, skipped: summary.skipped, reduced: selected.size < total };
+    for (const bucket of group.buckets.values()) for (const record of [bucket.first, bucket.last, ...[...bucket.extrema.values()].flatMap(item => [item.low, item.high])]) selected.set(record.timestamp, record);
+    for (const pair of group.gapPairs) for (const record of pair) selected.set(record.timestamp, record);
+    for (const [stamp, record] of group.continuityFrames) selected.set(stamp, record);
+    return { rows: [...selected.values()].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)), total: group.total, rangeTotal, skipped: summary.skipped, reduced: selected.size < group.total, gapStarts: group.gapPairs.map(pair => pair[1].timestamp), series, seriesKey: group.key };
   }
 }
 

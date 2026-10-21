@@ -1,10 +1,12 @@
 'use strict';
 let recordingState = { settings: { startMode: 'on-connect', startAt: '', durationMinutes: 0 }, connected: false, active: false, waiting: false, count: 0 };
-let historyPlot, rangeFrames = [], rangeGeneration = 0, rangeProfile = null, rangeReduced = false;
+let historyPlot, rangeFrames = [], rangeGeneration = 0, rangeProfile = null, rangeReduced = false, rangeGapStarts = [];
+let invalidateHistoryRange = () => {};
 let recordActionBusy = false;
-function storageLabel(last) {
+function storageLabel(last, savedHistory = false) {
   if (mode === 'demo') return 'ข้อมูลจำลอง';
   if (!last) return 'ยังไม่มีข้อมูล';
+  if (savedHistory) return 'ข้อมูลจากไฟล์ประวัติ';
   if (last.recordingState === 'before-start') return 'ค่าทดสอบก่อนเริ่มบันทึก';
   if (last.recordingState === 'monitor-only') return 'ดูอย่างเดียว · ไม่บันทึก';
   return last.recorded === false ? 'บันทึกไม่สำเร็จ' : 'บันทึก CSV แล้ว';
@@ -42,74 +44,6 @@ function recordingModeFields() {
   $('record-mode-help').textContent = scheduled ? 'กดเริ่มเพื่ออ่านค่ารอไว้ แล้วบันทึกเมื่อถึงเวลา · ต้องเปิดโปรแกรมไว้' : value === 'monitor-only' ? 'อ่านค่าจริงโดยไม่เขียนไฟล์ · เริ่มบันทึกภายหลังได้จากเมนูเพิ่มเติม' : 'กดเริ่มครั้งเดียวเพื่อตรวจเซ็นเซอร์ อ่านค่า และบันทึกอัตโนมัติ';
 }
 function inputLocal(value) { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 19); }
-function createHistorySurface(container, { frames, metric, note }) {
-  const view = node('section', null, 'history-surface-view'); view.id = 'history-3d-view'; view.hidden = true;
-  const toolbar = node('div', null, 'history-surface-toolbar'), selectLabel = node('label', 'ค่าที่แสดง'), select = node('select'); select.id = 'history-surface-metric';
-  for (const [value, label] of [['velocity', 'ความเร็วสั่น · mm/s'], ['displacement', 'ระยะกระจัด · µm'], ['acceleration', 'ความเร่ง · m/s²'], ['frequency', 'ความถี่ · Hz']]) select.add(new Option(label, value));
-  selectLabel.append(select);
-  const legend = node('div', 'X · Y · Z', 'surface-axis-legend');
-  for (const [axis, color] of [['X', 'var(--x)'], ['Y', 'var(--y)'], ['Z', 'var(--z)']]) { const item = node('span', axis); item.style.setProperty('--axis-color', color); legend.append(item); }
-  toolbar.append(selectLabel, legend);
-  const canvas = document.createElement('canvas'); canvas.id = 'history-surface-canvas'; canvas.tabIndex = 0; canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', 'กราฟพื้นผิวสามมิติจากค่าการสั่นที่บันทึกย้อนหลัง ลากเพื่อหมุน ใช้ล้อเมาส์เพื่อซูม');
-  const readout = node('p', 'ลากเพื่อหมุน · ล้อเมาส์เพื่อซูม · ปุ่มลูกศรเพื่อหมุนเมื่อใช้คีย์บอร์ด', 'surface-readout'); readout.id = 'history-surface-readout';
-  const caption = node('p', 'แกนนอน = เวลา · แกนลึก = แกนวัด X/Y/Z · ความสูงและสี = ค่าที่เลือก · ไม่ใช่กราฟ FFT', 'surface-caption');
-  const chart = node('div', null, 'history-surface-chart'); chart.append(canvas);
-  view.append(toolbar, chart, readout, caption); container.after(view);
-  let rotation = -.62, zoom = 1, pointer = null;
-  const valueFor = (frame, axis) => { const key = `${select.value}${axis}`; const value = frame?.channels?.[key] ?? frame?.[key]; return Number.isFinite(value) ? value : null; };
-  const format = value => Number.isFinite(value) ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value) : '—';
-  const draw = () => {
-    const rect = canvas.getBoundingClientRect(), cssWidth = Math.max(240, rect.width), cssHeight = Math.max(250, rect.height);
-    const dpr = Math.min(2, window.devicePixelRatio || 1), width = Math.round(cssWidth * dpr), height = Math.round(cssHeight * dpr);
-    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
-    const context = canvas.getContext('2d'); context.setTransform(dpr, 0, 0, dpr, 0, 0); context.clearRect(0, 0, cssWidth, cssHeight);
-    const key = select.value, axes = ['X', 'Y', 'Z'];
-    let rows = frames().filter(frame => Number.isFinite(Date.parse(frame.timestamp)));
-    if (rows.length > 120) rows = Array.from({ length: 120 }, (_, index) => rows[Math.round(index * (rows.length - 1) / 119)]);
-    const points = rows.map(frame => axes.map(axis => valueFor(frame, axis)));
-    const allValues = points.flat().filter(Number.isFinite), low = allValues.length ? Math.min(0, ...allValues) : 0, high = allValues.length ? Math.max(...allValues) : 0;
-    const valueSpan = high - low || Math.abs(high) || 1, centerValue = (high + low) / 2;
-    const margin = { left: 72, right: 45, top: 26, bottom: 48 }, plotWidth = Math.max(100, cssWidth - margin.left - margin.right), plotHeight = Math.max(100, cssHeight - margin.top - margin.bottom);
-    const scale = Math.min(plotWidth * .44, plotHeight * .72) * zoom;
-    const cx = margin.left + plotWidth * .53, cy = margin.top + plotHeight * .69, cos = Math.cos(rotation), sin = Math.sin(rotation);
-    const project = (x, y, z) => { const dx = (x - .5) * 2, dy = y * 2 - 1, rx = dx * cos - dy * sin, ry = dx * sin + dy * cos; return { x: cx + (rx - ry * .12) * scale, y: cy + (rx * .2 + ry * .43) * scale - z * scale * .7, depth: ry + z * .1 }; };
-    const ground = [[project(0, 0, 0), project(1, 0, 0)], [project(1, 0, 0), project(1, 1, 0)], [project(1, 1, 0), project(0, 1, 0)], [project(0, 1, 0), project(0, 0, 0)]];
-    context.lineWidth = 1; context.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--line').trim() || '#d9dce8';
-    for (const [a, b] of ground) { context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.stroke(); }
-    for (let tick = 1; tick < 5; tick++) { const t = tick / 5, a = project(t, 0, 0), b = project(t, 1, 0); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.stroke(); }
-    for (let tick = 1; tick < 3; tick++) { const t = tick / 3, a = project(0, t, 0), b = project(1, t, 0); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.stroke(); }
-    const triangles = [];
-    for (let index = 0; index < rows.length - 1; index++) for (let axis = 0; axis < axes.length - 1; axis++) {
-      const values = [points[index][axis], points[index + 1][axis], points[index][axis + 1], points[index + 1][axis + 1]];
-      if (!values.every(Number.isFinite)) continue;
-      const normalized = values.map(value => Math.max(-.48, Math.min(.48, (value - centerValue) / valueSpan)));
-      const positions = [project(index / Math.max(rows.length - 1, 1), axis / 2, normalized[0]), project((index + 1) / Math.max(rows.length - 1, 1), axis / 2, normalized[1]), project(index / Math.max(rows.length - 1, 1), (axis + 1) / 2, normalized[2]), project((index + 1) / Math.max(rows.length - 1, 1), (axis + 1) / 2, normalized[3])];
-      for (const [corner, average] of [[[0, 1, 2], (normalized[0] + normalized[1] + normalized[2]) / 3], [[1, 3, 2], (normalized[1] + normalized[3] + normalized[2]) / 3]]) triangles.push({ points: corner.map(point => positions[point]), depth: corner.reduce((sum, point) => sum + positions[point].depth, 0) / 3, average });
-    }
-    triangles.sort((a, b) => a.depth - b.depth);
-    for (const triangle of triangles) { const hue = Math.round(230 - Math.max(0, Math.min(1, (triangle.average + .48) / .96)) * 230); context.beginPath(); context.moveTo(triangle.points[0].x, triangle.points[0].y); for (const point of triangle.points.slice(1)) context.lineTo(point.x, point.y); context.closePath(); context.fillStyle = `hsl(${hue} 78% 50% / .88)`; context.fill(); context.strokeStyle = 'rgba(255,255,255,.28)'; context.lineWidth = .55; context.stroke(); }
-    context.font = '11px Segoe UI, sans-serif'; context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#666'; context.textAlign = 'center';
-    const dateAt = index => rows.length ? new Date(rows[Math.round(index * (rows.length - 1))].timestamp).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : '';
-    for (const tick of [0, .5, 1]) { const p = project(tick, 0, 0); context.fillText(dateAt(tick), p.x, p.y + 17); }
-    context.textAlign = 'right'; for (const tick of [0, .5, 1]) { const p = project(0, tick, 0); context.fillText(['X', 'Y', 'Z'][Math.round(tick * 2)], p.x - 8, p.y + 4); }
-    context.textAlign = 'left'; const zLow = project(1, 1, -.48), zMid = project(1, 1, 0), zHigh = project(1, 1, .48); context.fillText(format(low), zLow.x + 7, zLow.y + 4); context.fillText(format(centerValue), zMid.x + 7, zMid.y + 4); context.fillText(format(high), zHigh.x + 7, zHigh.y + 4);
-    canvas.dataset.valueCount = allValues.length; canvas.dataset.recordCount = rows.length; canvas.dataset.metric = key;
-    if (!allValues.length) { context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#666'; context.textAlign = 'center'; context.font = '14px Segoe UI, sans-serif'; context.fillText(rows.length ? 'ไม่มีค่าของหน่วยนี้ในข้อมูลที่เลือก' : 'เลือกมอเตอร์และช่วงเวลา แล้วโหลดข้อมูลย้อนหลัง', cssWidth / 2, cssHeight / 2); }
-    const group = Measurements.groups[key]; readout.textContent = allValues.length ? `${rows.length.toLocaleString()} เวลา · ${allValues.length.toLocaleString()} ค่า ${group?.unit || 'Hz'} · ${rows.length ? timestamp(rows[0].timestamp) : ''} ถึง ${rows.length ? timestamp(rows.at(-1).timestamp) : ''}` : key === 'frequency' ? 'ไม่มีค่าความถี่ที่ยืนยันแล้วในข้อมูลช่วงนี้' : 'ไม่มีข้อมูลสำหรับช่วงเวลาที่เลือก';
-  };
-  select.onchange = draw;
-  canvas.onpointerdown = event => { pointer = { x: event.clientX, rotation }; canvas.setPointerCapture(event.pointerId); };
-  canvas.onpointermove = event => {
-    if (pointer) { rotation = pointer.rotation + (event.clientX - pointer.x) * .009; draw(); return; }
-    const rows = frames(); if (!rows.length) return; const rect = canvas.getBoundingClientRect(), fraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), frame = rows[Math.round(fraction * (rows.length - 1))];
-    readout.textContent = `${timestamp(frame.timestamp)} · X ${format(valueFor(frame, 'X'))} · Y ${format(valueFor(frame, 'Y'))} · Z ${format(valueFor(frame, 'Z'))} ${Measurements.groups[select.value]?.unit || 'Hz'}`;
-  };
-  canvas.onpointerup = () => { pointer = null; }; canvas.onpointercancel = () => { pointer = null; };
-  canvas.onwheel = event => { event.preventDefault(); zoom = Math.max(.65, Math.min(1.8, zoom * (event.deltaY < 0 ? 1.08 : .92))); draw(); };
-  canvas.onkeydown = event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); rotation += event.key === 'ArrowLeft' ? -.12 : .12; draw(); } else if (event.key === '+' || event.key === '=') { zoom = Math.min(1.8, zoom * 1.1); draw(); } else if (event.key === '-') { zoom = Math.max(.65, zoom / 1.1); draw(); } };
-  new ResizeObserver(draw).observe(chart); window.addEventListener('resize', draw);
-  return { view, canvas, select, draw };
-}
 function setupAcquisitionUI() {
   const recordingForm = $('recording-form');
   $('record-settings').onclick = () => {
@@ -142,37 +76,54 @@ function setupAcquisitionUI() {
   };
   // Leave a small clock-skew margin so a sample written while the view opens is included.
   const rangeEnd = Date.now() + 60000; $('range-from').value = bangkokDateTime(rangeEnd - 24 * 3600000); $('range-to').value = bangkokDateTime(rangeEnd);
+  $('history-date').value = $('range-from').value.slice(0, 10);
   const historyView = $('history-view'), rangePanel = historyView.querySelector('.history-range');
+  const seriesLabel = node('label', 'ชุดข้อมูลที่บันทึก'), seriesSelect = node('select');
+  seriesLabel.id = 'history-series-label'; seriesSelect.id = 'history-series'; seriesLabel.hidden = true; seriesLabel.append(seriesSelect);
+  rangePanel.querySelector('.history-range-controls').insertBefore(seriesLabel, $('load-range'));
   historyView.querySelector('.table-scroll').before(rangePanel);
   historyPlot = createPlotStack($('history-plots'), { prefix: 'history', label: 'ย้อนหลัง' });
   const viewControls = node('div', null, 'history-view-switch'), twoD = node('button', 'กราฟเส้น', 'active'), threeD = node('button', 'พื้นผิว 3D');
   twoD.type = 'button'; threeD.type = 'button'; twoD.id = 'history-view-lines'; threeD.id = 'history-view-surface'; twoD.setAttribute('aria-pressed', 'true'); threeD.setAttribute('aria-pressed', 'false');
   viewControls.append(twoD, threeD); $('history-view').querySelector('.history-range .panel-heading').append(viewControls);
-  const surface = createHistorySurface($('history-plots'), { frames: () => rangeFrames });
+  const surface = createHistorySurface($('history-plots'), { frames: () => rangeFrames, profile: () => rangeProfile, reduced: () => rangeReduced, gapStarts: () => rangeGapStarts });
   const setHistoryView = is3d => { $('history-plots').hidden = is3d; surface.view.hidden = !is3d; rangePanel.dataset.historyView = is3d ? 'surface' : 'lines'; twoD.classList.toggle('active', !is3d); threeD.classList.toggle('active', is3d); twoD.setAttribute('aria-pressed', String(!is3d)); threeD.setAttribute('aria-pressed', String(is3d)); if (is3d) surface.draw(); };
   twoD.onclick = () => setHistoryView(false); threeD.onclick = () => setHistoryView(true);
-  const drawHistory = () => historyPlot.draw(rangeFrames, rangeProfile || profiles.find(profile => profile.motorId === $('history-motor').value) || { sensorModel: MODEL, unit: 'mm/s' }, { reduced: rangeReduced });
-  const clearRange = () => {
-    rangeGeneration++; rangeFrames = []; rangeProfile = null; drawHistory(); surface.draw();
-    rangePanel.dataset.loaded = 'false';
-    $('load-range').disabled = false; $('range-summary').textContent = 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟย้อนหลัง';
+  const drawHistory = () => {
+    historyPlot.draw(rangeFrames, rangeProfile || profiles.find(profile => profile.motorId === $('history-motor').value) || { motorId: $('history-motor').value, sensorModel: MODEL, unit: 'mm/s' }, { reduced: rangeReduced, gapStarts: rangeGapStarts });
+    threeD.disabled = rangeProfile?.sensorModel === 'custom'; threeD.title = threeD.disabled ? 'ข้อมูล Custom มีค่าหนึ่งช่อง ดูได้ในกราฟเส้น' : 'แสดงค่าที่บันทึกตามเวลาและแกน X/Y/Z';
+    if (threeD.disabled) setHistoryView(false);
   };
-  for (const id of ['history-motor', 'range-from', 'range-to']) $(id).onchange = clearRange;
+  const clearRange = ({ keepSeries = false } = {}) => {
+    rangeGeneration++; rangeFrames = []; rangeProfile = null; rangeReduced = false; rangeGapStarts = [];
+    historyPlot.cursorStamp = null; historyPlot.source = null; closeWorkbenchPopovers();
+    if (!keepSeries) { seriesSelect.replaceChildren(); seriesLabel.hidden = true; }
+    drawHistory(); surface.draw();
+    rangePanel.dataset.loaded = 'false';
+    $('load-range').disabled = false; $('range-summary').textContent = $('history-motor').value ? 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟย้อนหลัง' : 'เลือกมอเตอร์เพื่อเปิดกราฟย้อนหลัง · ตารางด้านล่างแสดงได้ทุกมอเตอร์';
+  };
+  invalidateHistoryRange = clearRange;
+  for (const id of ['range-from', 'range-to']) $(id).onchange = clearRange;
+  $('history-motor').onchange = () => { clearRange(); if (currentTab === 'history') { loadHistory(); if ($('history-motor').value) $('load-range').click(); } };
+  seriesSelect.onchange = () => { clearRange({ keepSeries: true }); $('load-range').click(); };
   new ResizeObserver(() => { if ($('history-chart').clientWidth) drawHistory(); }).observe($('history-chart'));
   $('load-range').onclick = async () => {
     const generation = ++rangeGeneration, motorId = $('history-motor').value;
     rangePanel.dataset.loaded = 'loading';
     $('load-range').disabled = true; $('range-summary').textContent = 'กำลังโหลดจากไฟล์…';
     try {
-      const result = check(await api.chartRange({ motorId, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
+      const result = check(await api.chartRange({ motorId, seriesKey: seriesSelect.value || undefined, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
       if (generation !== rangeGeneration) return;
-      rangeFrames = result.rows; rangeReduced = Boolean(result.reduced);
+      rangeFrames = result.rows; rangeReduced = Boolean(result.reduced); rangeGapStarts = result.gapStarts || [];
+      seriesSelect.replaceChildren(); (result.series || []).forEach(series => seriesSelect.add(new Option(`${series.label} · ${series.total.toLocaleString()} ค่า`, series.key)));
+      seriesSelect.value = result.seriesKey || ''; seriesLabel.hidden = (result.series?.length || 0) < 2;
       // The recording determines its channels/units, even if the motor was edited later.
-      rangeProfile = rangeFrames.length ? { sensorModel: rangeFrames.some(frame => frame.channels) ? MODEL : 'custom', unit: rangeFrames[0].unit } : null;
+      const recordedSeries = result.series?.find(series => series.key === result.seriesKey);
+      rangeProfile = rangeFrames.length ? { motorId, sensorModel: recordedSeries?.sensorModel || (rangeFrames[0].channels ? MODEL : 'custom'), unit: recordedSeries?.unit || rangeFrames[0].unit } : null;
       drawHistory(); surface.draw();
       rangePanel.dataset.loaded = 'true';
-      $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${historyPlot.frames.length.toLocaleString()} จุด${result.reduced || historyPlot.frames.length < result.rows.length ? ' (ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
-    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; drawHistory(); surface.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
+      $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${historyPlot.frames.length.toLocaleString()} จุด${result.series?.length > 1 ? ` · ชุดที่เลือกจาก ${result.series.length} รูปแบบข้อมูล` : ''}${result.reduced || historyPlot.frames.length < result.rows.length ? ' (ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
+    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; rangeGapStarts = []; drawHistory(); surface.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
     finally { if (generation === rangeGeneration) $('load-range').disabled = false; }
   };
 }

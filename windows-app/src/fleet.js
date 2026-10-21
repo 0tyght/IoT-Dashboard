@@ -58,7 +58,7 @@ function buildFleet() {
     const problem = node('p', null, 'fleet-problem'); problem.hidden = true; card.append(problem); $('fleet-list').append(card);
     const refs = { card, values, age, lastTime, connection, connectionText, temperature, samples, storage, cadence, problem, plotStack, coverage, frequencyNote, inViewport: false, lastKey: '' };
     refs.redraw = () => {
-      const frames = graphWindow(stateFor(profile.motorId).frames, plotStack.svg.clientWidth); plotStack.draw(frames, profile);
+      const state = stateFor(profile.motorId), frames = graphWindow(state.frames, plotStack.svg.clientWidth); plotStack.draw(frames, profile, { reduced: Boolean(state.reduced), gapStarts: state.gapStarts || [] });
       coverage.textContent = `${frames.length.toLocaleString()} ค่า${plotStack.frames.length < frames.length ? ` (${plotStack.frames.length} จุด)` : ''}${frames.length ? ` · ${time(frames[0].timestamp)}–${time(frames.at(-1).timestamp)}` : ''}`;
     };
     fleetCards.set(profile.motorId, refs); fleetVisibility.observe(card);
@@ -86,7 +86,7 @@ function refreshFleet() {
     refs.frequencyNote.dataset.state = last?.frequencyStatus || 'pending';
     refs.connection.className = `fleet-connection ${status.kind}`; refs.connectionText.textContent = status.text;
     refs.temperature.textContent = `อุณหภูมิ ${digits(last?.channels?.temperature)} °C`; refs.samples.textContent = `${state.samples.toLocaleString()} ค่า`;
-    refs.storage.textContent = storageLabel(last); refs.storage.classList.toggle('storage-fault', last?.recordingState === 'error');
+    refs.storage.textContent = storageLabel(last, state.restored); refs.storage.classList.toggle('storage-fault', last?.recordingState === 'error');
     refs.lastTime.textContent = last ? timestamp(last.timestamp) : 'ยังไม่ได้รับข้อมูล';
     const actual = last?.actualIntervalMs ?? state.actualIntervalMs;
     refs.cadence.textContent = `ตั้งอ่านทุก ${profile.pollInterval / 1000} s · รับจริง ${Number.isFinite(actual) ? `${(actual / 1000).toFixed(3)} s` : 'รอสองรอบ'} · ตอบกลับ ${last?.elapsedMs ?? '—'} ms`;
