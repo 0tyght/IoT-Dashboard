@@ -20,3 +20,5 @@ The user's self-contained WebGL2 preview and reference poster are copied into sr
 - Electron checks cover CRUD, all 12 axis values, numerical temperature, 13 register rows, three synchronized full-width plots, model camera/reset, simulated WebGL failure/retry, fullscreen/Escape and 960/1366/1920 layouts.
 - Rendered captures show the actual V4 model and three equal-height fullscreen plots. Auxiliary 11 px metadata and compact table/dialog wrappers retain the existing dense Windows layout; main labels and actions remain larger. These checks do not certify full accessibility compliance.
 - Physical sensor/USB-driver testing is still required on the destination computer. The preview uses explicitly simulated readings.
+
+0.12.1 makes the plot fixture check atomic within one renderer task. In the first GitHub run, the live simulation/resize redraw could replace an injected extreme-value fixture between separate test IPC calls. The revised check retains the same gap/extreme/bounds assertions without allowing another render between injection and observation.

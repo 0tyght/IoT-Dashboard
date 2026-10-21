@@ -147,19 +147,24 @@ const { _electron: electron } = require('playwright');
     assert.equal(await page.locator('#detail-plots .plot-crosshair[visibility="visible"]').count(), 3);
     const cursorReadings = await page.locator('#detail-plots .plot-readout').allTextContents();
     assert(cursorReadings[1].includes('µm') && cursorReadings[2].includes('m/s²'));
-    // A communication outage must not be drawn as a continuous healthy trace.
-    await page.evaluate(() => {
+    // Read injected fixture results in the same renderer task. A live demo tick or
+    // ResizeObserver may redraw the real chart between separate IPC round trips.
+    const fixturePlot = await page.evaluate(() => {
       const last = chartFrames.at(-1), before = new Date(Date.parse(last.timestamp) - 60000).toISOString();
       detailPlot.draw([{ ...last, timestamp: before, pollIntervalMs: 1000 }, { ...last, pollIntervalMs: 1000 }], currentProfile());
-    });
-    assert.equal(await page.locator('#trend-chart polyline').count(), 6, 'three traces break across missing polls');
-    await page.evaluate(() => {
-      const last = chartFrames.at(-1);
+      const gapTraceCount = document.querySelectorAll('#trend-chart polyline').length;
       detailPlot.draw([{ ...last, channels: { ...last.channels, displacementX: 5000, accelerationX: -12, temperature: -5 } }], currentProfile());
+      return {
+        gapTraceCount,
+        displacement: document.querySelector('#detail-plots [data-kind="displacement"] .plot-readout').textContent,
+        acceleration: document.querySelector('#detail-plots [data-kind="acceleration"] .plot-readout').textContent,
+        pointsInside: [...document.querySelectorAll('#detail-plots svg')].every(svg => [...svg.querySelectorAll('circle')].every(point => Number(point.getAttribute('cy')) > 0 && Number(point.getAttribute('cy')) < svg.viewBox.baseVal.height))
+      };
     });
-    assert((await page.locator('#detail-plots [data-kind="displacement"] .plot-readout').textContent()).includes('5000.0'));
-    assert((await page.locator('#detail-plots [data-kind="acceleration"] .plot-readout').textContent()).includes('-12.0'));
-    assert(await page.locator('#detail-plots svg').evaluateAll(svgs => svgs.every(svg => [...svg.querySelectorAll('circle')].every(point => Number(point.getAttribute('cy')) > 0 && Number(point.getAttribute('cy')) < svg.viewBox.baseVal.height))));
+    assert.equal(fixturePlot.gapTraceCount, 6, 'three traces break across missing polls');
+    assert(fixturePlot.displacement.includes('5000.0'));
+    assert(fixturePlot.acceleration.includes('-12.0'));
+    assert(fixturePlot.pointsInside);
     await page.evaluate(() => drawChart());
     for (const [width, height] of [[960, 680], [1366, 768], [1920, 1080]]) {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size), [width, height]);
