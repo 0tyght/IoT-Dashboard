@@ -57,7 +57,10 @@ function setTab(tab) {
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
   document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
   document.querySelector('main').scrollTop = 0;
-  if (tab === 'history') loadHistory();
+  if (tab === 'history') {
+    loadHistory();
+    if (selected && $('history-motor').value && !['true', 'loading'].includes(document.querySelector('.history-range').dataset.loaded)) $('load-range').click();
+  }
   renderSelected();
 }
 function renderMotorList() {
@@ -83,7 +86,47 @@ function refreshMotorStates() {
     button.querySelector('.item-value').textContent = last ? digits(last.value) : '—';
   });
 }
-function selectMotor(id) { selected = id; frozen = false; controlLabel($('pause-stream'), 'พักกราฟ', 'pause'); renderMotorList(); setTab('monitor'); updateControls(); }
+function selectMotor(id) {
+  const previous = selected; selected = id; frozen = false;
+  if ($('history-motor').value === previous && previous !== id) { $('history-motor').value = id; $('history-motor').dispatchEvent(new Event('change')); }
+  controlLabel($('pause-stream'), 'พักกราฟ', 'pause'); renderMotorList(); setTab('monitor'); updateControls(); void restoreSavedMotorHistory(id);
+}
+async function restoreSavedMotorHistory(motorId) {
+  const state = stateFor(motorId);
+  if (mode !== 'offline' || state.frames.length || !profiles.some(profile => profile.motorId === motorId)) return;
+  const profile = profiles.find(item => item.motorId === motorId);
+  const matchesProfile = frame => {
+    if (frame.port && profile.path && frame.port.toUpperCase() !== profile.path.toUpperCase()) return false;
+    if (Number.isFinite(frame.slaveId) && frame.slaveId !== profile.slaveId) return false;
+    if (frame.sensorModel && frame.sensorModel !== profile.sensorModel) return false;
+    if (frame.unit && frame.unit !== profile.unit) return false;
+    const recordedConfig = frame.decodeConfig;
+    if (recordedConfig) for (const key of ['sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'unit']) {
+      if (recordedConfig[key] !== undefined && recordedConfig[key] !== profile[key]) return false;
+    }
+    if (frame.frequencyByteOrder && profile.frequencyByteOrder && frame.frequencyByteOrder !== profile.frequencyByteOrder) return false;
+    return true;
+  };
+  const token = (state.restoreToken || 0) + 1; state.restoreToken = token; state.restoring = true;
+  if (selected === motorId) renderSelected();
+  const end = Date.now(), loadHours = async hours => check(await api.chartRange({ motorId, from: new Date(end - hours * 3600000).toISOString(), to: new Date(end).toISOString() }));
+  try {
+    let result = await loadHours(24);
+    let rows = result.rows.filter(matchesProfile);
+    if (!rows.length) { result = await loadHours(24 * 30); rows = result.rows.filter(matchesProfile); }
+    if (state.restoreToken !== token || mode !== 'offline' || state.frames.length) return;
+    state.frames = rows;
+    state.samples = rows.length === result.rows.length ? result.total : rows.length;
+    state.restored = rows.length > 0;
+    state.restoredRangeHours = rows.length ? (Date.parse(rows.at(-1).timestamp) < end - 24 * 3600000 ? 24 * 30 : 24) : 0;
+    state.actualIntervalMs = rows.at(-1)?.actualIntervalMs ?? null;
+    renderMotorList(); if (selected === motorId) renderSelected();
+  } catch {
+    // A missing or unreadable history file should never prevent live acquisition.
+  } finally {
+    if (state.restoreToken === token) { state.restoring = false; if (selected === motorId) renderSelected(); }
+  }
+}
 function renderProfiles() {
   const body = $('motors-body'); body.replaceChildren();
   const historySelection = $('history-motor').value;
@@ -111,14 +154,14 @@ function renderSelected() {
   $('metric-type').textContent = threeAxis ? 'VELOCITY' : 'VALUE';
   [...$('chart-legend').children].slice(0, 3).forEach(element => { element.hidden = !threeAxis; });
   $('pause-stream').setAttribute('aria-pressed', String(frozen));
-  $('chart-description').textContent = frozen ? 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ' : `${$('fleet-window').selectedOptions[0].textContent} · เวลาคอมพิวเตอร์รับข้อมูล (UTC+07:00)`;
+  $('chart-description').textContent = frozen ? 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ' : state?.restored && mode === 'offline' ? `ข้อมูลย้อนหลังที่บันทึกล่าสุด · ไม่ใช่ข้อมูลสด · ${$('fleet-window').selectedOptions[0].textContent}` : `${$('fleet-window').selectedOptions[0].textContent} · เวลาคอมพิวเตอร์รับข้อมูล (UTC+07:00)`;
   $('selected-title').textContent = profile ? profile.name || profile.motorId : 'สถานีตรวจวัดมอเตอร์';
   $('selected-area').textContent = profile?.area || 'LOCAL WORKSPACE';
   $('selected-subtitle').textContent = profile ? `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee SN-3001-WZ3A-N01' : 'Custom Modbus sensor'} · ${profile.path} / Slave ${profile.slaveId}` : 'ตั้งค่าเซ็นเซอร์เพื่อเริ่มเก็บข้อมูลในเครื่องนี้';
   $('welcome').hidden = Boolean(last) || mode !== 'offline';
   $('monitor-content').hidden = !last && mode === 'offline';
-  $('empty-state-title').textContent = profiles.length ? 'ยังไม่มีข้อมูลการวัด' : 'ยังไม่มีมอเตอร์';
-  $('empty-state-description').textContent = profiles.length ? 'กดปุ่มเริ่มเพื่อตรวจการเชื่อมต่อและรับข้อมูลตามโหมดที่เลือก' : 'เพิ่มมอเตอร์และกำหนดค่าการเชื่อมต่อเพื่อเริ่มอ่านข้อมูล';
+  $('empty-state-title').textContent = state?.restoring ? 'กำลังค้นหาข้อมูลที่บันทึกไว้' : profiles.length ? 'ยังไม่มีข้อมูลการวัด' : 'ยังไม่มีมอเตอร์';
+  $('empty-state-description').textContent = state?.restoring ? 'กำลังโหลดข้อมูลล่าสุดจากไฟล์ในเครื่อง' : profiles.length ? 'กดปุ่มเริ่มเพื่อตรวจการเชื่อมต่อและรับข้อมูลตามโหมดที่เลือก' : 'เพิ่มมอเตอร์และกำหนดค่าการเชื่อมต่อเพื่อเริ่มอ่านข้อมูล';
   controlLabel($('welcome-setup'), profiles.length ? 'ตั้งค่าการเชื่อมต่อ' : 'เพิ่มมอเตอร์', profiles.length ? 'settings' : 'plus');
   if (profile) {
     $('connection-name').textContent = mode === 'demo' ? 'DEMO' : profile.path;
@@ -155,7 +198,7 @@ function renderSelected() {
 }
 function refreshSelectionState() {
   const profile = currentProfile(), state = profile ? stateFor(profile.motorId) : null;
-  const label = mode === 'demo' ? 'ข้อมูลจำลอง' : profile?.enabled === false ? 'พักการอ่านมอเตอร์นี้' : mode === 'offline' ? 'หยุดการอ่าน' : state?.status === 'online' ? '● รับข้อมูลแล้ว' : state?.status === 'stale' ? 'ข้อมูลเก่า · กำลังลองใหม่' : state?.status === 'fault' ? 'อ่านไม่สำเร็จ · กำลังลองใหม่' : 'กำลังรอข้อมูล';
+  const label = mode === 'demo' ? 'ข้อมูลจำลอง' : profile?.enabled === false ? 'พักการอ่านมอเตอร์นี้' : mode === 'offline' && state?.restored ? 'ข้อมูลย้อนหลัง · หยุดอ่าน' : mode === 'offline' ? 'หยุดการอ่าน' : state?.status === 'online' ? '● รับข้อมูลแล้ว' : state?.status === 'stale' ? 'ข้อมูลเก่า · กำลังลองใหม่' : state?.status === 'fault' ? 'อ่านไม่สำเร็จ · กำลังลองใหม่' : 'กำลังรอข้อมูล';
   $('selection-state').textContent = label;
   $('selection-state').className = `selection-state ${mode === 'live' ? state?.status === 'online' ? 'online' : state?.status === 'fault' || state?.status === 'stale' ? 'fault' : '' : ''}`;
   $('selection-state').title = state?.message || '';
@@ -205,7 +248,9 @@ function svgNode(tag, attributes = {}, text) { const element = document.createEl
 function drawChart() {
   if (!detailPlot) return;
   detailPlot.draw(chartFrames, currentProfile());
-  $('chart-live').textContent = frozen ? 'PAUSED' : mode === 'demo' ? 'DEMO' : mode === 'live' ? 'LIVE' : 'STOPPED';
+  const restored = stateFor(selected).restored && mode === 'offline';
+  $('chart-live').textContent = frozen ? 'PAUSED' : restored ? 'SAVED' : mode === 'demo' ? 'DEMO' : mode === 'live' ? 'LIVE' : 'STOPPED';
+  $('chart-live').dataset.state = frozen ? 'paused' : restored ? 'saved' : mode;
 }
 function addReading(reading) {
   if (!Number.isFinite(reading.value)) return;
@@ -219,6 +264,7 @@ function addReading(reading) {
   if (state.frames.length > limit) { state.frames.splice(0, state.frames.length - limit); state.dropped = true; }
   $('graph-buffer-note').textContent = `หน่วยความจำ ${limit.toLocaleString()} ค่าต่อมอเตอร์ · ช่วงเก่ากว่าโหลดจากประวัติ${state.dropped ? ' · ตัดค่าเก่าจากหน้าจอแล้ว' : ''}`;
   state.samples++; successful++;
+  state.restored = false;
   if (state.status === 'fault' || state.status === 'stale') addLog('info', reading.motorId, 'กลับมารับข้อมูลได้แล้ว');
   state.status = 'online'; state.message = '';
   if (reading.motorId === selected && currentTab !== 'fleet') renderSelected();
@@ -277,7 +323,7 @@ async function saveMotor(event) {
     const identityKeys = ['motorId', 'path', 'slaveId', 'sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'frequencyByteOrder', 'scale', 'unit'];
     if (previous && identityKeys.some(key => previous[key] !== raw[key])) { cache.delete(previous.motorId); cache.delete(raw.motorId); }
     profiles = result.profiles; selected = raw.motorId;
-    $('connection-dialog').close(); renderProfiles(); if (!$('history-motor').value) $('history-motor').value = selected; renderSelected(); addLog('info', raw.motorId, 'บันทึกการตั้งค่ามอเตอร์'); toast('บันทึกแล้ว กดเริ่มอ่านเพื่อทดสอบและเก็บข้อมูล');
+    $('connection-dialog').close(); renderProfiles(); if (!$('history-motor').value) $('history-motor').value = selected; renderSelected(); void restoreSavedMotorHistory(selected); addLog('info', raw.motorId, 'บันทึกการตั้งค่ามอเตอร์'); toast('บันทึกแล้ว กดเริ่มอ่านเพื่อทดสอบและเก็บข้อมูล');
   } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; }
   finally { setDialogBusy(false); }
 }
@@ -311,7 +357,7 @@ function deleteMotor(profile) {
     profiles = check(await api.saveProfiles(profiles.filter(item => item.motorId !== profile.motorId))).profiles;
     cache.delete(profile.motorId);
     if (selected === profile.motorId) selected = profiles[0]?.motorId || '';
-    renderProfiles(); renderSelected(); addLog('info', profile.motorId, 'ลบจากรายชื่อมอเตอร์แล้ว');
+    renderProfiles(); if (selected && $('history-motor').value === profile.motorId) $('history-motor').value = selected; renderSelected(); if (selected) void restoreSavedMotorHistory(selected); addLog('info', profile.motorId, 'ลบจากรายชื่อมอเตอร์แล้ว');
   });
 }
 function isTemporaryMotor(id) { return mode === 'demo' && !beforeDemo?.some(profile => profile.motorId === id); }
@@ -338,7 +384,7 @@ async function startLive() {
     if (!result.configs.some(profile => profile.motorId === selected)) selected = result.configs[0].motorId;
     if (result.recording) renderRecording(result.recording);
     if (result.recording?.scheduleMissed) message('เวลาบันทึกผ่านไประหว่างตรวจเซ็นเซอร์ · กำลังอ่านโดยไม่บันทึก เลือก เพิ่มเติม → เริ่มบันทึกทันที');
-    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', `เริ่มอ่าน ${result.configs.length} มอเตอร์ · ${recordingState.active ? 'บันทึกอัตโนมัติ' : recordingState.waiting ? 'รอเวลาบันทึก' : 'ดูอย่างเดียว'}`);
+    result.readings.forEach(addReading); renderProfiles(); renderSelected(); setTab('monitor'); addLog('info', '', `เริ่มอ่าน ${result.configs.length} มอเตอร์ · ${recordingState.active ? 'บันทึกอัตโนมัติ' : recordingState.waiting ? 'รอเวลาบันทึก' : 'ดูอย่างเดียว'}`);
   } catch (error) { message(`${error.message} · ยังไม่ได้เริ่มเก็บข้อมูล ตรวจการตั้งค่าแต่ละมอเตอร์แล้วลองใหม่`); addLog('error', '', error.message); }
   finally { setBusy(false); }
 }
@@ -373,7 +419,7 @@ function startDemo() {
     }
   });
   demoTimer = setInterval(() => { phase += .18; profiles.forEach((profile, index) => addReading(demoFrame(profile, index, 40 * .18 + phase))); }, 1000);
-  renderProfiles(); renderSelected(); setTab('fleet'); addLog('info', '', 'เปิดโหมดจำลอง ข้อมูลไม่ถูกเขียนลงไฟล์ประวัติ');
+  renderProfiles(); renderSelected(); setTab('monitor'); addLog('info', '', 'เปิดโหมดจำลอง ข้อมูลไม่ถูกเขียนลงไฟล์ประวัติ');
 }
 async function stopAndRestore() {
   const wasDemo = mode === 'demo'; await stop();
@@ -433,7 +479,7 @@ $('load-history').onclick = loadHistory;
 $('export-csv').onclick = () => action(async () => { $('export-csv').disabled = true; try { const result = check(await api.exportData(historyFilter())); if (!result.canceled) toast(`ส่งออก ${result.total} รายการแล้ว`); } finally { $('export-csv').disabled = false; } });
 $('open-data').onclick = () => action(async () => check(await api.openDataPath()));
 $('export-profiles').onclick = () => action(async () => { const result = check(await api.exportProfiles()); if (!result.canceled) toast('สำรองรายชื่อแล้ว'); });
-$('import-profiles').onclick = () => action(async () => { const result = check(await api.importProfiles()); if (!result.canceled) { profiles = result.profiles; selected = profiles[0]?.motorId || ''; cache.clear(); renderProfiles(); renderSelected(); toast('นำเข้ารายชื่อแล้ว'); } });
+$('import-profiles').onclick = () => action(async () => { const result = check(await api.importProfiles()); if (!result.canceled) { profiles = result.profiles; selected = profiles[0]?.motorId || ''; cache.clear(); renderProfiles(); renderSelected(); if (selected) void restoreSavedMotorHistory(selected); toast('นำเข้ารายชื่อแล้ว'); } });
 $('clear-events').onclick = () => { logs = []; $('event-count').textContent = '0'; renderLogs(); };
 $('help-button').onclick = () => $('help-dialog').showModal(); $('close-help').onclick = () => $('help-dialog').close();
 $('connection-dialog').addEventListener('cancel', event => { event.preventDefault(); closeEditor(); });
@@ -476,5 +522,5 @@ controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
     $('app-version').textContent = `v${initial.version}`; $('data-path').textContent = `ข้อมูลในเครื่อง: ${initial.dataPath}`;
     addLog('info', '', 'เปิดโปรแกรมพร้อมใช้งาน');
   } catch (error) { dataError = true; message(error.message); }
-  renderProfiles(); if (selected) $('history-motor').value = selected; renderSelected(); setTab('monitor');
+  renderProfiles(); if (selected) $('history-motor').value = selected; renderSelected(); setTab('monitor'); if (selected) void restoreSavedMotorHistory(selected);
 })();

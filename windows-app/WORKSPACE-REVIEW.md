@@ -1,4 +1,4 @@
-# Monitoring workspace — 0.15.0
+# Monitoring workspace — 0.15.1
 
 The user's priority is a single visible monitoring screen with stronger hierarchy and responsive behavior. The model is explicitly excluded from that screen and moved to its own lazily loaded 3D tab. No reference asset or original model project is deleted.
 

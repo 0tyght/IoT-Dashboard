@@ -136,7 +136,12 @@ function setupAcquisitionUI() {
   $('graph-count').onchange = updateGraphWindow;
   $('history-end-date').value = today();
   $('history-date').onchange = () => { if ($('history-end-date').value < $('history-date').value) $('history-end-date').value = $('history-date').value; };
-  $('range-from').value = `${today()}T00:00:00`; $('range-to').value = `${today()}T23:59:59`;
+  const bangkokDateTime = stamp => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(stamp)).map(part => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+  };
+  // Leave a small clock-skew margin so a sample written while the view opens is included.
+  const rangeEnd = Date.now() + 60000; $('range-from').value = bangkokDateTime(rangeEnd - 24 * 3600000); $('range-to').value = bangkokDateTime(rangeEnd);
   const historyView = $('history-view'), rangePanel = historyView.querySelector('.history-range');
   historyView.querySelector('.table-scroll').before(rangePanel);
   historyPlot = createPlotStack($('history-plots'), { prefix: 'history', label: 'ย้อนหลัง' });
@@ -149,12 +154,14 @@ function setupAcquisitionUI() {
   const drawHistory = () => historyPlot.draw(rangeFrames, rangeProfile || profiles.find(profile => profile.motorId === $('history-motor').value) || { sensorModel: MODEL, unit: 'mm/s' }, { reduced: rangeReduced });
   const clearRange = () => {
     rangeGeneration++; rangeFrames = []; rangeProfile = null; drawHistory(); surface.draw();
+    rangePanel.dataset.loaded = 'false';
     $('load-range').disabled = false; $('range-summary').textContent = 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟย้อนหลัง';
   };
   for (const id of ['history-motor', 'range-from', 'range-to']) $(id).onchange = clearRange;
   new ResizeObserver(() => { if ($('history-chart').clientWidth) drawHistory(); }).observe($('history-chart'));
   $('load-range').onclick = async () => {
     const generation = ++rangeGeneration, motorId = $('history-motor').value;
+    rangePanel.dataset.loaded = 'loading';
     $('load-range').disabled = true; $('range-summary').textContent = 'กำลังโหลดจากไฟล์…';
     try {
       const result = check(await api.chartRange({ motorId, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
@@ -163,8 +170,9 @@ function setupAcquisitionUI() {
       // The recording determines its channels/units, even if the motor was edited later.
       rangeProfile = rangeFrames.length ? { sensorModel: rangeFrames.some(frame => frame.channels) ? MODEL : 'custom', unit: rangeFrames[0].unit } : null;
       drawHistory(); surface.draw();
+      rangePanel.dataset.loaded = 'true';
       $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${historyPlot.frames.length.toLocaleString()} จุด${result.reduced || historyPlot.frames.length < result.rows.length ? ' (ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
-    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; drawHistory(); surface.draw(); $('range-summary').textContent = error.message; } }
+    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; drawHistory(); surface.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
     finally { if (generation === rangeGeneration) $('load-range').disabled = false; }
   };
 }
