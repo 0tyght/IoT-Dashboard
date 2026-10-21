@@ -429,3 +429,32 @@ legend { color: #796b8b; font-size: 12px; }
   .plot-axis-value small { grid-column: 2; }
   .plot-inspector-body { width: min(440px, calc(100cqw - 56px)); }
 }
+
+/* Historical surface view: a secondary, truthful 3D view of recorded scalar measurements. */
+.history-range .panel-heading { align-items: center; gap: 12px; flex-wrap: wrap; }
+.history-range[data-history-view="surface"] > .chart-legend { display: none; }
+.history-view-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+.history-view-switch button { min-height: 30px; padding: 4px 11px; border: 0; background: transparent; color: var(--muted); font-size: 12px; }
+.history-view-switch button.active { background: var(--blue); color: #fff; box-shadow: 0 2px 5px #6252e933; }
+.history-surface-view { margin: 0 18px 14px; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: linear-gradient(180deg, #fff, #fafbff); }
+.history-surface-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 12px 14px 8px; border-bottom: 1px solid var(--line); }
+.history-surface-toolbar label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+.history-surface-toolbar select { min-width: 210px; width: auto; min-height: 34px; color: var(--ink); font-size: 12px; }
+.surface-axis-legend { display: flex; gap: 14px; color: var(--muted); font-size: 11px; }
+.surface-axis-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.surface-axis-legend span::before { width: 8px; height: 8px; border-radius: 50%; background: var(--axis-color); content: ''; }
+.history-surface-chart { position: relative; min-width: 0; height: clamp(230px, 32vh, 420px); background-image: radial-gradient(ellipse at 52% 66%, #edf1ff88 0, transparent 63%); }
+#history-surface-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; outline: none; }
+#history-surface-canvas:active { cursor: grabbing; }
+#history-surface-canvas:focus-visible { outline: 2px solid var(--blue); outline-offset: -3px; }
+.surface-readout, .surface-caption { margin: 0; padding: 8px 14px; color: var(--muted); font-size: 11px; line-height: 1.6; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.surface-readout { min-height: 34px; border-top: 1px solid var(--line); color: var(--ink); }
+.surface-caption { border-top: 1px solid var(--line); }
+@media (max-width: 640px) {
+  .history-view-switch { width: 100%; }
+  .history-view-switch button { flex: 1; }
+  .history-surface-view { margin-right: 10px; margin-left: 10px; }
+  .history-surface-toolbar { align-items: stretch; }
+  .history-surface-toolbar label, .history-surface-toolbar select { width: 100%; min-width: 0; }
+  .history-surface-chart { height: 300px; }
+}

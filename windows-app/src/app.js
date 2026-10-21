@@ -7,7 +7,7 @@ let profiles = [], ports = [], selected = '', editing = null, mode = 'offline', 
 let demoTimer, chartFrames = [], historyGeneration = 0;
 let successful = 0, failures = 0, logs = [], dataError = false;
 let editorBaseline = '';
-let currentTab = 'fleet';
+let currentTab = 'monitor';
 let detailPlot;
 const cache = new Map();
 const digits = (value, precision = 1) => Number.isFinite(value) ? value.toFixed(precision) : '—';
@@ -277,7 +277,7 @@ async function saveMotor(event) {
     const identityKeys = ['motorId', 'path', 'slaveId', 'sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'frequencyByteOrder', 'scale', 'unit'];
     if (previous && identityKeys.some(key => previous[key] !== raw[key])) { cache.delete(previous.motorId); cache.delete(raw.motorId); }
     profiles = result.profiles; selected = raw.motorId;
-    $('connection-dialog').close(); renderProfiles(); renderSelected(); addLog('info', raw.motorId, 'บันทึกการตั้งค่ามอเตอร์'); toast('บันทึกแล้ว กดเริ่มอ่านเพื่อทดสอบและเก็บข้อมูล');
+    $('connection-dialog').close(); renderProfiles(); if (!$('history-motor').value) $('history-motor').value = selected; renderSelected(); addLog('info', raw.motorId, 'บันทึกการตั้งค่ามอเตอร์'); toast('บันทึกแล้ว กดเริ่มอ่านเพื่อทดสอบและเก็บข้อมูล');
   } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; }
   finally { setDialogBusy(false); }
 }
@@ -476,5 +476,5 @@ controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
     $('app-version').textContent = `v${initial.version}`; $('data-path').textContent = `ข้อมูลในเครื่อง: ${initial.dataPath}`;
     addLog('info', '', 'เปิดโปรแกรมพร้อมใช้งาน');
   } catch (error) { dataError = true; message(error.message); }
-  renderProfiles(); renderSelected();
+  renderProfiles(); if (selected) $('history-motor').value = selected; renderSelected(); setTab('monitor');
 })();
