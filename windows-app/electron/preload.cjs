@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   disconnect: () => ipcRenderer.invoke('sensor:disconnect'),
   history: filter => ipcRenderer.invoke('data:history', filter),
   chartRange: filter => ipcRenderer.invoke('data:chart-range', filter),
+  scatterRange: filter => ipcRenderer.invoke('data:scatter-range', filter),
   configureRecording: config => ipcRenderer.invoke('recording:configure', config),
   startRecording: () => ipcRenderer.invoke('recording:start'),
   stopRecording: () => ipcRenderer.invoke('recording:stop'),

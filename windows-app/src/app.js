@@ -60,8 +60,8 @@ function setTab(tab) {
   document.querySelector('main').scrollTop = 0;
   if (tab === 'history') {
     loadHistory();
-    if ($('history-motor').value && !['true', 'loading'].includes(document.querySelector('.history-range').dataset.loaded)) $('load-range').click();
   }
+  if (tab === 'analysis' && analysisSource === 'history') void openHistoryAnalysis();
   renderSelected();
 }
 function renderMotorList() {
@@ -117,7 +117,8 @@ async function restoreSavedMotorHistory(motorId) {
 function setHistoryMotor(id) {
   const select = $('history-motor'), previous = select.value;
   select.value = [...select.options].some(option => option.value === id) ? id : '';
-  if (previous !== select.value) { resetHistoryRun(); invalidateHistoryRange(); }
+  if (previous !== select.value) { historyGeneration++;resetHistoryRun(); invalidateHistoryRange();emptyRow($('history-body'),20,'มอเตอร์เปลี่ยนแล้ว · โหลดข้อมูลตามตัวกรอง'); }
+  syncAnalysisHistoryControls();
 }
 function renderHistoryMotors() {
   const select = $('history-motor'), previous = select.value, configured = new Set(profiles.map(profile => profile.motorId));
@@ -126,6 +127,7 @@ function renderHistoryMotors() {
   [...historyMotorIds].filter(id => !configured.has(id)).sort().forEach(id => select.add(new Option(`${id} · ประวัติ`, id)));
   select.value = [...select.options].some(option => option.value === previous) ? previous : '';
   if (previous !== select.value) { resetHistoryRun(); invalidateHistoryRange(); }
+  syncAnalysisHistoryControls();
 }
 function renderProfiles() {
   const body = $('motors-body'); body.replaceChildren();
@@ -433,13 +435,14 @@ async function stopAndRestore() {
 function historyFilter() { return { date: $('history-date').value, endDate: $('history-end-date').value || $('history-date').value, motorId: $('history-motor').value, runId: $('history-run')?.value || '' }; }
 async function loadHistory() {
   const generation = ++historyGeneration; $('load-history').disabled = true;
+  emptyRow($('history-body'),20,'กำลังโหลดข้อมูลตามตัวกรอง…');
   try {
     const result = check(await api.history(historyFilter())); if (generation !== historyGeneration) return;
     (result.motorIds || []).forEach(id => historyMotorIds.add(id)); renderHistoryMotors();
     if (renderHistoryRuns(result.runs || [])) {
       restoreHistoryRange(); invalidateHistoryRange();
       await loadHistory();
-      if (currentTab === 'history' && $('history-motor').value) $('load-range').click();
+      if (analysisHistoryActive() && $('history-motor').value) $('load-range').click();
       return;
     }
     const body = $('history-body'); body.replaceChildren();
@@ -449,7 +452,7 @@ async function loadHistory() {
       row.append(node('td', timestamp(frame.timestamp), 'mono'), historyIdentityCell(frame.runId, frame.runStartedAt, 'รอบอ่าน'), historyIdentityCell(frame.recordingId, frame.recordingStartedAt, 'รอบบันทึก'), node('td', frame.motorId), ...[...Measurements.keys.slice(0, 9), 'temperature', ...Measurements.keys.slice(9)].map(key => node('td', digits(frame.channels?.[key], key.startsWith('frequency') ? 2 : 1), 'mono')), node('td', frame.frequencyStatus === 'ok' ? 'Hz พร้อมใช้' : frame.frequencyStatus === 'unconfirmed' ? 'รอยืนยัน Float' : frame.frequencyStatus ? 'Hz ไม่พร้อม' : 'ไม่มี Hz ในข้อมูลรุ่นเดิม'), node('td', `${digits(frame.value, 2)} ${frame.unit}`, 'mono'), node('td', `${frame.port} / ${frame.slaveId}`)); body.append(row);
     }
     if (!result.rows.length) emptyRow(body, 20, 'ไม่มีข้อมูลที่บันทึกในวันที่และมอเตอร์ที่เลือก');
-  } catch (error) { if (generation === historyGeneration) { $('history-summary').textContent = error.message; toast(error.message); } }
+  } catch (error) { if (generation === historyGeneration) { emptyRow($('history-body'),20,'โหลดข้อมูลไม่สำเร็จ · ตรวจตัวกรองแล้วลองใหม่');$('history-summary').textContent = error.message; toast(error.message); } }
   finally { if (generation === historyGeneration) $('load-history').disabled = false; }
 }
 
@@ -523,6 +526,7 @@ setupAssetView();
 setupWorkbench();
 setupAcquisitionUI();
 setupSpectralUI();
+setupAnalysisWorkspace();
 detailPlot = createPlotStack($('detail-plots'), { prefix: 'trend', label: 'มอเตอร์ที่เลือก' });
 new ResizeObserver(() => { if ($('trend-chart').clientWidth) drawChart(); }).observe($('trend-chart'));
 controlLabel($('pause-stream'), 'พักกราฟ', 'pause');

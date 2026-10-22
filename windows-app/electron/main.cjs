@@ -66,6 +66,7 @@ app.whenReady().then(() => {
   handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; return { ok: true, recording: recording.snapshot() }; }));
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
   handle('data:chart-range', async filter => ({ ok: true, ...await store.chartRange(filter) }));
+  handle('data:scatter-range', async filter => ({ ok: true, ...await store.scatterRange(filter) }));
   handle('data:open-folder', async () => {
     await fs.promises.mkdir(store.dataPath(), { recursive: true });
     const error = await shell.openPath(store.dataPath());

@@ -24,6 +24,7 @@ const { _electron: electron } = require('playwright');
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
     await page.waitForFunction(()=>innerWidth===1366&&innerHeight===768);
     await page.locator('[data-tab="analysis"]').click();
+    await page.locator('#analysis-source-waveform').click();
     assert(await page.locator('#spectral-empty').isVisible());
     assert((await page.locator('.spectral-capability').textContent()).includes('ยังทำ FFT สด') || (await page.locator('.spectral-capability').textContent()).includes('ยังไม่พบช่องส่งคลื่น'));
     const importFile=async file=>{

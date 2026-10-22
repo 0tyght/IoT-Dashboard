@@ -51,13 +51,16 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
       ipcMain.handle('data:open-run-folder', (_event, runId) => { globalThis.sessionUIOpenedRun = runId; return { ok: true }; });
     });
     await page.locator('[data-tab="history"]').click();
+    assert.equal(await page.locator('#history-view .history-range').count(), 0, 'record history no longer embeds a duplicate graph workspace');
+    await page.locator('#history-open-analysis').click();
+    assert(await page.locator('#analysis-history').isVisible());
     const waitForRange = async (motorId, count) => {
-      await page.waitForFunction(({ motorId, count }) => document.querySelector('.history-range').dataset.loaded === 'true' && document.querySelector('#range-summary').textContent.includes(motorId) && document.querySelector('#range-summary').textContent.includes(`${count} ค่าจริง`), { motorId, count });
+      await page.waitForFunction(({ motorId, count }) => document.querySelector('.history-range').dataset.loaded === 'true' && document.querySelector('#range-summary').textContent.includes(motorId) && document.querySelector('#range-summary').textContent.includes(`${count} รายการ`), { motorId, count });
       await page.waitForFunction(() => !document.querySelector('#load-history').disabled);
     };
     await waitForRange(profile.motorId, 2);
     const originalRange = await page.evaluate(() => [document.querySelector('#range-from').value, document.querySelector('#range-to').value]);
-    const runSelect = page.locator('#history-run');
+    const runSelect = page.locator('#analysis-history-run');
     await page.waitForFunction(() => document.querySelector('#history-run').options.length === 4);
     const options = await runSelect.locator('option').evaluateAll(elements => elements.map(element => ({ value: element.value, text: element.textContent })));
     assert.equal(await runSelect.inputValue(), '', 'history begins with all runs available');
@@ -74,6 +77,7 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
 
     await runSelect.selectOption(firstRun);
     await waitForRange(profile.motorId, 3);
+    assert.equal(await page.locator('#history-run').inputValue(), firstRun, 'analysis and record-table run filters stay synchronized');
     assert.equal(await page.locator('#history-run option').count(), 4, 'selecting a run keeps the complete date/motor catalog');
     assert.equal(await page.locator('#history-body tr').count(), 3, 'run selection reloads the table automatically');
     assert(await page.locator('#open-run-folder').isEnabled());
@@ -84,11 +88,14 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     assert(identityCells[2].text.includes(resumedRecording.slice(0, 8)) && identityCells[2].title.includes(resumedRecording), 'resumed recording segments remain distinguishable within a run');
     assert.equal(identityCells[3].text, profile.motorId);
     assert.equal((await page.locator('#history-plots .plot-axis-value strong').first().textContent()).trim(), '13.0', 'run filter updates the graph values');
-    await page.locator('#open-run-folder').click();
+    await page.locator('#analysis-history-open-folder').click();
     assert.equal(await app.evaluate(() => globalThis.sessionUIOpenedRun), firstRun, 'folder action receives exactly the selected UUID');
 
     const exportPath = path.join(temporary, 'selected-run.csv');
     await app.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }); }, exportPath);
+    await page.locator('[data-tab="history"]').click();
+    await page.waitForFunction(() => !document.querySelector('#load-history').disabled);
+    assert.equal(await page.locator('#history-run').inputValue(), firstRun, 'opening the table retains the analysis run used for export');
     await page.locator('#export-csv').click();
     await page.waitForFunction(() => !document.querySelector('#export-csv').disabled);
     const csv = fs.readFileSync(exportPath, 'utf8').replace(/^\uFEFF/, '').trim().split(/\r?\n/);
@@ -98,6 +105,8 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     assert.equal(exported.length, 3, 'export applies the selected run filter');
     assert(exported.every(row => row[runColumn] === firstRun && row[motorColumn] === profile.motorId), 'export cannot leak another run or motor');
     await page.screenshot({ path: path.join(artifacts, 'history-run-filter.png'), animations: 'disabled' });
+    await page.locator('#history-open-analysis').click();
+    await waitForRange(profile.motorId, 3);
 
     await runSelect.selectOption('');
     await waitForRange(profile.motorId, 2);
@@ -114,7 +123,7 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
 
     await runSelect.selectOption(firstRun);
     await waitForRange(profile.motorId, 3);
-    await page.locator('#history-motor').selectOption('MTR-02');
+    await page.locator('#analysis-history-motor').selectOption('MTR-02');
     await waitForRange('MTR-02', 2);
     assert.equal(await runSelect.inputValue(), '', 'changing motor clears the previous motor run filter');
     const otherOptions = await runSelect.locator('option').evaluateAll(elements => elements.map(element => element.value));
@@ -154,7 +163,7 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
       if (width === 960) await page.screenshot({ path: path.join(artifacts, 'monitor-run-status.png'), animations: 'disabled' });
     }
     assert.deepEqual(errors, [], 'run selection, export and recording-state updates produce no renderer errors');
-    console.log('PASS: saved newest run, run filters/catalog, recording columns, per-run folder and filtered CSV export');
+    console.log('PASS: saved newest run, shared analysis/table filters, recording columns, per-run folder and filtered CSV export');
   } catch (error) {
     if (page) await page.screenshot({ path: path.join(artifacts, 'session-ui-failure.png'), animations: 'disabled' }).catch(() => {});
     throw error;

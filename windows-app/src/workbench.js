@@ -1,6 +1,23 @@
 'use strict';
-let workbenchTab = '', workbenchNarrow = false;
+let workbenchTab = '', workbenchNarrow = false, desktopSidebarCollapsed = false;
 const floatingAnchors = new WeakMap();
+function syncSidebarDrawer(focusInside = false) {
+  const shell = document.querySelector('.shell'), sidebar = $('motor-sidebar');
+  const open = innerWidth < 1180 && !shell.classList.contains('sidebar-collapsed');
+  shell.classList.toggle('sidebar-drawer-open', open);
+  $('toggle-sidebar').setAttribute('aria-expanded', String(!shell.classList.contains('sidebar-collapsed')));
+  const backdrop = $('sidebar-backdrop'); if (backdrop) backdrop.hidden = !open;
+  for (const element of document.querySelectorAll('main, .commandbar, .recording-strip, .statusbar, .appbar-end')) element.inert = open;
+  if (open) { sidebar.setAttribute('role', 'dialog'); sidebar.setAttribute('aria-modal', 'true'); sidebar.setAttribute('aria-labelledby', 'motor-registry-title'); }
+  else { sidebar.removeAttribute('role'); sidebar.removeAttribute('aria-modal'); sidebar.removeAttribute('aria-labelledby'); }
+  if (open && focusInside) $('motor-search').focus();
+  if (!open && shell.classList.contains('sidebar-collapsed') && sidebar.contains(document.activeElement)) $('toggle-sidebar').focus();
+}
+function closeSidebarDrawer(restoreFocus = false) {
+  if (innerWidth >= 1180) return;
+  document.querySelector('.shell').classList.add('sidebar-collapsed'); syncSidebarDrawer();
+  if (restoreFocus) $('toggle-sidebar').focus();
+}
 function positionFloatingPanel(panel, anchor) {
   const bounds = anchor.getBoundingClientRect(), width = Math.min(440, innerWidth - 32), height = Math.min(440, innerHeight - 40);
   panel.style.width = `${width}px`; panel.style.maxHeight = `${height}px`;
@@ -24,13 +41,14 @@ function closeWorkbenchPopovers(restoreFocus = false) {
   return open.length > 0;
 }
 function updateWorkbenchLayout() {
-  const shell = document.querySelector('.shell'), monitor = currentTab === 'monitor', narrow = monitor && innerWidth < 1180;
+  const shell = document.querySelector('.shell'), monitor = currentTab === 'monitor', narrow = innerWidth < 1180;
   if (workbenchTab !== currentTab) closeWorkbenchPopovers();
   shell.classList.toggle('monitor-workspace', monitor);
-  if (narrow && (workbenchTab !== 'monitor' || !workbenchNarrow)) shell.classList.add('sidebar-collapsed');
-  else if (!narrow && workbenchNarrow) shell.classList.remove('sidebar-collapsed');
+  if (narrow && !workbenchNarrow) { desktopSidebarCollapsed = shell.classList.contains('sidebar-collapsed'); shell.classList.add('sidebar-collapsed'); }
+  else if (!narrow && workbenchNarrow) shell.classList.toggle('sidebar-collapsed', desktopSidebarCollapsed);
+  if (narrow && workbenchTab !== currentTab) shell.classList.add('sidebar-collapsed');
   workbenchTab = currentTab; workbenchNarrow = narrow;
-  $('toggle-sidebar').setAttribute('aria-expanded', String(!shell.classList.contains('sidebar-collapsed')));
+  syncSidebarDrawer();
   document.querySelectorAll('#graph-shortcuts button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.window === $('fleet-window').value)));
   $('toggle-context').hidden = !monitor;
 }
@@ -48,6 +66,12 @@ function updateWorkbenchValues(reading, threeAxis) {
   for (const id of ['connection-name', 'connection-detail', 'last-response', 'record-state', 'selected-title', 'selected-subtitle']) $(id).title = $(id).textContent;
 }
 function setupWorkbench() {
+  $('motor-sidebar').querySelector('h2').id = 'motor-registry-title';
+  const closeSidebar = node('button', null, 'icon-button sidebar-close'); closeSidebar.id = 'close-sidebar'; closeSidebar.type = 'button'; closeSidebar.setAttribute('aria-label', 'ปิดทะเบียนมอเตอร์'); closeSidebar.append(controlIcon('close'));
+  $('motor-sidebar').querySelector('.side-heading').append(closeSidebar);
+  const backdrop = node('button', null, 'sidebar-backdrop'); backdrop.id = 'sidebar-backdrop'; backdrop.type = 'button'; backdrop.hidden = true; backdrop.tabIndex = -1; backdrop.setAttribute('aria-label', 'ปิดทะเบียนมอเตอร์');
+  document.querySelector('.workspace').insertBefore(backdrop, document.querySelector('main'));
+  backdrop.onclick = () => closeSidebarDrawer(true); closeSidebar.onclick = () => closeSidebarDrawer(true);
   const shortcuts = node('div', null, 'graph-shortcuts'); shortcuts.id = 'graph-shortcuts'; shortcuts.setAttribute('aria-label', 'ช่วงเวลาที่ใช้บ่อย');
   for (const [value, label] of [['60s', '1 นาที'], ['300s', '5 นาที'], ['1800s', '30 นาที']]) {
     const button = node('button', label); button.dataset.window = value; button.setAttribute('aria-pressed', 'false');
@@ -74,12 +98,20 @@ function setupWorkbench() {
     }
   });
   document.addEventListener('keydown', event => {
+    if (document.querySelector('.shell').classList.contains('sidebar-drawer-open')) {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeSidebarDrawer(true); return; }
+      if (event.key === 'Tab') {
+        const items = [...$('motor-sidebar').querySelectorAll('button, input, select, summary, [tabindex="0"]')].filter(element => !element.disabled && element.getClientRects().length);
+        const first = items[0], last = items.at(-1), active = document.activeElement;
+        if (items.length && (!items.includes(active) || event.shiftKey && active === first || !event.shiftKey && active === last)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+      }
+    }
     if (event.key === 'Escape' && closeWorkbenchPopovers(true)) { event.preventDefault(); event.stopPropagation(); }
   }, true);
   document.addEventListener('fullscreenchange', () => closeWorkbenchPopovers());
-  $('toggle-sidebar').addEventListener('click', () => closeWorkbenchPopovers());
+  $('toggle-sidebar').addEventListener('click', () => { closeWorkbenchPopovers(); syncSidebarDrawer(true); });
   document.querySelector('.motor-list').addEventListener('click', () => {
-    if (currentTab === 'monitor' && innerWidth < 1180) { document.querySelector('.shell').classList.add('sidebar-collapsed'); $('toggle-sidebar').setAttribute('aria-expanded', 'false'); }
+    if (innerWidth < 1180) { closeSidebarDrawer(); document.querySelector(`[data-tab="${currentTab}"]`)?.focus(); }
   });
   updateWorkbenchLayout();
 }

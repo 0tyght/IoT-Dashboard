@@ -51,6 +51,49 @@ function historySeries(record) {
   return { key, sensorModel, unit, port, slaveId, runId, runStartedAt, label: `${simulation ? 'ข้อมูลจำลอง · ' : ''}${sensorModel === 'custom' ? 'Custom' : 'VemSee 3-axis'} · ${unit} · ${port} / ID ${slaveId ?? '—'}${formula}${runId === LEGACY_RUN_ID ? '' : ` · Run ${runId.slice(0, 8)}`}` };
 }
 
+function sampleRandom(seedText) {
+  let state = 2166136261;
+  for (let index = 0; index < seedText.length; index++) state = Math.imul(state ^ seedText.charCodeAt(index), 16777619);
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let value = state;
+    value = Math.imul(value ^ value >>> 15, value | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// Byte-bounded snapshots make both passes see the same append-only journal,
+// including when acquisition continues while the user opens an analysis.
+async function snapshotJournal(directory, startDate, endDate) {
+  let names;
+  try { names = await fs.promises.readdir(directory); }
+  catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+  const files = [];
+  for (const name of names.filter(name => /^readings-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name) && name.slice(9, 19) >= startDate && name.slice(9, 19) <= endDate).sort()) {
+    const file = path.join(directory, name), size = (await fs.promises.stat(file)).size;
+    if (size) files.push({ file, size });
+  }
+  return files;
+}
+async function visitSnapshot(files, visitor) {
+  let skipped = 0;
+  for (const { file, size } of files) {
+    const stream = fs.createReadStream(file, { encoding: 'utf8', start: 0, end: size - 1 });
+    const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    try {
+      for await (const line of lines) {
+        if (!line.trim()) continue;
+        let record;
+        try { record = JSON.parse(line); if (!record || !Number.isFinite(Date.parse(record.timestamp)) || !Number.isFinite(record.value)) throw new Error('Invalid record'); }
+        catch { skipped++; continue; }
+        visitor(record);
+      }
+    } finally { lines.close(); stream.destroy(); }
+  }
+  return skipped;
+}
+
 class DataStore {
   constructor(directory) { this.directory = directory; this.queue = Promise.resolve(); }
   dataPath() { return path.join(this.directory, 'data'); }
@@ -172,6 +215,51 @@ class DataStore {
     for (const pair of group.gapPairs) for (const record of pair) selected.set(record.timestamp, record);
     for (const [stamp, record] of group.continuityFrames) selected.set(stamp, record);
     return { rows: [...selected.values()].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)), total: group.total, rangeTotal, skipped: summary.skipped, reduced: selected.size < group.total, gapStarts: group.gapPairs.map(pair => pair[1].timestamp), series, seriesKey: group.key };
+  }
+  async scatterRange({ from, to, motorId, profile, seriesKey, runId = '', metric = 'velocity', limit = 6000 }) {
+    const start = Date.parse(from), end = Date.parse(to);
+    if (!motorId || typeof motorId !== 'string' || !Number.isFinite(start) || !Number.isFinite(end) || start >= end) throw new Error('เลือกมอเตอร์และช่วงเวลาเริ่ม–สิ้นสุดให้ถูกต้อง');
+    if (profile && (typeof profile !== 'object' || profile.motorId !== motorId)) throw new Error('การตั้งค่ามอเตอร์ไม่ตรงกับข้อมูลที่เลือก');
+    if (!['velocity', 'displacement', 'acceleration'].includes(metric)) throw new Error('เลือก Velocity, Displacement หรือ Acceleration สำหรับกราฟกระจาย');
+    if (!Number.isInteger(limit) || limit < 100 || limit > 12000) throw new Error('จำนวนจุดกราฟกระจายต้องเป็นจำนวนเต็ม 100–12000');
+    await this.queue;
+    const files = await snapshotJournal(this.dataPath(), dayKey(new Date(start)), dayKey(new Date(end)));
+    const groups = new Map(), keys = ['X', 'Y', 'Z'].map(axis => `${metric}${axis}`);
+    const complete = record => keys.every(key => Number.isFinite(record[key] ?? record.channels?.[key]));
+    const matching = record => {
+      const stamp = Date.parse(record.timestamp);
+      return stamp >= start && stamp <= end && record.motorId === motorId && (!runId || recordedRunId(record) === runId) && (!profile || matchesCurrentProfile(record, profile));
+    };
+    let rangeTotal = 0;
+    const skipped = await visitSnapshot(files, record => {
+      if (!matching(record)) return;
+      const descriptor = historySeries(record);
+      if (!groups.has(descriptor.key)) groups.set(descriptor.key, { ...descriptor, total: 0, completeTotal: 0, incompleteTotal: 0, lastTimestamp: record.timestamp });
+      const group = groups.get(descriptor.key);
+      group.total++; rangeTotal++;
+      if (complete(record)) group.completeTotal++; else group.incompleteTotal++;
+      if (Date.parse(record.timestamp) > Date.parse(group.lastTimestamp)) group.lastTimestamp = record.timestamp;
+    });
+    const series = [...groups.values()].sort((a, b) => Date.parse(b.lastTimestamp) - Date.parse(a.lastTimestamp));
+    const group = seriesKey ? groups.get(seriesKey) : series[0];
+    const base = { rows: [], total: 0, completeTotal: 0, incompleteTotal: 0, rangeTotal, skipped, reduced: false, gapStarts: [], series, seriesKey: '', metric, limit, sampling: 'all' };
+    if (!group) return base;
+    const rows = [], random = sampleRandom(`${motorId}|${metric}|${group.key}`);
+    let seen = 0;
+    await visitSnapshot(files, record => {
+      if (!matching(record) || historySeries(record).key !== group.key || !complete(record)) return;
+      seen++;
+      if (rows.length < limit) rows.push(record);
+      else {
+        // Algorithm R: every complete record has the same inclusion probability,
+        // unlike a time/extrema reducer that exaggerates rare extreme readings.
+        const index = Math.floor(random() * seen);
+        if (index < limit) rows[index] = record;
+      }
+    });
+    rows.sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    const reduced = rows.length < group.completeTotal;
+    return { ...base, rows, total: group.total, completeTotal: group.completeTotal, incompleteTotal: group.incompleteTotal, reduced, sampling: reduced ? 'uniform-record-sample' : 'all', seriesKey: group.key };
   }
 }
 

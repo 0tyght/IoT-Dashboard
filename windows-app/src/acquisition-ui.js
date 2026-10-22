@@ -1,6 +1,7 @@
 'use strict';
 let recordingState = { settings: { startMode: 'on-connect', startAt: '', durationMinutes: 0 }, connected: false, active: false, waiting: false, count: 0 };
 let historyPlot, rangeFrames = [], rangeGeneration = 0, rangeProfile = null, rangeReduced = false, rangeGapStarts = [];
+let rangeView = 'scatter', rangeSampling = 'all', rangeCompleteTotal = 0;
 let invalidateHistoryRange = () => {};
 let recordActionBusy = false;
 let historyRuns = [];
@@ -27,6 +28,7 @@ function renderHistoryRuns(runs = []) {
     select.add(option);
   }
   select.value = [...select.options].some(option => option.value === previous) ? previous : '';
+  syncAnalysisHistoryControls();
   updateRunFolderButton();
   return previous !== select.value;
 }
@@ -145,30 +147,38 @@ function setupAcquisitionUI() {
   const seriesLabel = node('label', 'ชุดข้อมูลที่บันทึก'), seriesSelect = node('select');
   seriesLabel.id = 'history-series-label'; seriesSelect.id = 'history-series'; seriesLabel.hidden = true; seriesLabel.append(seriesSelect);
   rangePanel.querySelector('.history-range-controls').insertBefore(seriesLabel, $('load-range'));
-  historyView.querySelector('.table-scroll').before(rangePanel);
   historyPlot = createPlotStack($('history-plots'), { prefix: 'history', label: 'ย้อนหลัง' });
-  const viewControls = node('div', null, 'history-view-switch'), twoD = node('button', 'กราฟเส้น', 'active'), threeD = node('button', 'แนวโน้ม 3D');
-  twoD.type = 'button'; threeD.type = 'button'; twoD.id = 'history-view-lines'; threeD.id = 'history-view-surface'; twoD.setAttribute('aria-pressed', 'true'); threeD.setAttribute('aria-pressed', 'false');
-  viewControls.append(twoD, threeD); $('history-view').querySelector('.history-range .panel-heading').append(viewControls);
-  const surface = createHistorySurface($('history-plots'), { frames: () => rangeFrames, profile: () => rangeProfile, reduced: () => rangeReduced, gapStarts: () => rangeGapStarts });
-  const setHistoryView = is3d => { $('history-plots').hidden = is3d; surface.view.hidden = !is3d; rangePanel.dataset.historyView = is3d ? 'surface' : 'lines'; twoD.classList.toggle('active', !is3d); threeD.classList.toggle('active', is3d); twoD.setAttribute('aria-pressed', String(!is3d)); threeD.setAttribute('aria-pressed', String(is3d)); if (is3d) surface.draw(); };
-  twoD.onclick = () => setHistoryView(false); threeD.onclick = () => setHistoryView(true);
-  const drawHistory = () => {
-    historyPlot.draw(rangeFrames, rangeProfile || profiles.find(profile => profile.motorId === $('history-motor').value) || { motorId: $('history-motor').value, sensorModel: MODEL, unit: 'mm/s' }, { reduced: rangeReduced, gapStarts: rangeGapStarts });
-    threeD.disabled = rangeProfile?.sensorModel === 'custom'; threeD.title = threeD.disabled ? 'ข้อมูล Custom มีค่าหนึ่งช่อง ดูได้ในกราฟเส้น' : 'แสดงค่าที่บันทึกตามเวลาและแกน X/Y/Z';
-    if (threeD.disabled) setHistoryView(false);
+  const viewControls = node('div', null, 'history-view-switch'), twoD = node('button', 'แนวโน้มเวลา'), threeD = node('button', 'กระจาย 3D', 'active');
+  twoD.type = 'button'; threeD.type = 'button'; twoD.id = 'history-view-lines'; threeD.id = 'history-view-scatter';
+  viewControls.append(threeD, twoD); rangePanel.querySelector('.panel-heading').append(viewControls);
+  const scatter = createHistoryScatter($('history-plots'), { frames: () => rangeFrames, profile: () => rangeProfile, reduced: () => rangeReduced, sampling: () => rangeSampling, total: () => rangeCompleteTotal });
+  const setHistoryView = view => {
+    rangeView = view; const is3d = view === 'scatter';
+    $('history-plots').hidden = is3d; scatter.view.hidden = !is3d; rangePanel.dataset.historyView = view;
+    twoD.classList.toggle('active', !is3d); threeD.classList.toggle('active', is3d); twoD.setAttribute('aria-pressed', String(!is3d)); threeD.setAttribute('aria-pressed', String(is3d));
+    rangePanel.querySelector('.chart-legend').hidden = is3d;
   };
+  setHistoryView(rangeView);
+  const drawHistory = () => {
+    const profile = rangeProfile || profiles.find(profile => profile.motorId === $('history-motor').value) || { motorId: $('history-motor').value, sensorModel: MODEL, unit: 'mm/s' };
+    if (rangeView === 'lines') historyPlot.draw(rangeFrames, profile, { reduced: rangeReduced, gapStarts: rangeGapStarts });
+    else scatter.draw();
+    threeD.disabled = profile.sensorModel === 'custom'; threeD.title = threeD.disabled ? 'ข้อมูล Custom มีค่าหนึ่งช่อง ใช้แนวโน้มเวลา' : 'หนึ่งจุดคือค่ารวม X/Y/Z ที่บันทึกพร้อมกัน ไม่ใช่ตำแหน่งหรือ FFT';
+  };
+  drawHistoryAnalysis = drawHistory;
   const clearRange = ({ keepSeries = false } = {}) => {
-    rangeGeneration++; rangeFrames = []; rangeProfile = null; rangeReduced = false; rangeGapStarts = [];
+    rangeGeneration++; rangeFrames = []; rangeProfile = null; rangeReduced = false; rangeGapStarts = []; rangeSampling = 'all'; rangeCompleteTotal = 0;
     historyPlot.cursorStamp = null; historyPlot.source = null; closeWorkbenchPopovers();
     if (!keepSeries) { seriesSelect.replaceChildren(); seriesLabel.hidden = true; }
-    drawHistory(); surface.draw();
+    historyPlot.draw([], rangeProfile || { sensorModel: MODEL, unit: 'mm/s' }); drawHistory(); scatter.draw();
     rangePanel.dataset.loaded = 'false';
-    $('load-range').disabled = false; $('range-summary').textContent = $('history-motor').value ? 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟย้อนหลัง' : 'เลือกมอเตอร์เพื่อเปิดกราฟย้อนหลัง · ตารางด้านล่างแสดงได้ทุกมอเตอร์';
+    $('load-range').disabled = false; $('range-summary').textContent = $('history-motor').value ? 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟ' : 'เลือกมอเตอร์เพื่อเปิดกราฟย้อนหลัง';
   };
   invalidateHistoryRange = clearRange;
+  for (const [button, view] of [[twoD,'lines'],[threeD,'scatter']]) button.onclick = () => { if(rangeView === view)return; setHistoryView(view); clearRange({ keepSeries:true }); if($('history-motor').value)$('load-range').click(); };
+  scatter.select.addEventListener('change', () => { if(rangeView === 'scatter'){clearRange({keepSeries:true});if($('history-motor').value)$('load-range').click();} });
   for (const id of ['range-from', 'range-to']) $(id).onchange = () => { rangeBeforeRun = null; clearRange(); };
-  $('history-motor').onchange = () => { resetHistoryRun(); clearRange(); if (currentTab === 'history') { loadHistory(); if ($('history-motor').value) $('load-range').click(); } };
+  $('history-motor').onchange = () => { historyGeneration++;resetHistoryRun(); clearRange(); syncAnalysisHistoryControls(); if (currentTab === 'history' || analysisHistoryActive()) { loadHistory(); if (analysisHistoryActive() && $('history-motor').value) $('load-range').click(); } };
   runSelect.onchange = () => {
     const run = historyRuns.find(item => item.runId === runSelect.value);
     if (run && Number.isFinite(Date.parse(run.firstTimestamp)) && Number.isFinite(Date.parse(run.lastTimestamp))) {
@@ -176,8 +186,8 @@ function setupAcquisitionUI() {
       $('range-from').value = bangkokDateTime(Date.parse(run.firstTimestamp));
       $('range-to').value = bangkokDateTime(Date.parse(run.lastTimestamp) + 1000);
     } else restoreHistoryRange();
-    updateRunFolderButton(); clearRange();
-    if (currentTab === 'history') { loadHistory(); if ($('history-motor').value) $('load-range').click(); }
+    updateRunFolderButton(); clearRange(); syncAnalysisHistoryControls();
+    if (currentTab === 'history' || analysisHistoryActive()) { loadHistory(); if (analysisHistoryActive() && $('history-motor').value) $('load-range').click(); }
   };
   seriesSelect.onchange = () => { clearRange({ keepSeries: true }); $('load-range').click(); };
   new ResizeObserver(() => { if ($('history-chart').clientWidth) drawHistory(); }).observe($('history-chart'));
@@ -186,19 +196,23 @@ function setupAcquisitionUI() {
     rangePanel.dataset.loaded = 'loading';
     $('load-range').disabled = true; $('range-summary').textContent = 'กำลังโหลดจากไฟล์…';
     try {
-      const result = check(await api.chartRange({ motorId, runId: runSelect.value || undefined, seriesKey: seriesSelect.value || undefined, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` }));
+      const filter = { motorId, runId: runSelect.value || undefined, seriesKey: seriesSelect.value || undefined, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` };
+      const result = check(await (rangeView === 'scatter' ? api.scatterRange({ ...filter, metric:scatter.select.value, limit:1200 }) : api.chartRange(filter)));
       if (generation !== rangeGeneration) return;
       rangeFrames = result.rows; rangeReduced = Boolean(result.reduced); rangeGapStarts = result.gapStarts || [];
+      rangeSampling = result.sampling || 'all'; rangeCompleteTotal = result.completeTotal ?? result.total;
       seriesSelect.replaceChildren(); (result.series || []).forEach(series => seriesSelect.add(new Option(`${series.label} · ${series.total.toLocaleString()} ค่า`, series.key)));
       seriesSelect.value = result.seriesKey || ''; seriesLabel.hidden = (result.series?.length || 0) < 2;
       // The recording determines its channels/units, even if the motor was edited later.
       const recordedSeries = result.series?.find(series => series.key === result.seriesKey);
-      rangeProfile = rangeFrames.length ? { motorId, sensorModel: recordedSeries?.sensorModel || (rangeFrames[0].channels ? MODEL : 'custom'), unit: recordedSeries?.unit || rangeFrames[0].unit } : null;
-      drawHistory(); surface.draw();
+      rangeProfile = recordedSeries ? { motorId, sensorModel: recordedSeries.sensorModel, unit: recordedSeries.unit } : rangeFrames.length ? { motorId, sensorModel: rangeFrames[0].channels ? MODEL : 'custom', unit: rangeFrames[0].unit } : null;
+      if(rangeView === 'scatter' && rangeProfile?.sensorModel === 'custom'){setHistoryView('lines');clearRange({keepSeries:true});$('load-range').click();return;}
+      drawHistory();
       rangePanel.dataset.loaded = 'true';
       const runSummary = recordedSeries?.runId && recordedSeries.runId !== '__legacy__' ? ` · รอบ ${shortIdentity(recordedSeries.runId)}` : recordedSeries?.runId === '__legacy__' ? ' · ข้อมูลเดิมไม่ระบุรอบ' : '';
-      $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} ค่าจริง · แสดง ${historyPlot.frames.length.toLocaleString()} จุด${runSummary}${result.series?.length > 1 ? ` · ชุดที่เลือกจาก ${result.series.length} รูปแบบข้อมูล` : ''}${result.reduced || historyPlot.frames.length < result.rows.length ? ' (ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุดของทุกช่อง)' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
-    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; rangeGapStarts = []; drawHistory(); surface.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
+      const shown = rangeView === 'scatter' ? rangeFrames.length : historyPlot.frames.length;
+      $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} รายการ · แสดง ${shown.toLocaleString()} จุด${runSummary}${result.incompleteTotal ? ` · XYZ ไม่ครบ ${result.incompleteTotal.toLocaleString()} รายการ` : ''}${result.series?.length > 1 ? ` · ชุดที่เลือกจาก ${result.series.length} รูปแบบข้อมูล` : ''}${result.reduced || shown < result.rows.length ? rangeView === 'scatter' ? ' · สุ่มตัวอย่างจากรายการที่มี XYZ ครบ' : ' · ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุด' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
+    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; rangeGapStarts = []; rangeCompleteTotal = 0; drawHistory(); scatter.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
     finally { if (generation === rangeGeneration) $('load-range').disabled = false; }
   };
 }
