@@ -18,8 +18,11 @@ const { _electron: electron } = require('playwright');
   try{
     app=await electron.launch({...process.env.ELECTRON_EXECUTABLE?{executablePath:process.env.ELECTRON_EXECUTABLE,args:[]}:{args:['.'],cwd:project},env:{...process.env,TEMP:temporaryRoot,TMP:temporaryRoot,VECTRA_TEST_DATA:temporary}});
     const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    const settlePlot=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     await page.waitForLoadState('domcontentloaded');
     await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
+    await page.waitForFunction(()=>innerWidth===1366&&innerHeight===768);
     await page.locator('[data-tab="analysis"]').click();
     assert(await page.locator('#spectral-empty').isVisible());
     assert((await page.locator('.spectral-capability').textContent()).includes('ยังทำ FFT สด') || (await page.locator('.spectral-capability').textContent()).includes('ยังไม่พบช่องส่งคลื่น'));
@@ -41,9 +44,11 @@ const { _electron: electron } = require('playwright');
     await page.locator('#spectral-surface-title').filter({hasText:'Surface 3D'}).waitFor();
     assert(await page.locator('#spectral-max-hz').isEnabled());
     await page.locator('#spectral-max-hz').fill('200');await page.locator('#spectral-max-hz').press('Tab');
+    await settlePlot();
     // The mesh must paint a filled, height-colored area, rather than line curtains.
     await page.waitForFunction(()=>{const c=document.getElementById('spectral-surface'),data=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let colored=0;for(let i=0;i<data.length;i+=4)if(data[i+3]>0&&Math.max(data[i],data[i+1],data[i+2])-Math.min(data[i],data[i+1],data[i+2])>100)colored++;return colored>2000;});
-    const meshPoint=await page.locator('#spectral-surface').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,r=c.getBoundingClientRect();for(let y=25;y<c.height-25;y++)for(let x=80;x<c.width-80;x++){const i=(y*c.width+x)*4;if(d[i]>150&&d[i+2]>100&&d[i+1]<90&&d[i+3]===255)return{x:r.x+x*r.width/c.width,y:r.y+y*r.height/c.height};}return null;});
+    await page.locator('#spectral-surface').scrollIntoViewIfNeeded();
+    const meshPoint=await page.locator('#spectral-surface').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,r=c.getBoundingClientRect();for(let y=26;y<c.height-26;y++)for(let x=81;x<c.width-81;x++){const i=(y*c.width+x)*4;if(d[i]>150&&d[i+2]>100&&d[i+1]<90&&d[i+3]===255&&[i-4,i+4,i-c.width*4,i+c.width*4].every(p=>d[p+3]===255&&Math.max(d[p],d[p+1],d[p+2])-Math.min(d[p],d[p+1],d[p+2])>100))return{x:r.x+(x+.5)*r.width/c.width,y:r.y+(y+.5)*r.height/c.height};}return null;});
     assert(meshPoint,'a nonzero spectral peak has a high color on the filled surface');
     await page.mouse.move(meshPoint.x,meshPoint.y);await page.locator('#spectral-readout').filter({hasText:'จุด FFT จริง'}).waitFor();
     await page.mouse.click(meshPoint.x,meshPoint.y);
@@ -75,10 +80,16 @@ const { _electron: electron } = require('playwright');
     await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.fullscreenElement);
     for(const [width,height]of[[1366,700],[1024,768],[768,1024],[960,680]]){
       await page.setViewportSize({width,height});
+      await page.locator('#spectral-view').selectOption('surface');
       await page.locator('#spectral-surface').scrollIntoViewIfNeeded();
+      await settlePlot();
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`no page horizontal overflow ${width}`);
       const overflow=await page.locator('#analysis-view').evaluate(el=>el.scrollWidth>el.clientWidth+1);
       assert(!overflow,`no analysis overflow ${width}`);
+      const point=await page.locator('#spectral-surface').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,r=c.getBoundingClientRect();for(let y=30;y<c.height-30;y++)for(let x=80;x<c.width-80;x++){const i=(y*c.width+x)*4;if(d[i]>150&&d[i+2]>100&&d[i+1]<90&&d[i+3]===255&&[i-4,i+4,i-c.width*4,i+c.width*4].every(p=>d[p+3]===255))return{x:r.x+(x+.5)*r.width/c.width,y:r.y+(y+.5)*r.height/c.height};}return null;});
+      assert(point,`${width}: surface peak is visible`);
+      await page.locator('#spectral-readout').evaluate(el=>{el.textContent='';});
+      await page.mouse.move(point.x,point.y);await page.locator('#spectral-readout').filter({hasText:'จุด FFT จริง'}).waitFor();
       if(width===1366)await page.screenshot({path:path.join(artifacts,'spectral-waterfall.png'),fullPage:false});
     }
     await page.setViewportSize({width:1366,height:768});

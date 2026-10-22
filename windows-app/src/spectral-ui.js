@@ -243,7 +243,9 @@ function setupSpectralUI() {
   }
   function scheduleDraw(){if(drawing)return;drawing=true;requestAnimationFrame(()=>{drawing=false;drawPlots();drawSurface();});}
   function readAt(event,choose=false){if(!spectrum)return;const rect=$('spectral-surface').getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;let p;
-    if($('spectral-view').value==='surface'&&meshRaster){const px=Math.floor(x*meshRaster.ratioX),py=Math.floor(y*meshRaster.ratioY);if(px>=0&&py>=0&&px<meshRaster.width&&py<meshRaster.height)p=meshRaster.vertices[meshRaster.picks[py*meshRaster.width+px]-1];if(!p&&meshCache?.mesh.rows.length===1)p=HistorySurfaceData.nearestProjected(picked,x,y,24);}
+    if($('spectral-view').value==='surface'&&meshRaster){const px=Math.floor(x*meshRaster.ratioX),py=Math.floor(y*meshRaster.ratioY);let nearest=Infinity;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const hx=px+dx,hy=py+dy;if(hx<0||hy<0||hx>=meshRaster.width||hy>=meshRaster.height)continue;const id=meshRaster.picks[hy*meshRaster.width+hx],distance=dx*dx+dy*dy;if(id&&distance<nearest){nearest=distance;p=meshRaster.vertices[id-1];}}
+      if(!p&&meshCache?.mesh.rows.length===1)p=HistorySurfaceData.nearestProjected(picked,x,y,24);}
     else if($('spectral-view').value==='waterfall'&&hitContext&&x>=0&&y>=0&&x<hitCanvas.width&&y<hitCanvas.height){const pixel=hitContext.getImageData(Math.floor(x),Math.floor(y),1,1).data;if(pixel[3]===255)p=hitPoints[(pixel[0]+(pixel[1]<<8)+(pixel[2]<<16))-1];
       if(p){const dx=p.x-p.from.x,dy=p.y-p.from.y,t=Math.max(0,Math.min(1,((x-p.from.x)*dx+(y-p.from.y)*dy)/(dx*dx+dy*dy||1)));if(Math.hypot(x-p.from.x-t*dx,y-p.from.y-t*dy)>4)p=null;}}
     else p=HistorySurfaceData.nearestProjected(picked,x,y,24);if(!p)return;
