@@ -13,6 +13,9 @@
   const MAX_SAMPLES = 262144, MAX_FRAMES = 512, MAX_CSV_BYTES = 32 * 1024 * 1024;
   const TIME_TOLERANCE = .001, RATE_TOLERANCE = .01;
   const numeric = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+  const headerName = value => value.toLowerCase().replace(/[\s_-]/g, '');
+  const aggregateHeader = /^(?:velocity|acceleration|displacement|frequency|temperature|rawregister|pollinterval|actualinterval|motorid|schema|record|timestamp|source|slaveid|port)/;
+  const recordMessage = 'ไฟล์นี้เป็นข้อมูล overall/record ของ VECTRA ไม่ใช่ waveform samples จึงนำมาทำ FFT การสั่นไม่ได้ · ดูข้อมูลที่โปรแกรมบันทึกในเมนู “ค่าที่บันทึก · XYZ”';
 
   function fail(message) { throw new Error(message); }
   function finiteNumber(value, description) {
@@ -49,6 +52,9 @@
     let row = [], field = '', quoted = false, closedQuote = false;
     function cell() {
       row.push(field.trim()); field = ''; closedQuote = false;
+      // Recognize our full 32-column recording header before the waveform
+      // column guard. Otherwise users receive a misleading column-count error.
+      if (!rows.length && aggregateHeader.test(headerName(row.at(-1)))) fail(recordMessage);
       if (row.length > 16) fail('CSV มีคอลัมน์มากเกินไปสำหรับข้อมูล waveform');
     }
     function line() {
@@ -83,10 +89,8 @@
   function parseCSV(text, options = {}) {
     const rows = csvRows(text);
     if (rows.length < 2) fail('CSV ต้องมีหัวคอลัมน์และข้อมูล waveform อย่างน้อย 1 sample');
-    const headers = rows.shift().map(value => value.toLowerCase().replace(/[\s_-]/g, ''));
+    const headers = rows.shift().map(headerName);
     if (new Set(headers).size !== headers.length || headers.some(value => !value)) fail('หัวคอลัมน์ CSV ว่างหรือซ้ำกัน');
-    const aggregate = /^(?:velocity|acceleration|displacement|frequency|temperature|rawregister|pollinterval|actualinterval|motorid|schema|record|timestamp|source|slaveid|port)/;
-    if (headers.some(value => aggregate.test(value))) fail('ไฟล์นี้เป็นข้อมูล overall/record ของ VECTRA ไม่ใช่ waveform samples จึงนำมาทำ FFT การสั่นไม่ได้');
     const timingTypes = { times: 1, elapsedtimes: 1, timems: .001, elapsedtimems: .001, index: 0, sample: 0 };
     const timing = headers.map((name, index) => ({ name, index, scale: timingTypes[name] })).filter(item => item.scale !== undefined);
     if (timing.length > 1) fail('CSV ต้องใช้เวลา หรือ sample index เพียงคอลัมน์เดียว');

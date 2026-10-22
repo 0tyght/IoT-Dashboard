@@ -13,7 +13,7 @@ function setupSpectralUI() {
       <span id="spectral-file" class="spectral-file"></span>
     </div>
     <p id="spectral-status" class="spectral-status" role="status" aria-live="polite">เปิด CSV ของคลื่นดิบเพื่อเริ่มวิเคราะห์</p>
-    <div id="spectral-empty" class="spectral-empty"><h3>ต้องใช้ชุดตัวอย่างคลื่นตามเวลา</h3><p>ใช้หัวคอลัมน์ <code>time_s,x,y,z</code> หรือ <code>index,value</code> พร้อม Sample rate ข้อมูลต้องห่างกันเท่ากัน และมีอย่างน้อย 64 samples</p><p>CSV ประวัติค่า overall ของโปรแกรมนี้ไม่ใช่คลื่นดิบ จึงนำมาวิเคราะห์ FFT การสั่นไม่ได้ ปุ่มสัญญาณทดสอบใช้ตรวจการแสดงผลโดยไม่บันทึกลงประวัติจริง</p></div>
+    <div id="spectral-empty" class="spectral-empty"><h3>ต้องใช้ชุดตัวอย่างคลื่นตามเวลา</h3><p>ใช้หัวคอลัมน์ <code>time_s,x,y,z</code> หรือ <code>index,value</code> พร้อม Sample rate ข้อมูลต้องห่างกันเท่ากัน และมีอย่างน้อย 64 samples</p><p>CSV ประวัติค่า overall ของโปรแกรมนี้ไม่ใช่คลื่นดิบ จึงนำมาวิเคราะห์ FFT การสั่นไม่ได้ ปุ่มสัญญาณทดสอบใช้ตรวจการแสดงผลโดยไม่บันทึกลงประวัติจริง</p><button id="spectral-open-history" type="button">ดูค่าที่บันทึก · XYZ</button></div>
     <div id="spectral-results" hidden>
       <div class="spectral-config">
         <label>แกน<select id="spectral-axis" aria-label="แกนของคลื่น"></select></label>
@@ -43,6 +43,7 @@ function setupSpectralUI() {
   const meshCanvas = document.createElement('canvas');
   let meshCache = null, meshRaster = null;
   const colors = { X:'#007b8d', Y:'#3474bb', Z:'#6750c5' };
+  $('spectral-open-history').onclick = () => setAnalysisSource('history');
   const format = value => !Number.isFinite(value) ? '—' : value !== 0 && (Math.abs(value)<.0001 || Math.abs(value)>=1e7) ? value.toExponential(3) : Number(value.toPrecision(5)).toLocaleString('en-US', { maximumFractionDigits:6 });
   const unit = () => $('spectral-scale').value === 'psd' ? `(${input.unit})²/Hz` : input.unit;
   const values = frame => $('spectral-scale').value === 'psd' ? frame.psd : frame.amplitudes;

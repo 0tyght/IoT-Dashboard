@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const Spectral = require('../src/spectral-analysis.js');
+const { CSV_KEYS, csvRow } = require('../electron/data-store.cjs');
 const close = (actual, expected, tolerance = 1e-9, label = '') => assert(Math.abs(actual - expected) <= tolerance, `${label}: expected ${expected}, received ${actual}`);
 const sine = (count, sampleRate, frequency, amplitude = 1, phase = 0) => Array.from({ length: count }, (_, i) => amplitude * Math.sin(2 * Math.PI * frequency * i / sampleRate + phase));
 const peak = values => values.reduce((best, value, index) => value > values[best] ? index : best, 0);
@@ -82,6 +83,10 @@ assert.throws(() => Spectral.parseCSV('sample,value\n0,1\n2,2', { sampleRateHz: 
 assert.throws(() => Spectral.parseCSV('sample,value\n0,1\n1,2'), /Sample rate/);
 assert.throws(() => Spectral.parseCSV('timestamp,motorId,velocityX,velocityY,velocityZ\n2026-10-21,M1,1,2,3', { sampleRateHz: 5000 }), /overall\/record/);
 assert.throws(() => Spectral.parseCSV('schema_version,record_type,value\n3,snapshot,1', { sampleRateHz: 5000 }), /overall\/record/);
+const recordedCSV = '\uFEFF' + CSV_KEYS.join(',') + '\r\n' + csvRow({ timestamp: '2026-10-22T00:00:00.000Z', motorId: 'MTR-01', value: 2.4, unit: 'mm/s', channels: { velocityX: 1, velocityY: 2.4, velocityZ: 1.5 } });
+assert(CSV_KEYS.length > 16, 'regression uses the real wide recording schema');
+assert.throws(() => Spectral.parseCSV(recordedCSV), error => /overall\/record/.test(error.message) && /ค่าที่บันทึก · XYZ/.test(error.message) && !/คอลัมน์มากเกิน/.test(error.message), 'actual exported CSV explains its data type before the waveform column guard');
+assert.throws(() => Spectral.parseCSV(Array.from({ length: 17 }, (_, i) => `unknown${i}`).join(',') + '\n' + Array(17).fill('1').join(',')), /คอลัมน์มากเกิน/, 'unrecognized oversized CSV retains its resource limit');
 assert.throws(() => Spectral.parseCSV('x\nNaN', { sampleRateHz: 1000 }), /ตัวเลข/);
 assert.throws(() => Spectral.parseCSV('x\nInfinity', { sampleRateHz: 1000 }), /ตัวเลข/);
 assert.throws(() => Spectral.parseCSV('x\n0x10', { sampleRateHz: 1000 }), /ตัวเลข/);

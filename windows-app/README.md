@@ -106,6 +106,8 @@ The current SN-3001-WZ3A-N01 profile reads temperature, nine per-axis overall vi
 
 The stated **10–5000 Hz vibration response bandwidth is not the sensor's sample rate**, register refresh period or the application's polling rate. Changing the Modbus polling interval does not produce a verified high-rate waveform. An FFT of the stored overall values would describe how those summary values change at the polling cadence, not the motor's vibration spectrum up to 5 kHz. The Analysis importer therefore rejects VECTRA history/record CSV, including `velocityX`, `accelerationX`, frequency and schema/record headers. Renaming an overall column to `x` does not turn its contents into waveform samples.
 
+The importer identifies recording headers before applying the waveform column limit, including the full 32-column v4 export. Its error explains the data-type mismatch rather than suggesting columns should be deleted. **ดูค่าที่บันทึก · XYZ** returns to analysis of the application's local recording journal; this button does not import the selected CSV into that journal.
+
 ### Accepted waveform CSV
 
 Use a waveform export from an acquisition device with a known hardware sampling rate, physical unit and sample timing. The importer supports UTF-8 BOM, quoted comma-separated fields, decimal/scientific numbers and one to three channels named `x`, `y`, `z` (case-insensitive). A single channel may instead be named `value`, which is represented as channel X. Missing cells, non-finite values and inconsistent row widths are rejected.
