@@ -89,6 +89,7 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     assert.equal(identityCells[3].text, profile.motorId);
     assert.equal((await page.locator('#history-plots .plot-axis-value strong').first().textContent()).trim(), '13.0', 'run filter updates the graph values');
     await page.locator('#analysis-history-open-folder').click();
+    await page.waitForFunction(() => !document.querySelector('#open-run-folder').disabled);
     assert.equal(await app.evaluate(() => globalThis.sessionUIOpenedRun), firstRun, 'folder action receives exactly the selected UUID');
 
     const exportPath = path.join(temporary, 'selected-run.csv');

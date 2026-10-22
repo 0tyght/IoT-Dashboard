@@ -70,6 +70,8 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     page.on('pageerror', error => errors.push(error.message));
     await page.waitForLoadState('domcontentloaded');
     await page.locator('#app-version').filter({ hasText: `v${require('../package.json').version}` }).waitFor();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1366, 768));
+    await page.waitForFunction(() => innerWidth === 1366 && innerHeight === 768);
     await page.locator('#chart-live').filter({ hasText: 'SAVED' }).waitFor();
     assert(await page.locator('#monitor-view').isVisible(), 'opening an existing profile lands directly in its monitor');
     assert(await page.locator('#fleet-view').isHidden());
@@ -134,14 +136,16 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     await canvas.focus(); await canvas.press('Home');
     await page.locator('#history-scatter-readout').filter({ hasText: 'X 10 µm' }).waitFor();
     await page.locator('#history-scatter-expand').click();
-    await page.waitForFunction(() => document.fullscreenElement?.id === 'history-scatter-view');
+    // The native transition and fullscreenchange listener finish separately.
+    await page.waitForFunction(() => document.fullscreenElement?.id === 'history-scatter-view' && document.querySelector('#history-scatter-expand').getAttribute('aria-pressed') === 'true');
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.equal(await page.locator('#history-scatter-expand').getAttribute('aria-pressed'), 'true');
     assert(await canvas.evaluate(element => {
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
     }), 'fullscreen 3D canvas stays inside the viewport');
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.fullscreenElement);
+    await page.waitForFunction(() => !document.fullscreenElement && document.querySelector('#history-scatter-expand').getAttribute('aria-pressed') === 'false');
     assert.equal(await page.locator('#history-scatter-expand').getAttribute('aria-pressed'), 'false');
 
     await page.locator('#analysis-history-motor').selectOption('DELETE-01');
