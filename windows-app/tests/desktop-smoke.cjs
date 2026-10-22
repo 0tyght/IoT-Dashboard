@@ -31,6 +31,10 @@ const { _electron: electron } = require('playwright');
     page.on('pageerror', error => errors.push(error.message));
     await page.waitForLoadState('domcontentloaded');
     await page.locator('#app-version').filter({ hasText: `v${require('../package.json').version}` }).waitFor();
+    // Desktop interactions below expect a persistent registry. CI may start on
+    // a small display, where the registry correctly becomes a closed drawer.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1440, 900));
+    await page.waitForFunction(() => innerWidth === 1440 && innerHeight === 900);
     assert(await page.locator('#connect-all').isDisabled());
     assert((await page.locator('#connect-all').textContent()).includes('เริ่มอ่านและบันทึก'));
     assert(await page.locator('#disconnect').isHidden());
