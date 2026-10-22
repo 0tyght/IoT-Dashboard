@@ -3,7 +3,7 @@
 function setupSpectralUI() {
   const host = $('analysis-view');
   host.innerHTML = `
-    <div class="spectral-heading"><div><h2>วิเคราะห์ความถี่</h2><p>Waveform · FFT · Waterfall</p></div><span id="spectral-source" class="spectral-source">ยังไม่มีข้อมูลคลื่น</span></div>
+    <div class="spectral-heading"><div><h2>วิเคราะห์ความถี่</h2><p>Waveform · FFT · Surface 3D</p></div><span id="spectral-source" class="spectral-source">ยังไม่มีข้อมูลคลื่น</span></div>
     <p class="spectral-capability">SN-3001-WZ3A-N01 ส่งค่ารวมและค่า Hz ตาม Register ที่มีอยู่ ยังไม่พบช่องส่งคลื่นดิบ จึงยังทำ FFT สดจากเซ็นเซอร์นี้ไม่ได้</p>
     <div class="spectral-toolbar">
       <button id="spectral-import" class="primary">เปิด Waveform CSV</button>
@@ -28,8 +28,8 @@ function setupSpectralUI() {
         <section class="spectral-plot"><h3 id="spectral-fft-title">FFT · one-sided</h3><canvas id="spectral-fft" role="img" aria-label="สเปกตรัมความถี่"></canvas><p id="spectral-peak"></p></section>
       </div>
       <section id="spectral-panel" class="panel spectral-waterfall">
-        <div class="panel-heading"><div><h3 id="spectral-surface-title">Waterfall · FFT ตามเวลา</h3></div><div class="inline-controls"><select id="spectral-view" aria-label="รูปแบบสเปกตรัม"><option value="waterfall">Waterfall 3D</option><option value="spectrogram">Spectrogram 2D</option></select><button id="spectral-reset">รีเซ็ตมุม</button><button id="spectral-fullscreen">ขยายกราฟ</button></div></div>
-        <canvas id="spectral-surface" tabindex="0" aria-label="Waterfall ความถี่ตามเวลา ลากเพื่อหมุน ใช้ลูกศรเปลี่ยนช่วงเวลา หรือปุ่มบวกและลบเพื่อซูม"></canvas>
+        <div class="panel-heading"><div><h3 id="spectral-surface-title">Surface 3D · FFT ตามเวลา</h3></div><div class="inline-controls"><label class="spectral-band">แสดงถึง<input id="spectral-max-hz" type="number" min="0.001" step="any" placeholder="Nyquist" aria-label="ความถี่สูงสุดที่แสดง">Hz</label><select id="spectral-view" aria-label="รูปแบบสเปกตรัม"><option value="surface">พื้นผิว 3D</option><option value="waterfall">Waterfall 3D</option><option value="spectrogram">Spectrogram 2D</option></select><button id="spectral-reset">รีเซ็ตมุม</button><button id="spectral-fullscreen">ขยายกราฟ</button></div></div>
+        <canvas id="spectral-surface" tabindex="0" aria-label="พื้นผิวความถี่ตามเวลา ลากแนวนอนเพื่อหมุน แนวตั้งเพื่อปรับมุมก้ม ใช้ลูกศรเปลี่ยนช่วงเวลา หรือปุ่มบวกและลบเพื่อซูม"></canvas>
         <p id="spectral-readout" class="spectral-readout">ชี้กราฟเพื่ออ่านความถี่ เวลา และขนาด</p>
         <label class="spectral-frame"><span>ช่วง FFT</span><input id="spectral-frame" type="range" min="0" max="0" value="0" aria-label="เลือกช่วงเวลา FFT"><output id="spectral-frame-time"></output></label>
       </section>
@@ -37,9 +37,11 @@ function setupSpectralUI() {
     </div>`;
 
   let worker, serial = 0, pending = new Map(), generation = 0, computation = 0;
-  let input = null, spectrum = null, fileName = '', frameIndex = 0, rotation = -.6, zoom = 1, drawing = false, picked = [], drag = null;
+  let input = null, spectrum = null, fileName = '', frameIndex = 0, rotation = -.6, elevation = .6, zoom = 1, drawing = false, picked = [], drag = null;
   const hitCanvas = document.createElement('canvas');
   let hitContext = null, hitPoints = [];
+  const meshCanvas = document.createElement('canvas');
+  let meshCache = null, meshRaster = null;
   const colors = { X:'#007b8d', Y:'#3474bb', Z:'#6750c5' };
   const format = value => !Number.isFinite(value) ? '—' : value !== 0 && (Math.abs(value)<.0001 || Math.abs(value)>=1e7) ? value.toExponential(3) : Number(value.toPrecision(5)).toLocaleString('en-US', { maximumFractionDigits:6 });
   const unit = () => $('spectral-scale').value === 'psd' ? `(${input.unit})²/Hz` : input.unit;
@@ -62,7 +64,7 @@ function setupSpectralUI() {
     return new Promise((resolve, reject) => { const id = ++serial; pending.set(id, {resolve,reject}); worker.postMessage({id,type,...data}); });
   }
   function blank() {
-    spectrum = null; input = null; picked = []; frameIndex = 0;
+    spectrum = null; input = null; picked = []; frameIndex = 0; meshCache = null; meshRaster = null;
     $('spectral-results').hidden = true; $('spectral-empty').hidden = false;
     $('spectral-clear').disabled = true; $('spectral-file').textContent = '';
     $('spectral-source').textContent = 'ยังไม่มีข้อมูลคลื่น';
@@ -89,18 +91,20 @@ function setupSpectralUI() {
   async function compute() {
     if (!input) return;
     const mine = ++computation, loadId = generation;
-    spectrum = null; picked = []; $('spectral-metadata').replaceChildren(); $('spectral-peak').textContent = ''; $('spectral-method').textContent = ''; $('spectral-frame-time').textContent = ''; $('spectral-readout').textContent = 'รอผลการคำนวณ'; scheduleDraw();
+    spectrum = null; picked = []; meshCache = null; meshRaster = null; $('spectral-metadata').replaceChildren(); $('spectral-peak').textContent = ''; $('spectral-method').textContent = ''; $('spectral-frame-time').textContent = ''; $('spectral-readout').textContent = 'รอผลการคำนวณ'; scheduleDraw();
     setStatus('กำลังคำนวณ FFT / STFT…');
     try {
       const result = await request('analyze', { axis:$('spectral-axis').value, options:{fftSize:Number($('spectral-size').value), window:$('spectral-window').value, overlap:Number($('spectral-overlap').value)} });
       if (mine !== computation || loadId !== generation) return;
       spectrum = result; frameIndex = Math.min(frameIndex,result.frames.length-1);
+      $('spectral-max-hz').max = String(result.nyquistHz);
+      if (Number($('spectral-max-hz').value) > result.nyquistHz) $('spectral-max-hz').value = '';
       $('spectral-frame').max = String(result.frames.length-1); $('spectral-frame').value = String(frameIndex);
       $('spectral-metadata').replaceChildren(...[
         `Fs ${format(input.sampleRateHz)} Hz`, `Nyquist ${format(result.nyquistHz)} Hz`, `Δf ${format(result.binWidthHz)} Hz`, `${format(input.sampleCount)} samples`, `${result.frames.length} ช่วง`
       ].map(text => node('b',text)));
       const test = input.source === 'test-signal';
-      setStatus(test ? 'ข้อมูลทดสอบเท่านั้น · X: 50 Hz / 1 และ 120 Hz / 0.4 m/s² peak · Y: 80 Hz · Z: sweep 30–190 Hz' : `วิเคราะห์ ${fileName} · เวลาเป็นวินาทีจาก sample แรก · เปลี่ยน Fs/หน่วย: ล้างข้อมูลแล้วเปิดไฟล์ใหม่`);
+      setStatus(test ? 'ข้อมูลทดสอบเท่านั้น · X: 50 / 120 Hz คงที่ · Y: 80 Hz · Z: sweep 30–190 Hz พร้อมขนาดที่เปลี่ยนตามเวลา' : `วิเคราะห์ ${fileName} · เวลาเป็นวินาทีจาก sample แรก · เปลี่ยน Fs/หน่วย: ล้างข้อมูลแล้วเปิดไฟล์ใหม่`);
       $('spectral-wave-note').textContent = `${format(input.timeSpanSeconds)} s · ${input.unit} · ภาพรวมย่อคงจุดต่ำสุด/สูงสุด การคำนวณใช้ทุก sample`;
       $('spectral-method').textContent = `ลบค่าเฉลี่ย · ${$('spectral-window').selectedOptions[0].textContent} · N=${result.fftSize} · Hop=${result.hopSize} · Δf=Fs/N · ไม่เติมศูนย์ · ท้ายที่ไม่ครบ ${result.omittedSamples} samples · PSD ด้านบนเฉลี่ยทุกช่วง; Waterfall/สีเป็นค่าของแต่ละช่วง`;
       $('spectral-readout').textContent = result.frames.length === 1 ? 'มี 1 ช่วง FFT · คลื่นต้องยาวขึ้นเพื่อดูการเปลี่ยนแปลงตามเวลา' : 'ชี้เพื่ออ่านค่า · คลิกเลือกช่วง FFT · ลากเพื่อหมุน · ล้อเมาส์เพื่อซูม';
@@ -150,11 +154,50 @@ function setupSpectralUI() {
   // available plot area instead of preserving a cube's screen aspect ratio.
   function projection(width,height) {
     const c=Math.cos(rotation),s=Math.sin(rotation);
-    const raw=(x,y,z)=>{const dx=(x-.5)*2,dy=y*2-1,rx=dx*c-dy*s,ry=dx*s+dy*c;return{x:rx-ry*.12,y:rx*.2+ry*.43-z*.7,depth:rx*.084+ry*.7+z*.454};};
+    const tilt=Math.sin(elevation),rise=Math.cos(elevation);
+    const raw=(x,y,z)=>{const dx=(x-.5)*2,dy=y*2-1,rx=dx*c-dy*s,ry=dx*s+dy*c;return{x:rx,y:ry*tilt-z*1.8*rise,depth:ry*rise+z*1.8*tilt};};
     const corners=[0,1].flatMap(x=>[0,1].flatMap(y=>[-.5,.5].map(z=>raw(x,y,z))));
     const xs=corners.map(p=>p.x),ys=corners.map(p=>p.y),loX=Math.min(...xs),hiX=Math.max(...xs),loY=Math.min(...ys),hiY=Math.max(...ys);
-    const scaleX=Math.max(30,width-180)/(hiX-loX)*zoom,scaleY=Math.max(30,height-75)/(hiY-loY)*zoom;
+    const plotWidth=$('spectral-view').value==='surface'?Math.min(width-180,Math.max(220,(height-65)*2.8)):width-180;
+    const scaleX=Math.max(30,plotWidth)/(hiX-loX)*zoom,scaleY=Math.max(30,height-75)/(hiY-loY)*zoom;
     return(x,y,z)=>{const p=raw(x,y,z);return{x:width/2+(p.x-(loX+hiX)/2)*scaleX,y:(height-15)/2+(p.y-(loY+hiY)/2)*scaleY,depth:p.depth};};
+  }
+  function frequencyLimit() {
+    const requested=Number($('spectral-max-hz').value);
+    return requested>0?Math.min(requested,spectrum.nyquistHz):spectrum.nyquistHz;
+  }
+  function colorScale(ctx,width,height,max) {
+    const x=width-48,top=32,bottom=height-36;
+    const gradient=ctx.createLinearGradient(0,bottom,0,top);
+    [[0,'#0000ff'],[.2,'#00ffff'],[.4,'#00ff00'],[.6,'#ffff00'],[.8,'#ff0000'],[1,'#ff00ff']].forEach(([at,color])=>gradient.addColorStop(at,color));
+    ctx.fillStyle=gradient;ctx.fillRect(x,top,12,bottom-top);ctx.strokeStyle='#b5bac7';ctx.strokeRect(x,top,12,bottom-top);
+    ctx.fillStyle='#50596e';ctx.textAlign='right';ctx.fillText(unit(),width-7,16);ctx.fillText(format(max),width-4,top-4);ctx.fillText('0',width-11,bottom+16);
+  }
+  function drawMesh(ctx,width,height) {
+    const metric=$('spectral-scale').value==='psd'?'psd':'amplitude',maxFrequencyHz=frequencyLimit();
+    if(!meshCache||meshCache.spectrum!==spectrum||meshCache.metric!==metric||meshCache.frameIndex!==frameIndex||meshCache.maxFrequencyHz!==maxFrequencyHz){
+      meshCache={spectrum,metric,frameIndex,maxFrequencyHz,mesh:SpectralMesh.prepare(spectrum,{metric,selectedFrame:frameIndex,maxFrequencyHz})};
+    }
+    const mesh=meshCache.mesh,project=projection(width,height);
+    const line=(points,color='#cbd0dd')=>{ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();points.forEach((p,i)=>{const q=project(...p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.stroke();};
+    // Back walls and floor share the same numeric coordinates as the mesh.
+    for(const points of [[[0,0,-.5],[1,0,-.5],[1,1,-.5],[0,1,-.5]],[[0,0,-.5],[1,0,-.5],[1,0,.5],[0,0,.5]],[[0,0,-.5],[0,1,-.5],[0,1,.5],[0,0,.5]]]){
+      ctx.beginPath();points.forEach((p,i)=>{const q=project(...p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.closePath();ctx.fillStyle='#f2f3f7';ctx.fill();
+    }
+    for(let i=0;i<=5;i++){const t=i/5;line([[t,0,-.5],[t,1,-.5]]);line([[0,t,-.5],[1,t,-.5]]);line([[t,0,-.5],[t,0,.5]]);line([[0,t,-.5],[0,t,.5]]);line([[0,0,t-.5],[1,0,t-.5]]);line([[0,0,t-.5],[0,1,t-.5]]);}
+    const ratio=Math.min(1,Math.sqrt(1000000/(width*height))),rw=Math.ceil(width*ratio),rh=Math.ceil(height*ratio),ratioX=rw/width,ratioY=rh/height;
+    meshRaster=SpectralMesh.rasterize(mesh,{width:rw,height:rh,project:(x,y,z)=>{const q=project(x,y,z);return{...q,x:q.x*ratioX,y:q.y*ratioY};}});
+    meshRaster.ratioX=ratioX;meshRaster.ratioY=ratioY;meshRaster.width=rw;meshRaster.height=rh;
+    meshCanvas.width=rw;meshCanvas.height=rh;const buffer=meshCanvas.getContext('2d');buffer.putImageData(new ImageData(meshRaster.pixels,rw,rh),0,0);ctx.drawImage(meshCanvas,0,0,width,height);
+    ctx.fillStyle='#50596e';ctx.textAlign='center';
+    for(let i=0;i<=4;i++){const p=project(i/4,1,-.5);ctx.fillText(format(mesh.frequencyMaxHz*i/4),p.x,p.y+14);}
+    for(let i=0;i<=2;i++){if(mesh.rows.length>1||i===1){const p=project(0,i/2,-.5);ctx.textAlign='right';ctx.fillText(`${format(mesh.timeStart+(mesh.timeEnd-mesh.timeStart)*i/2)} s`,p.x-8,p.y+3);}}
+    const hz=project(.65,1,-.5);ctx.textAlign='center';ctx.fillText('Frequency · Hz',hz.x,Math.min(height-4,hz.y+29));
+    const provenance=input.source==='test-signal'?'TEST SIGNAL · ข้อมูลทดสอบ':'WAVEFORM CSV';
+    ctx.textAlign='left';ctx.fillText(`${provenance} · ผิว FFT · ${mesh.displayedFrames}/${mesh.totalFrames} ช่วง · ${mesh.displayedBins}/${mesh.totalBins} bins · สีและความสูง = ${unit()}`,10,13);
+    if(mesh.rows.length===1){const row=mesh.rows[0];ctx.strokeStyle='#6252e9';ctx.lineWidth=2;ctx.beginPath();row.vertices.forEach((v,i)=>{const p=project(v.x,v.y,v.z);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);picked.push({...v,...p});});ctx.stroke();ctx.fillStyle='#50596e';ctx.fillText('มีช่วง FFT เดียว · ยังสร้างผืนตามเวลาไม่ได้',10,height-8);}
+    if(mesh.displayedBins<2){ctx.fillStyle='#50596e';ctx.fillText('ช่วง Hz นี้มีเพียง 1 bin · เพิ่มความถี่สูงสุดที่แสดง',10,height-8);}
+    colorScale(ctx,width,height,mesh.maxValue);
   }
   function drawSurface() {
     const target=canvas('spectral-surface'); picked=[];hitPoints=[];if(!target||!spectrum)return;
@@ -162,8 +205,10 @@ function setupSpectralUI() {
     let max=0;for(const frame of frames)for(const v of values(frame))max=Math.max(max,v);max||=1;
     const first=frames[0].timeSeconds,last=frames.at(-1).timeSeconds,span=last-first||1;
     const mode=$('spectral-view').value;
-    $('spectral-surface-title').textContent=mode==='waterfall'?'Waterfall · FFT ตามเวลา':'Spectrogram · FFT ตามเวลา';
-    $('spectral-reset').disabled=mode!=='waterfall';
+    $('spectral-surface-title').textContent=mode==='surface'?'Surface 3D · FFT ตามเวลา':mode==='waterfall'?'Waterfall · FFT ตามเวลา':'Spectrogram · FFT ตามเวลา';
+    $('spectral-reset').disabled=mode==='spectrogram';
+    $('spectral-max-hz').disabled=mode!=='surface';
+    if(mode==='surface'){drawMesh(ctx,width,height);return;}
     if(mode==='spectrogram') {
       const left=66,right=width-70,top=20,bottom=height-34,cols=Math.min(320,spectrum.frequencies.length),step=Math.ceil(spectrum.frequencies.length/cols);
       const cellH=(bottom-top)/frames.length;
@@ -198,16 +243,18 @@ function setupSpectralUI() {
   }
   function scheduleDraw(){if(drawing)return;drawing=true;requestAnimationFrame(()=>{drawing=false;drawPlots();drawSurface();});}
   function readAt(event,choose=false){if(!spectrum)return;const rect=$('spectral-surface').getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;let p;
-    if($('spectral-view').value==='waterfall'&&hitContext&&x>=0&&y>=0&&x<hitCanvas.width&&y<hitCanvas.height){const pixel=hitContext.getImageData(Math.floor(x),Math.floor(y),1,1).data;if(pixel[3]===255)p=hitPoints[(pixel[0]+(pixel[1]<<8)+(pixel[2]<<16))-1];
+    if($('spectral-view').value==='surface'&&meshRaster){const px=Math.floor(x*meshRaster.ratioX),py=Math.floor(y*meshRaster.ratioY);if(px>=0&&py>=0&&px<meshRaster.width&&py<meshRaster.height)p=meshRaster.vertices[meshRaster.picks[py*meshRaster.width+px]-1];if(!p&&meshCache?.mesh.rows.length===1)p=HistorySurfaceData.nearestProjected(picked,x,y,24);}
+    else if($('spectral-view').value==='waterfall'&&hitContext&&x>=0&&y>=0&&x<hitCanvas.width&&y<hitCanvas.height){const pixel=hitContext.getImageData(Math.floor(x),Math.floor(y),1,1).data;if(pixel[3]===255)p=hitPoints[(pixel[0]+(pixel[1]<<8)+(pixel[2]<<16))-1];
       if(p){const dx=p.x-p.from.x,dy=p.y-p.from.y,t=Math.max(0,Math.min(1,((x-p.from.x)*dx+(y-p.from.y)*dy)/(dx*dx+dy*dy||1)));if(Math.hypot(x-p.from.x-t*dx,y-p.from.y-t*dy)>4)p=null;}}
     else p=HistorySurfaceData.nearestProjected(picked,x,y,24);if(!p)return;
-    $('spectral-readout').textContent=`${format(spectrum.frequencies[p.bin])} Hz · ${format(spectrum.frames[p.fi].timeSeconds)} s · ${format(p.value)} ${unit()} · แกน ${$('spectral-axis').value}`;
+    $('spectral-readout').textContent=`${format(spectrum.frequencies[p.bin])} Hz · ${format(spectrum.frames[p.fi].timeSeconds)} s · ${format(p.value)} ${unit()} · แกน ${$('spectral-axis').value}${$('spectral-view').value==='surface'?' · จุด FFT จริงใกล้ตำแหน่งที่ชี้':''}`;
     if(choose){frameIndex=p.fi;$('spectral-frame').value=String(frameIndex);scheduleDraw();}}
   $('spectral-import').addEventListener('click',()=>void action(async()=>{const result=check(await api.importWaveform());if(!result.canceled)await load('load',result.text,result.fileName);}));
   $('spectral-demo').addEventListener('click',()=>void load('demo',null,'สัญญาณทดสอบ · ไม่ใช่ข้อมูลเซ็นเซอร์'));
   $('spectral-clear').addEventListener('click',()=>{++generation;++computation;resetWorker();blank();$('spectral-fs').value='';$('spectral-unit').value='a.u.';setStatus('เปิด CSV ของคลื่นดิบเพื่อเริ่มวิเคราะห์');});
   for(const id of ['spectral-axis','spectral-size','spectral-window','spectral-overlap'])$(id).addEventListener('change',()=>void compute());
   $('spectral-scale').addEventListener('change',scheduleDraw);$('spectral-view').addEventListener('change',scheduleDraw);
+  $('spectral-max-hz').addEventListener('change',()=>{if(!$('spectral-max-hz').checkValidity()){$('spectral-max-hz').reportValidity();$('spectral-max-hz').value='';}scheduleDraw();});
   $('spectral-frame').addEventListener('input',()=>{frameIndex=Number($('spectral-frame').value);scheduleDraw();});
   $('spectral-fft').addEventListener('pointermove',event=>{
     if(!spectrum)return;
@@ -217,19 +264,19 @@ function setupSpectralUI() {
     const list=$('spectral-scale').value==='psd'?spectrum.meanPSD:values(spectrum.frames[frameIndex]);
     plot.title=`${format(spectrum.frequencies[bin])} Hz · ${format(list[bin])} ${unit()} · ${$('spectral-scale').value==='psd'?'เฉลี่ยทุกช่วง':`${format(spectrum.frames[frameIndex].timeSeconds)} s`}`;
   });
-  $('spectral-reset').addEventListener('click',()=>{rotation=-.6;zoom=1;scheduleDraw();});
+  $('spectral-reset').addEventListener('click',()=>{rotation=-.6;elevation=.6;zoom=1;scheduleDraw();});
   $('spectral-fullscreen').addEventListener('click',()=>void action(()=>togglePanelFullscreen($('spectral-panel'))));
   const surface=$('spectral-surface');
-  surface.addEventListener('pointerdown',event=>{if(event.button!==0)return;drag={x:event.clientX,startX:event.clientX,startY:event.clientY,rotation,moved:false};surface.setPointerCapture(event.pointerId);surface.focus();});
-  surface.addEventListener('pointermove',event=>{if(drag){if(Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)>4)drag.moved=true;if($('spectral-view').value==='waterfall'){rotation=drag.rotation+(event.clientX-drag.x)*.008;scheduleDraw();}}else readAt(event);});
+  surface.addEventListener('pointerdown',event=>{if(event.button!==0)return;drag={x:event.clientX,startX:event.clientX,startY:event.clientY,rotation,elevation,moved:false};surface.setPointerCapture(event.pointerId);surface.focus();});
+  surface.addEventListener('pointermove',event=>{if(drag){if(Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)>4)drag.moved=true;if($('spectral-view').value!=='spectrogram'){rotation=drag.rotation+(event.clientX-drag.x)*.008;elevation=Math.max(.2,Math.min(1.3,drag.elevation+(event.clientY-drag.startY)*.006));scheduleDraw();}}else readAt(event);});
   surface.addEventListener('pointerup',event=>{if(!drag?.moved)readAt(event,true);drag=null;if(surface.hasPointerCapture(event.pointerId))surface.releasePointerCapture(event.pointerId);});
   surface.addEventListener('pointercancel',()=>{drag=null;});
-  surface.addEventListener('wheel',event=>{if($('spectral-view').value!=='waterfall')return;event.preventDefault();zoom=Math.max(.6,Math.min(1.7,zoom*(event.deltaY>0?.94:1.06)));scheduleDraw();},{passive:false});
+  surface.addEventListener('wheel',event=>{if($('spectral-view').value==='spectrogram')return;event.preventDefault();zoom=Math.max(.6,Math.min(1.7,zoom*(event.deltaY>0?.94:1.06)));scheduleDraw();},{passive:false});
   surface.addEventListener('keydown',event=>{if(!spectrum)return;let handled=true;
     if(event.key==='ArrowRight'||event.key==='ArrowUp')frameIndex=Math.min(spectrum.frames.length-1,frameIndex+1);
     else if(event.key==='ArrowLeft'||event.key==='ArrowDown')frameIndex=Math.max(0,frameIndex-1);
     else if(event.key==='+')zoom=Math.min(1.7,zoom+.1);else if(event.key==='-')zoom=Math.max(.6,zoom-.1);
-    else if(event.key==='Home'){rotation=-.6;zoom=1;frameIndex=0;}else handled=false;
+    else if(event.key==='Home'){rotation=-.6;elevation=.6;zoom=1;frameIndex=0;}else handled=false;
     if(handled){event.preventDefault();$('spectral-frame').value=String(frameIndex);scheduleDraw();}});
   new ResizeObserver(scheduleDraw).observe(surface);
   document.addEventListener('fullscreenchange',()=>{$('spectral-fullscreen').textContent=document.fullscreenElement===$('spectral-panel')?'ย่อกราฟ':'ขยายกราฟ';scheduleDraw();});

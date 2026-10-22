@@ -18,7 +18,8 @@ self.onmessage = ({ data: request }) => {
         const t = i / sampleRateHz;
         channels.X.push(Math.sin(2 * Math.PI * 50 * t) + .4 * Math.sin(2 * Math.PI * 120 * t));
         channels.Y.push(.7 * Math.sin(2 * Math.PI * 80 * t));
-        channels.Z.push(.5 * Math.sin(2 * Math.PI * (30 * t + 20 * t * t)));
+        const envelope = .12 + .88 * Math.exp(-(((t - 2) / .65) ** 2));
+        channels.Z.push(.5 * envelope * Math.sin(2 * Math.PI * (30 * t + 20 * t * t)));
       }
       waveform = { channels, sampleRateHz, sampleCount, durationSeconds: sampleCount / sampleRateHz, timeSpanSeconds: (sampleCount - 1) / sampleRateHz, unit: 'm/s²', source: 'test-signal', timingSource: 'generated' };
       result = metadata();
