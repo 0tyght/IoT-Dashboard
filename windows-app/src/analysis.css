@@ -5,6 +5,30 @@
 .analysis-sources button { background:transparent; border-color:transparent; min-height:29px; font-size:12px; padding:4px 12px; }
 .analysis-sources button[aria-selected="true"] { color:#fff; background:#6252e9; border-color:#6252e9; }
 .analysis-source-panel { min-width:0; }
+.trend-fft-host { min-width:0; margin:0 10px 10px; }
+.trend-fft-host .spectral-heading { display:none; }
+.trend-fft-host .spectral-capability { margin:0 0 3px; }
+.trend-fft-toolbar { gap:6px 10px; }
+.trend-fft-toolbar select { max-width:230px; }
+.trend-fft-toolbar label:last-child { min-width:160px; flex:1; }
+.trend-fft-toolbar label:last-child select { max-width:100%; width:100%; }
+.trend-fft-provenance { font-size:11px; color:#50439c; background:#f6f4ff; padding:3px 8px; margin:0; flex-shrink:0; }
+.trend-fft-host .spectral-status { overflow-wrap:anywhere; }
+@media (min-width:1101px) and (min-height:680px) {
+  .history-range[data-history-view="trend-fft"] { overflow:auto; }
+  .history-range[data-history-view="trend-fft"] > .panel-heading { padding:4px 10px!important; }
+  .history-range[data-history-view="trend-fft"] > .panel-heading > div:first-child { display:none; }
+  #analysis-history .history-range[data-history-view="trend-fft"] .history-range-controls { padding:4px 10px; }
+  .trend-fft-host:not([hidden]) { display:flex; flex-direction:column; flex:1; min-height:340px; }
+  .trend-fft-host .spectral-capability { font-size:11px; padding:4px 8px; }
+  .trend-fft-host:has(.spectral-results:not([hidden])) > .spectral-capability { display:none; }
+  .trend-fft-host .spectral-toolbar { margin:2px 0; }
+  .trend-fft-host .spectral-topplots { flex:1; min-height:170px; }
+  .trend-fft-host .spectral-waterfall { min-height:225px; }
+  .trend-fft-host .spectral-config { gap:5px 8px; }
+  .trend-fft-host .spectral-metadata { margin-left:0; }
+  .trend-fft-host .spectral-footnote { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+}
 #analysis-waveform > .spectral-heading { display:none; }
 #analysis-history .history-range { margin:0; }
 #analysis-history .history-range > .panel-heading { align-items:center; padding:9px 12px; flex-wrap:wrap; gap:8px 14px; }

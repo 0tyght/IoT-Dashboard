@@ -1,4 +1,8 @@
-# UX/UI review — 22 October 2026
+# UX/UI review — 25 October 2026
+
+Overall-trend FFT now appears as a third saved-data graph mode alongside XYZ scatter and time plots. It loads unreduced records, exposes metric/axis and continuous-segment selection, labels time interpolation and receive cadence, and clears prior results on invalid data or a changed filter. Default 2D plots use the remaining workspace; 3D time-frequency plots are a separate display toggle so a compact desktop does not squeeze all plots into unreadable strips. Waveform input state remains isolated. `trend-ui.cjs` verifies known slow-cycle frequency, strict-jitter rejection/recovery, units/axes, fullscreen source labels and narrow layouts. The underlying sensor's waveform capability has not changed.
+
+Finish review: the existing Operate interface and white/violet palette are retained. The rendered 1366×768 view fits the two readable trend/FFT plots without workspace scrolling; narrow layouts retain full content width and allow vertical scrolling. The mechanical detector returned no findings. All seven packaged desktop suites passed, including waveform/trend state isolation and clock-rollback preservation in storage tests. This remains local recorded-data analysis, not a waveform-capability or field-calibration claim.
 
 Current scope: refine the existing white/violet Windows interface, consolidate historical graphs and waveform analysis, and make navigation/layout behavior consistent across pages. Product copy describes the task and measured source directly; it does not use slogans or imply unverified diagnostics.
 

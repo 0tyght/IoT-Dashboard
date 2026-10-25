@@ -216,6 +216,21 @@ class DataStore {
     for (const [stamp, record] of group.continuityFrames) selected.set(stamp, record);
     return { rows: [...selected.values()].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)), total: group.total, rangeTotal, skipped: summary.skipped, reduced: selected.size < group.total, gapStarts: group.gapPairs.map(pair => pair[1].timestamp), series, seriesKey: group.key };
   }
+  async trendRange({ from, to, motorId, seriesKey, runId = '' }) {
+    const start=Date.parse(from),end=Date.parse(to),limit=65536;
+    if(typeof motorId!=='string'||!motorId||!Number.isFinite(start)||!Number.isFinite(end)||start>=end)throw new Error('เลือกมอเตอร์และช่วงเวลาเริ่ม–สิ้นสุดให้ถูกต้อง');
+    await this.queue;
+    const files=await snapshotJournal(this.dataPath(),dayKey(new Date(start)),dayKey(new Date(end))),groups=new Map();let rangeTotal=0;
+    const matches=record=>record.motorId===motorId&&Date.parse(record.timestamp)>=start&&Date.parse(record.timestamp)<=end&&(!runId||recordedRunId(record)===runId);
+    const skipped=await visitSnapshot(files,record=>{if(!matches(record))return;const descriptor=historySeries(record);if(!groups.has(descriptor.key))groups.set(descriptor.key,{...descriptor,simulation:record.source==='SIMULATION',total:0,lastTimestamp:record.timestamp});const group=groups.get(descriptor.key);group.total++;rangeTotal++;if(Date.parse(record.timestamp)>Date.parse(group.lastTimestamp))group.lastTimestamp=record.timestamp;});
+    const series=[...groups.values()].sort((a,b)=>Date.parse(b.lastTimestamp)-Date.parse(a.lastTimestamp)),group=seriesKey?groups.get(seriesKey):series[0];
+    const result={rows:[],series,seriesKey:group?.key||'',total:group?.total||0,rangeTotal,skipped,reduced:false,limit,limitExceeded:Boolean(group&&group.total>limit)};
+    if(!group||result.limitExceeded)return result;
+    await visitSnapshot(files,record=>{if(matches(record)&&historySeries(record).key===group.key)result.rows.push({timestamp:record.timestamp,value:record.value,channels:Object.fromEntries([...PRESET_CHANNELS,'temperature','frequencyX','frequencyY','frequencyZ'].map(key=>[key,record.channels?.[key]??record[key]])),frequencyStatus:record.frequencyStatus,pollIntervalMs:record.pollIntervalMs,actualIntervalMs:record.actualIntervalMs});});
+    // Preserve journal receive order: sorting could conceal a clock rollback.
+    // TrendAnalysis separates non-increasing timestamps instead of joining them.
+    return result;
+  }
   async scatterRange({ from, to, motorId, profile, seriesKey, runId = '', metric = 'velocity', limit = 6000 }) {
     const start = Date.parse(from), end = Date.parse(to);
     if (!motorId || typeof motorId !== 'string' || !Number.isFinite(start) || !Number.isFinite(end) || start >= end) throw new Error('เลือกมอเตอร์และช่วงเวลาเริ่ม–สิ้นสุดให้ถูกต้อง');

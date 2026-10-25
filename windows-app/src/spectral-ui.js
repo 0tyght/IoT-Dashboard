@@ -1,7 +1,8 @@
 'use strict';
 
-function setupSpectralUI() {
-  const host = $('analysis-view');
+function setupSpectralUI({host:providedHost,prefix='spectral',mode='waveform'} = {}) {
+  const $ = id => document.getElementById(id.startsWith('spectral-') ? prefix + id.slice(8) : id);
+  const host = providedHost || $('analysis-view'), isTrend = mode === 'trend';
   host.innerHTML = `
     <div class="spectral-heading"><div><h2>วิเคราะห์ความถี่</h2><p>Waveform · FFT · Surface 3D</p></div><span id="spectral-source" class="spectral-source">ยังไม่มีข้อมูลคลื่น</span></div>
     <p class="spectral-capability">SN-3001-WZ3A-N01 ส่งค่ารวมและค่า Hz ตาม Register ที่มีอยู่ ยังไม่พบช่องส่งคลื่นดิบ จึงยังทำ FFT สดจากเซ็นเซอร์นี้ไม่ได้</p>
@@ -34,7 +35,24 @@ function setupSpectralUI() {
         <label class="spectral-frame"><span>ช่วง FFT</span><input id="spectral-frame" type="range" min="0" max="0" value="0" aria-label="เลือกช่วงเวลา FFT"><output id="spectral-frame-time"></output></label>
       </section>
       <p id="spectral-method" class="spectral-footnote" title="ลบค่าเฉลี่ยก่อนคูณ Window · A_peak=2|FFT|/Σw · PSD=2|FFT|²/(Fs·Σw²) · ไม่คูณ 2 ที่ DC และ Nyquist · PSD ด้านบนเฉลี่ย periodogram ทุกช่วง"></p>
-    </div>`;
+    </div>`.replace(/id="spectral-/g, `id="${prefix}-`);
+  $('spectral-surface').classList.add('spectral-surface');$('spectral-results').classList.add('spectral-results');
+  let trendRows=null,trendContext=null;
+  if(isTrend){
+    host.classList.add('trend-fft-host');host.querySelector('.spectral-heading').hidden=true;host.querySelector('.spectral-toolbar').hidden=true;
+    host.querySelector('.spectral-capability').textContent='FFT ของค่ารวมตามเวลารับ · ใช้ดูรอบการเปลี่ยนโหลด ไม่ใช่สเปกตรัมการสั่น 10–5000 Hz · ยังไม่ทราบรอบประมวลผลภายในเซ็นเซอร์';
+    const toolbar=node('div',null,'spectral-toolbar trend-fft-toolbar');
+    toolbar.innerHTML=`<label>ค่าที่วิเคราะห์<select id="${prefix}-metric"><option value="velocity">ความเร็วสั่น · mm/s</option><option value="displacement">ระยะกระจัด · µm</option><option value="acceleration">ความเร่ง · m/s²</option><option value="frequency">ค่า Hz ที่รายงาน</option><option value="temperature">อุณหภูมิ · °C</option></select></label><label>แกน<select id="${prefix}-channel"><option>X</option><option>Y</option><option>Z</option></select></label><label>เวลารับข้อมูล<select id="${prefix}-timing"><option value="linear">ปรับ jitter เชิงเส้น ≤20%</option><option value="strict">ใช้ค่าตรง · jitter ≤0.1%</option></select></label><label>ช่วงต่อเนื่อง<select id="${prefix}-segment"><option value="-1">ช่วงที่ยาวที่สุด</option></select></label>`;
+    host.querySelector('.spectral-capability').after(toolbar);
+    $('spectral-empty').replaceChildren(node('h3','FFT ของค่ารวมตามเวลา'),node('p','เลือกมอเตอร์ รอบอ่าน และช่วงเวลา แล้วกดโหลดกราฟ ต้องมีข้อมูลต่อเนื่องอย่างน้อย 64 ค่า ไม่เติมช่วงที่ขาดและไม่ใช้จุดที่ลดจำนวนแล้ว'));
+    $('spectral-axis').parentElement.hidden=true;
+    $('spectral-size').value='256';$('spectral-max-hz').min='0.000000001';
+    $('spectral-scale').options[0].textContent='ค่ารวม · peak';$('spectral-scale').options[1].textContent='PSD ค่ารวม';$('spectral-peak').title='ขนาดการเปลี่ยนค่ารวมหลังหักค่าเฉลี่ย ไม่ใช่ Peak ของคลื่นสั่นจริง';
+    const provenance=node('p','FFT ค่ารวม · เวลารับในคอม · ไม่ใช่ FFT คลื่นสั่นสะเทือน','trend-fft-provenance');$('spectral-panel').querySelector('.panel-heading').after(provenance);
+    const showTime=node('button','สเปกตรัมตามเวลา 3D');showTime.type='button';showTime.id=`${prefix}-show-time`;showTime.setAttribute('aria-expanded','false');showTime.setAttribute('aria-controls',`${prefix}-panel`);toolbar.append(showTime);$('spectral-panel').hidden=true;host.dataset.timeView='false';
+    showTime.onclick=()=>{const active=$('spectral-panel').hidden;$('spectral-panel').hidden=!active;host.querySelector('.spectral-topplots').hidden=active;host.dataset.timeView=String(active);showTime.setAttribute('aria-expanded',String(active));showTime.textContent=active?'กลับกราฟ FFT 2D':'สเปกตรัมตามเวลา 3D';scheduleDraw();};
+    for(const id of ['metric','channel','timing','segment'])document.getElementById(`${prefix}-${id}`).onchange=()=>{if(id==='metric'||id==='channel')document.getElementById(`${prefix}-segment`).replaceChildren(new Option('ช่วงที่ยาวที่สุด','-1'));void reloadTrend();};
+  }
 
   let worker, serial = 0, pending = new Map(), generation = 0, computation = 0;
   let input = null, spectrum = null, fileName = '', frameIndex = 0, rotation = -.6, elevation = .6, zoom = 1, drawing = false, picked = [], drag = null;
@@ -43,7 +61,7 @@ function setupSpectralUI() {
   const meshCanvas = document.createElement('canvas');
   let meshCache = null, meshRaster = null;
   const colors = { X:'#007b8d', Y:'#3474bb', Z:'#6750c5' };
-  $('spectral-open-history').onclick = () => setAnalysisSource('history');
+  if(!isTrend)$('spectral-open-history').onclick = () => setAnalysisSource('history');
   const format = value => !Number.isFinite(value) ? '—' : value !== 0 && (Math.abs(value)<.0001 || Math.abs(value)>=1e7) ? value.toExponential(3) : Number(value.toPrecision(5)).toLocaleString('en-US', { maximumFractionDigits:6 });
   const unit = () => $('spectral-scale').value === 'psd' ? `(${input.unit})²/Hz` : input.unit;
   const values = frame => $('spectral-scale').value === 'psd' ? frame.psd : frame.amplitudes;
@@ -70,24 +88,31 @@ function setupSpectralUI() {
     $('spectral-clear').disabled = true; $('spectral-file').textContent = '';
     $('spectral-source').textContent = 'ยังไม่มีข้อมูลคลื่น';
     $('spectral-fs').disabled = false; $('spectral-unit').disabled = false;
+    if(isTrend)for(const key of ['peakHz','sampleRate','samples','start','timing'])delete host.dataset[key];
   }
   async function load(type, text, name) {
     const mine = ++generation; ++computation; resetWorker(); blank();
     setStatus('กำลังตรวจชุดตัวอย่างคลื่น…');
     try {
       const rateText = $('spectral-fs').value.trim();
-      const details = await request(type, { text, options: { ...(rateText ? {sampleRateHz:Number(rateText)} : {}), unit:$('spectral-unit').value } });
+      const details = await request(type, isTrend ? {rows:trendRows,options:{...trendContext,metric:document.getElementById(`${prefix}-metric`).value,axis:document.getElementById(`${prefix}-channel`).value,timing:document.getElementById(`${prefix}-timing`).value,segment:Number(document.getElementById(`${prefix}-segment`).value)}} : { text, options: { ...(rateText ? {sampleRateHz:Number(rateText)} : {}), unit:$('spectral-unit').value } });
       if (mine !== generation) return;
       input = details; fileName = name; $('spectral-file').textContent = name;
       $('spectral-fs').value = String(details.sampleRateHz); $('spectral-unit').value = details.unit;
       $('spectral-fs').disabled = true; $('spectral-unit').disabled = true;
       $('spectral-clear').disabled = false; $('spectral-empty').hidden = true; $('spectral-results').hidden = false;
-      $('spectral-source').textContent = details.source === 'test-signal' ? 'TEST SIGNAL · ข้อมูลทดสอบ' : 'WAVEFORM CSV · ไฟล์คลื่น';
+      $('spectral-source').textContent = isTrend ? `FFT ค่ารวม${details.simulation?' · ข้อมูลจำลอง':''}` : details.source === 'test-signal' ? 'TEST SIGNAL · ข้อมูลทดสอบ' : 'WAVEFORM CSV · ไฟล์คลื่น';
+      if(isTrend){const segment=document.getElementById(`${prefix}-segment`);segment.replaceChildren(...details.segments.map(item=>new Option(`${item.index+1} · ${item.count.toLocaleString()} ค่า · ${timestamp(item.start)}`,item.index)));segment.value=String(details.selectedSegment);host.dataset.source='overall-trend';host.dataset.sampleRate=String(details.sampleRateHz);host.dataset.samples=String(details.sampleCount);host.dataset.timing=details.timingMode;host.dataset.start=details.startTimestamp;}
       $('spectral-axis').replaceChildren(...details.axes.map(axis => { const option = node('option',axis); option.value = axis; return option; }));
       for (const option of $('spectral-size').options) option.disabled = Number(option.value) > details.sampleCount;
       if (Number($('spectral-size').value) > details.sampleCount) $('spectral-size').value = [...$('spectral-size').options].filter(option=>!option.disabled).at(-1)?.value || '64';
       await compute();
     } catch (error) { if (mine === generation) { blank(); setStatus(error.message,true); } }
+  }
+  async function reloadTrend(){
+    if(!trendRows)return;
+    const metric=document.getElementById(`${prefix}-metric`).value,channel=document.getElementById(`${prefix}-channel`);channel.disabled=metric==='custom'||metric==='temperature';if(channel.disabled)channel.value='X';
+    await load('trend',null,trendContext?.motorId||'ค่ารวม');
   }
   async function compute() {
     if (!input) return;
@@ -102,12 +127,16 @@ function setupSpectralUI() {
       if (Number($('spectral-max-hz').value) > result.nyquistHz) $('spectral-max-hz').value = '';
       $('spectral-frame').max = String(result.frames.length-1); $('spectral-frame').value = String(frameIndex);
       $('spectral-metadata').replaceChildren(...[
-        `Fs ${format(input.sampleRateHz)} Hz`, `Nyquist ${format(result.nyquistHz)} Hz`, `Δf ${format(result.binWidthHz)} Hz`, `${format(input.sampleCount)} samples`, `${result.frames.length} ช่วง`
+        `${isTrend?'Fs รับ':'Fs'} ${format(input.sampleRateHz)} Hz`, `${isTrend?'สูงสุดตามรอบรับ':'Nyquist'} ${format(result.nyquistHz)} Hz`, `Δf ${format(result.binWidthHz)} Hz`, `${format(input.sampleCount)} samples`, `${result.frames.length} ช่วง`
       ].map(text => node('b',text)));
       const test = input.source === 'test-signal';
       setStatus(test ? 'ข้อมูลทดสอบเท่านั้น · X: 50 / 120 Hz คงที่ · Y: 80 Hz · Z: sweep 30–190 Hz พร้อมขนาดที่เปลี่ยนตามเวลา' : `วิเคราะห์ ${fileName} · เวลาเป็นวินาทีจาก sample แรก · เปลี่ยน Fs/หน่วย: ล้างข้อมูลแล้วเปิดไฟล์ใหม่`);
-      $('spectral-wave-note').textContent = `${format(input.timeSpanSeconds)} s · ${input.unit} · ภาพรวมย่อคงจุดต่ำสุด/สูงสุด การคำนวณใช้ทุก sample`;
+      if(isTrend)setStatus(`${input.motorId} · ${input.metricLabel} ${input.axis} · ${timestamp(input.startTimestamp)} · ${input.originalSampleCount.toLocaleString()}/${input.totalRecords.toLocaleString()} ค่าต่อเนื่อง${input.omittedRecords?` · นอกช่วง ${input.omittedRecords.toLocaleString()} ค่า`:''} · ${input.timingMode==='linear'?'จัดเวลาเชิงเส้น':'ค่าตรง'} · jitter ${format(input.maxJitterPercent)}%${input.simulation?' · ข้อมูลจำลอง':''}`);
+      $('spectral-wave-title').textContent=isTrend?'ค่ารวมตามเวลารับ':'คลื่นตามเวลา';
+      $('spectral-wave-note').textContent = `${format(input.timeSpanSeconds)} s · ${input.unit} · ${isTrend?(input.timingMode==='linear'?'FFT ใช้ค่าจัดเวลาเชิงเส้น ไม่ได้แก้ไฟล์ต้นฉบับ':'FFT ใช้ค่าต้นฉบับทุกจุดในช่วงนี้'):'ภาพรวมย่อคงจุดต่ำสุด/สูงสุด การคำนวณใช้ทุก sample'}`;
       $('spectral-method').textContent = `ลบค่าเฉลี่ย · ${$('spectral-window').selectedOptions[0].textContent} · N=${result.fftSize} · Hop=${result.hopSize} · Δf=Fs/N · ไม่เติมศูนย์ · ท้ายที่ไม่ครบ ${result.omittedSamples} samples · PSD ด้านบนเฉลี่ยทุกช่วง; Waterfall/สีเป็นค่าของแต่ละช่วง`;
+      if(isTrend)$('spectral-method').textContent=`FFT ค่ารวม ไม่ใช่สเปกตรัมการสั่น · ${$('spectral-method').textContent} · Fs จากเวลารับในคอม ไม่ใช่ความเร็วภายในเซ็นเซอร์`;
+      if(isTrend)$('spectral-method').title=$('spectral-method').textContent+' · A_peak=2|FFT|/Σw · PSD=2|FFT|²/(Fs·Σw²) · ไม่คูณ 2 ที่ DC/Nyquist';
       $('spectral-readout').textContent = result.frames.length === 1 ? 'มี 1 ช่วง FFT · คลื่นต้องยาวขึ้นเพื่อดูการเปลี่ยนแปลงตามเวลา' : 'ชี้เพื่ออ่านค่า · คลิกเลือกช่วง FFT · ลากเพื่อหมุน · ล้อเมาส์เพื่อซูม';
       scheduleDraw();
     } catch(error) { if(mine === computation && loadId === generation) { setStatus(error.message,true); scheduleDraw(); } }
@@ -145,8 +174,10 @@ function setupSpectralUI() {
       ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();preview.forEach((p,i)=>i?ctx.lineTo(x(p.time),y(p.value)):ctx.moveTo(x(p.time),y(p.value)));ctx.stroke();}
     const isPSD=$('spectral-scale').value==='psd',list=isPSD?spectrum.meanPSD:values(spectrum.frames[frameIndex]);
     let peak=0,max=0;list.forEach((v,i)=>{if(v>max){max=v;peak=i;}});
-    $('spectral-fft-title').textContent=isPSD?'PSD · ค่าเฉลี่ยทุกช่วง':'FFT · ช่วงเวลาที่เลือก';
+    $('spectral-fft-title').textContent=isTrend?(isPSD?'PSD ค่ารวม · เฉลี่ยทุกช่วง':'FFT ค่ารวม · ช่วงที่เลือก'):isPSD?'PSD · ค่าเฉลี่ยทุกช่วง':'FFT · ช่วงเวลาที่เลือก';
     $('spectral-peak').textContent=`Peak bin ${format(spectrum.frequencies[peak])} Hz · ${format(max)} ${unit()}`;
+    host.dataset.peakHz=String(spectrum.frequencies[peak]);
+    if(isTrend)$('spectral-peak').textContent=max===0?'ไม่มีการเปลี่ยนแปลงในช่วงนี้':`${$('spectral-peak').textContent}${spectrum.frequencies[peak]>0?` · รอบค่ารวม ${format(1/spectrum.frequencies[peak])} s`:''}`;
     const frame=spectrum.frames[frameIndex];$('spectral-frame-time').textContent=`${frameIndex+1}/${spectrum.frames.length} · ${format(frame.timeSeconds)} s`;
     if(fft){const{ctx,width,height}=fft,{x,y}=axes(ctx,width,height,0,max*1.12||1,spectrum.nyquistHz,'Hz',unit());ctx.strokeStyle=color;ctx.lineWidth=1.4;ctx.beginPath();peakBins(list).forEach((i,j)=>j?ctx.lineTo(x(spectrum.frequencies[i]),y(list[i])):ctx.moveTo(x(spectrum.frequencies[i]),y(list[i])));ctx.stroke();}
   }
@@ -194,7 +225,7 @@ function setupSpectralUI() {
     for(let i=0;i<=4;i++){const p=project(i/4,1,-.5);ctx.fillText(format(mesh.frequencyMaxHz*i/4),p.x,p.y+14);}
     for(let i=0;i<=2;i++){if(mesh.rows.length>1||i===1){const p=project(0,i/2,-.5);ctx.textAlign='right';ctx.fillText(`${format(mesh.timeStart+(mesh.timeEnd-mesh.timeStart)*i/2)} s`,p.x-8,p.y+3);}}
     const hz=project(.65,1,-.5);ctx.textAlign='center';ctx.fillText('Frequency · Hz',hz.x,Math.min(height-4,hz.y+29));
-    const provenance=input.source==='test-signal'?'TEST SIGNAL · ข้อมูลทดสอบ':'WAVEFORM CSV';
+    const provenance=isTrend?`FFT ค่ารวม${input.simulation?' · ข้อมูลจำลอง':''}`:input.source==='test-signal'?'TEST SIGNAL · ข้อมูลทดสอบ':'WAVEFORM CSV';
     ctx.textAlign='left';ctx.fillText(`${provenance} · ผิว FFT · ${mesh.displayedFrames}/${mesh.totalFrames} ช่วง · ${mesh.displayedBins}/${mesh.totalBins} bins · สีและความสูง = ${unit()}`,10,13);
     if(mesh.rows.length===1){const row=mesh.rows[0];ctx.strokeStyle='#6252e9';ctx.lineWidth=2;ctx.beginPath();row.vertices.forEach((v,i)=>{const p=project(v.x,v.y,v.z);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);picked.push({...v,...p});});ctx.stroke();ctx.fillStyle='#50596e';ctx.fillText('มีช่วง FFT เดียว · ยังสร้างผืนตามเวลาไม่ได้',10,height-8);}
     if(mesh.displayedBins<2){ctx.fillStyle='#50596e';ctx.fillText('ช่วง Hz นี้มีเพียง 1 bin · เพิ่มความถี่สูงสุดที่แสดง',10,height-8);}
@@ -207,6 +238,7 @@ function setupSpectralUI() {
     const first=frames[0].timeSeconds,last=frames.at(-1).timeSeconds,span=last-first||1;
     const mode=$('spectral-view').value;
     $('spectral-surface-title').textContent=mode==='surface'?'Surface 3D · FFT ตามเวลา':mode==='waterfall'?'Waterfall · FFT ตามเวลา':'Spectrogram · FFT ตามเวลา';
+    if(isTrend)$('spectral-surface-title').textContent+=' · ค่ารวม';
     $('spectral-reset').disabled=mode==='spectrogram';
     $('spectral-max-hz').disabled=mode!=='surface';
     if(mode==='surface'){drawMesh(ctx,width,height);return;}
@@ -221,6 +253,7 @@ function setupSpectralUI() {
       for(let i=0;i<=4;i++)ctx.fillText(format(spectrum.nyquistHz*i/4),left+(right-left)*i/4,height-14);ctx.textAlign='right';ctx.fillText('Hz',right,height-1);
       for(let i=0;i<80;i++){ctx.fillStyle=heat(i/79);ctx.fillRect(width-45,bottom-(bottom-top)*(i+1)/80,12,(bottom-top)/80+.5);}
       ctx.fillStyle='#5e6679';ctx.textAlign='right';ctx.fillText(format(max),width-2,top+5);ctx.fillText('0',width-2,bottom);ctx.fillText(unit(),width-3,11);
+      if(isTrend){ctx.textAlign='left';ctx.fillText('FFT ค่ารวมตามเวลารับ · ไม่ใช่สเปกตรัมการสั่น',10,12);}
     }else{
       const project=projection(width,height);
       hitCanvas.width=Math.ceil(width);hitCanvas.height=Math.ceil(height);hitContext=hitCanvas.getContext('2d',{willReadFrequently:true});hitContext.clearRect(0,0,width,height);hitContext.lineWidth=6;
@@ -240,6 +273,7 @@ function setupSpectralUI() {
       for(let i=0;i<=2;i++){if(frames.length>1||i===1){const p=project(0,i/2,-.5);ctx.fillText(`${format(first+(last-first)*i/2)} s`,p.x-20,p.y+3);}const z=project(1,1,i/2-.5);ctx.textAlign='left';ctx.fillText(format(max*i/2),z.x+6,z.y+3);ctx.textAlign='center';}
       const hz=project(.6,1,-.5),u=project(1,1,.5);ctx.fillText('Frequency · Hz',hz.x,Math.min(height-4,hz.y+27));ctx.textAlign='right';ctx.fillText(unit(),Math.min(width-4,u.x+25),Math.max(12,u.y-12));
       ctx.textAlign='left';ctx.fillText(`วาด ${rows.length}/${frames.length} ช่วง · สี 0–${format(max)} ${unit()} · เส้นม่วง = ช่วงที่เลือก`,10,13);
+      if(isTrend){ctx.fillStyle='#fff';ctx.fillRect(0,0,width-65,18);ctx.fillStyle='#50596e';ctx.fillText('FFT ค่ารวมตามเวลารับ · ไม่ใช่สเปกตรัมการสั่น',10,13);}
     }
   }
   function scheduleDraw(){if(drawing)return;drawing=true;requestAnimationFrame(()=>{drawing=false;drawPlots();drawSurface();});}
@@ -251,6 +285,7 @@ function setupSpectralUI() {
       if(p){const dx=p.x-p.from.x,dy=p.y-p.from.y,t=Math.max(0,Math.min(1,((x-p.from.x)*dx+(y-p.from.y)*dy)/(dx*dx+dy*dy||1)));if(Math.hypot(x-p.from.x-t*dx,y-p.from.y-t*dy)>4)p=null;}}
     else p=HistorySurfaceData.nearestProjected(picked,x,y,24);if(!p)return;
     $('spectral-readout').textContent=`${format(spectrum.frequencies[p.bin])} Hz · ${format(spectrum.frames[p.fi].timeSeconds)} s · ${format(p.value)} ${unit()} · แกน ${$('spectral-axis').value}${$('spectral-view').value==='surface'?' · จุด FFT จริงใกล้ตำแหน่งที่ชี้':''}`;
+    if(isTrend)$('spectral-readout').textContent+=` · ${timestamp(Date.parse(input.startTimestamp)+spectrum.frames[p.fi].timeSeconds*1000)} · ค่ารวม`;
     if(choose){frameIndex=p.fi;$('spectral-frame').value=String(frameIndex);scheduleDraw();}}
   $('spectral-import').addEventListener('click',()=>void action(async()=>{const result=check(await api.importWaveform());if(!result.canceled)await load('load',result.text,result.fileName);}));
   $('spectral-demo').addEventListener('click',()=>void load('demo',null,'สัญญาณทดสอบ · ไม่ใช่ข้อมูลเซ็นเซอร์'));
@@ -283,4 +318,5 @@ function setupSpectralUI() {
     if(handled){event.preventDefault();$('spectral-frame').value=String(frameIndex);scheduleDraw();}});
   new ResizeObserver(scheduleDraw).observe(surface);
   document.addEventListener('fullscreenchange',()=>{$('spectral-fullscreen').textContent=document.fullscreenElement===$('spectral-panel')?'ย่อกราฟ':'ขยายกราฟ';scheduleDraw();});
+  return{draw:scheduleDraw,clear(message='เลือกช่วงเวลาแล้วโหลดกราฟ') {++generation;++computation;trendRows=null;trendContext=null;resetWorker();blank();for(const key of ['peakHz','sampleRate','samples','start','timing'])delete host.dataset[key];setStatus(message);},async loadTrend(rows,context){trendRows=rows;trendContext=context;const metric=document.getElementById(`${prefix}-metric`),custom=context.sensorModel==='custom';if(custom)metric.replaceChildren(new Option(`Custom · ${context.unit}`,'custom'));else if(metric.options.length===1)metric.innerHTML='<option value="velocity">ความเร็วสั่น · mm/s</option><option value="displacement">ระยะกระจัด · µm</option><option value="acceleration">ความเร่ง · m/s²</option><option value="frequency">ค่า Hz ที่รายงาน</option><option value="temperature">อุณหภูมิ · °C</option>';const segment=document.getElementById(`${prefix}-segment`);segment.replaceChildren(new Option('ช่วงที่ยาวที่สุด','-1'));await reloadTrend();}};
 }

@@ -67,6 +67,7 @@ app.whenReady().then(() => {
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
   handle('data:chart-range', async filter => ({ ok: true, ...await store.chartRange(filter) }));
   handle('data:scatter-range', async filter => ({ ok: true, ...await store.scatterRange(filter) }));
+  handle('data:trend-range', async filter => ({ ok: true, ...await store.trendRange(filter) }));
   handle('data:open-folder', async () => {
     await fs.promises.mkdir(store.dataPath(), { recursive: true });
     const error = await shell.openPath(store.dataPath());

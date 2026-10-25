@@ -27,7 +27,7 @@ const { CSV_KEYS, csvRow } = require('../electron/data-store.cjs');
     await page.locator('[data-tab="analysis"]').click();
     await page.locator('#analysis-source-waveform').click();
     assert(await page.locator('#spectral-empty').isVisible());
-    assert((await page.locator('.spectral-capability').textContent()).includes('ยังทำ FFT สด') || (await page.locator('.spectral-capability').textContent()).includes('ยังไม่พบช่องส่งคลื่น'));
+    assert((await page.locator('#analysis-waveform .spectral-capability').textContent()).includes('ยังทำ FFT สด') || (await page.locator('#analysis-waveform .spectral-capability').textContent()).includes('ยังไม่พบช่องส่งคลื่น'));
     const importFile=async file=>{
       await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},file);
       await page.locator('#spectral-import').click();

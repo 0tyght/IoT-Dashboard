@@ -1,5 +1,6 @@
 'use strict';
 importScripts('spectral-analysis.js');
+importScripts('trend-analysis.js');
 let waveform = null;
 function metadata() {
   const { channels, ...details } = waveform;
@@ -22,6 +23,10 @@ self.onmessage = ({ data: request }) => {
         channels.Z.push(.5 * envelope * Math.sin(2 * Math.PI * (30 * t + 20 * t * t)));
       }
       waveform = { channels, sampleRateHz, sampleCount, durationSeconds: sampleCount / sampleRateHz, timeSpanSeconds: (sampleCount - 1) / sampleRateHz, unit: 'm/s²', source: 'test-signal', timingSource: 'generated' };
+      result = metadata();
+    } else if (request.type === 'trend') {
+      waveform = null;
+      waveform = TrendAnalysis.prepare(request.rows, request.options);
       result = metadata();
     } else if (request.type === 'analyze') {
       if (!waveform) throw new Error('เปิดไฟล์ Waveform CSV ก่อนวิเคราะห์');

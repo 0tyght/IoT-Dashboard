@@ -1,6 +1,7 @@
 'use strict';
 
-/* Pure waveform analysis. Overall Modbus readings are deliberately not inputs.
+/* Pure uniform-series analysis. The waveform CSV parser rejects overall records;
+ * TrendAnalysis prepares them separately with explicit receive-time provenance.
  * Scaling follows the one-sided periodogram convention documented by SciPy:
  * https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.periodogram.html
  * STFT frames use complete, unpadded windows; their times are window centers.

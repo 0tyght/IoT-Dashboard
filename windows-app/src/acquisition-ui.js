@@ -150,19 +150,23 @@ function setupAcquisitionUI() {
   historyPlot = createPlotStack($('history-plots'), { prefix: 'history', label: 'ย้อนหลัง' });
   const viewControls = node('div', null, 'history-view-switch'), twoD = node('button', 'แนวโน้มเวลา'), threeD = node('button', 'กระจาย 3D', 'active');
   twoD.type = 'button'; threeD.type = 'button'; twoD.id = 'history-view-lines'; threeD.id = 'history-view-scatter';
-  viewControls.append(threeD, twoD); rangePanel.querySelector('.panel-heading').append(viewControls);
+  const trendButton=node('button','FFT ค่ารวม');trendButton.type='button';trendButton.id='history-view-trend-fft';
+  viewControls.append(threeD, twoD, trendButton); rangePanel.querySelector('.panel-heading').append(viewControls);
   const scatter = createHistoryScatter($('history-plots'), { frames: () => rangeFrames, profile: () => rangeProfile, reduced: () => rangeReduced, sampling: () => rangeSampling, total: () => rangeCompleteTotal });
+  const trendHost=node('div');trendHost.id='history-trend-fft';trendHost.hidden=true;$('history-plots').after(trendHost);
+  const trend=setupSpectralUI({host:trendHost,prefix:'trendfft',mode:'trend'});
   const setHistoryView = view => {
     rangeView = view; const is3d = view === 'scatter';
-    $('history-plots').hidden = is3d; scatter.view.hidden = !is3d; rangePanel.dataset.historyView = view;
-    twoD.classList.toggle('active', !is3d); threeD.classList.toggle('active', is3d); twoD.setAttribute('aria-pressed', String(!is3d)); threeD.setAttribute('aria-pressed', String(is3d));
-    rangePanel.querySelector('.chart-legend').hidden = is3d;
+    $('history-plots').hidden = view!=='lines'; scatter.view.hidden = !is3d;trendHost.hidden=view!=='trend-fft';rangePanel.dataset.historyView = view;
+    for(const[button,value]of[[twoD,'lines'],[threeD,'scatter'],[trendButton,'trend-fft']]){button.classList.toggle('active',view===value);button.setAttribute('aria-pressed',String(view===value));}
+    rangePanel.querySelector('.chart-legend').hidden = view!=='lines';
+    rangePanel.querySelector('.panel-heading p').textContent=view==='trend-fft'?'FFT ของค่ารวมตามเวลารับในคอม · แยกจาก FFT คลื่นดิบ':'จุดกระจายแสดงความสัมพันธ์ X/Y/Z ของค่ารวม · ไม่ใช่คลื่นดิบหรือสเปกตรัม FFT';
   };
   setHistoryView(rangeView);
   const drawHistory = () => {
     const profile = rangeProfile || profiles.find(profile => profile.motorId === $('history-motor').value) || { motorId: $('history-motor').value, sensorModel: MODEL, unit: 'mm/s' };
     if (rangeView === 'lines') historyPlot.draw(rangeFrames, profile, { reduced: rangeReduced, gapStarts: rangeGapStarts });
-    else scatter.draw();
+    else if(rangeView==='trend-fft')trend.draw();else scatter.draw();
     threeD.disabled = profile.sensorModel === 'custom'; threeD.title = threeD.disabled ? 'ข้อมูล Custom มีค่าหนึ่งช่อง ใช้แนวโน้มเวลา' : 'หนึ่งจุดคือค่ารวม X/Y/Z ที่บันทึกพร้อมกัน ไม่ใช่ตำแหน่งหรือ FFT';
   };
   drawHistoryAnalysis = drawHistory;
@@ -170,12 +174,13 @@ function setupAcquisitionUI() {
     rangeGeneration++; rangeFrames = []; rangeProfile = null; rangeReduced = false; rangeGapStarts = []; rangeSampling = 'all'; rangeCompleteTotal = 0;
     historyPlot.cursorStamp = null; historyPlot.source = null; closeWorkbenchPopovers();
     if (!keepSeries) { seriesSelect.replaceChildren(); seriesLabel.hidden = true; }
+    trend.clear();
     historyPlot.draw([], rangeProfile || { sensorModel: MODEL, unit: 'mm/s' }); drawHistory(); scatter.draw();
     rangePanel.dataset.loaded = 'false';
     $('load-range').disabled = false; $('range-summary').textContent = $('history-motor').value ? 'เงื่อนไขเปลี่ยนแล้ว · กดโหลดกราฟ' : 'เลือกมอเตอร์เพื่อเปิดกราฟย้อนหลัง';
   };
   invalidateHistoryRange = clearRange;
-  for (const [button, view] of [[twoD,'lines'],[threeD,'scatter']]) button.onclick = () => { if(rangeView === view)return; setHistoryView(view); clearRange({ keepSeries:true }); if($('history-motor').value)$('load-range').click(); };
+  for (const [button, view] of [[twoD,'lines'],[threeD,'scatter'],[trendButton,'trend-fft']]) button.onclick = () => { if(rangeView === view)return; setHistoryView(view); clearRange({ keepSeries:true }); if($('history-motor').value)$('load-range').click(); };
   scatter.select.addEventListener('change', () => { if(rangeView === 'scatter'){clearRange({keepSeries:true});if($('history-motor').value)$('load-range').click();} });
   for (const id of ['range-from', 'range-to']) $(id).onchange = () => { rangeBeforeRun = null; clearRange(); };
   $('history-motor').onchange = () => { historyGeneration++;resetHistoryRun(); clearRange(); syncAnalysisHistoryControls(); if (currentTab === 'history' || analysisHistoryActive()) { loadHistory(); if (analysisHistoryActive() && $('history-motor').value) $('load-range').click(); } };
@@ -195,9 +200,10 @@ function setupAcquisitionUI() {
     const generation = ++rangeGeneration, motorId = $('history-motor').value;
     rangePanel.dataset.loaded = 'loading';
     $('load-range').disabled = true; $('range-summary').textContent = 'กำลังโหลดจากไฟล์…';
+    if(rangeView==='trend-fft')trend.clear('กำลังโหลดค่าต้นฉบับจากไฟล์…');
     try {
       const filter = { motorId, runId: runSelect.value || undefined, seriesKey: seriesSelect.value || undefined, from: `${$('range-from').value}+07:00`, to: `${$('range-to').value}+07:00` };
-      const result = check(await (rangeView === 'scatter' ? api.scatterRange({ ...filter, metric:scatter.select.value, limit:1200 }) : api.chartRange(filter)));
+      const result = check(await (rangeView === 'scatter' ? api.scatterRange({ ...filter, metric:scatter.select.value, limit:1200 }) : rangeView==='trend-fft'?api.trendRange(filter):api.chartRange(filter)));
       if (generation !== rangeGeneration) return;
       rangeFrames = result.rows; rangeReduced = Boolean(result.reduced); rangeGapStarts = result.gapStarts || [];
       rangeSampling = result.sampling || 'all'; rangeCompleteTotal = result.completeTotal ?? result.total;
@@ -205,14 +211,16 @@ function setupAcquisitionUI() {
       seriesSelect.value = result.seriesKey || ''; seriesLabel.hidden = (result.series?.length || 0) < 2;
       // The recording determines its channels/units, even if the motor was edited later.
       const recordedSeries = result.series?.find(series => series.key === result.seriesKey);
+      if(result.limitExceeded)throw new Error(`มี ${result.total.toLocaleString()} ค่าต้นฉบับ เกิน ${result.limit.toLocaleString()} ค่า · เลือกช่วงเวลาสั้นลง ไม่มีการลดจุดก่อน FFT`);
       rangeProfile = recordedSeries ? { motorId, sensorModel: recordedSeries.sensorModel, unit: recordedSeries.unit } : rangeFrames.length ? { motorId, sensorModel: rangeFrames[0].channels ? MODEL : 'custom', unit: rangeFrames[0].unit } : null;
       if(rangeView === 'scatter' && rangeProfile?.sensorModel === 'custom'){setHistoryView('lines');clearRange({keepSeries:true});$('load-range').click();return;}
+      if(rangeView==='trend-fft'){await trend.loadTrend(rangeFrames,{...rangeProfile,...recordedSeries,motorId});if(generation!==rangeGeneration)return;}
       drawHistory();
       rangePanel.dataset.loaded = 'true';
       const runSummary = recordedSeries?.runId && recordedSeries.runId !== '__legacy__' ? ` · รอบ ${shortIdentity(recordedSeries.runId)}` : recordedSeries?.runId === '__legacy__' ? ' · ข้อมูลเดิมไม่ระบุรอบ' : '';
-      const shown = rangeView === 'scatter' ? rangeFrames.length : historyPlot.frames.length;
+      const shown = rangeView === 'scatter'||rangeView==='trend-fft' ? rangeFrames.length : historyPlot.frames.length;
       $('range-summary').textContent = `${motorId} · ${result.total.toLocaleString()} รายการ · แสดง ${shown.toLocaleString()} จุด${runSummary}${result.incompleteTotal ? ` · XYZ ไม่ครบ ${result.incompleteTotal.toLocaleString()} รายการ` : ''}${result.series?.length > 1 ? ` · ชุดที่เลือกจาก ${result.series.length} รูปแบบข้อมูล` : ''}${result.reduced || shown < result.rows.length ? rangeView === 'scatter' ? ' · สุ่มตัวอย่างจากรายการที่มี XYZ ครบ' : ' · ลดจุดโดยเก็บค่าสูงสุด/ต่ำสุด' : ''}${result.skipped ? ` · ข้ามบรรทัดเสีย ${result.skipped}` : ''}`;
-    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; rangeGapStarts = []; rangeCompleteTotal = 0; drawHistory(); scatter.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
+    } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; rangeGapStarts = []; rangeCompleteTotal = 0;trend.clear(error.message);drawHistory(); scatter.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
     finally { if (generation === rangeGeneration) $('load-range').disabled = false; }
   };
 }
