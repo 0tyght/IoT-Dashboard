@@ -78,6 +78,7 @@ class FleetService {
   }
 
   async open(config) {
+    if (String(config.path).toUpperCase().startsWith('UNBOUND:')) throw new Error('อุปกรณ์ยังไม่เชื่อมกับบัส Modbus');
     const client = this.clientFactory();
     try {
       await client.connectRTUBuffered(config.path, { baudRate: config.baudRate, parity: config.parity, dataBits: 8, stopBits: config.stopBits });
@@ -114,6 +115,7 @@ class FleetService {
   async connect(rawConfigs, meters = []) {
     const configs = rawConfigs.length ? normalizeFleet(rawConfigs).filter(config => config.enabled) : [];
     if (!configs.length && !meters.length) throw new Error('ไม่มีอุปกรณ์ที่เปิดใช้งาน');
+    if ([...configs,...meters].some(config=>String(config.path).toUpperCase().startsWith('UNBOUND:'))) throw new Error('มีอุปกรณ์ที่ยังไม่เชื่อมกับบัส Modbus');
     await this.disconnect();
     const generation = this.generation;
     const groups = new Map();

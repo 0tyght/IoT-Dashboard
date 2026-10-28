@@ -16,3 +16,9 @@
 .flow-buses { justify-content:space-evenly; }
 /* Keep the command menu above the workspace at every window size. */
 .commandbar { position:relative; z-index:25; }
+
+.flow-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.flow-device-wrap { position:relative; min-width:0; }
+.flow-relink { display:block; margin:3px 0 0 auto; min-height:24px; padding:2px 7px; font-size:10px; color:#5144c5; }
+.flow-node[draggable=true] { cursor:grab; }
+.flow-node[draggable=true]:active { cursor:grabbing; }

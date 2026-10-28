@@ -51,7 +51,8 @@ app.whenReady().then(() => {
       try { return await action(...args); } catch (error) { return { ok: false, message: error.message }; }
     });
   }
-  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), groups:store.loadGroups(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), groups:store.loadGroups(), buses:store.loadBuses(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('buses:save', raw => { if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขบัส'); return {ok:true,buses:store.saveBuses(raw)}; });
   handle('groups:save', raw => {
     if(fleet.buses.length||busy) throw new Error('หยุดอ่านก่อนแก้ไขชุดการวัด');
     const incoming=normalizeGroups(raw), previous=store.loadGroups(), profiles=store.loadProfiles();

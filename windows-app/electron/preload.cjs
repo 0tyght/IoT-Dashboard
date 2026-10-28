@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   testConnection: config => ipcRenderer.invoke('sensor:test', config),
   testPowerRegister: (config, options) => ipcRenderer.invoke('power:test-register', config, options),
   connect: (configs,groupId) => ipcRenderer.invoke('sensor:connect', configs,groupId),
+  saveBuses: buses => ipcRenderer.invoke('buses:save', buses),
   saveGroups: groups => ipcRenderer.invoke('groups:save', groups),
   onPower: subscribe('power:reading'),
   disconnect: () => ipcRenderer.invoke('sensor:disconnect'),
