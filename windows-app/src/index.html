@@ -67,12 +67,12 @@
       <section id="motors-view" class="view" hidden><div class="section-toolbar"><div><h2>ทะเบียนมอเตอร์</h2><p>แยกมอเตอร์ด้วยรหัสและ Slave ID · รองรับ 64 ตัว</p></div><div class="inline-controls"><button id="import-profiles">นำเข้ารายชื่อ</button><button id="export-profiles">สำรองรายชื่อ</button></div></div><div class="table-scroll panel"><table class="data-table"><thead><tr><th>รหัส / ชื่อ</th><th>พื้นที่</th><th>รุ่นเซ็นเซอร์</th><th>พอร์ต / Slave</th><th>การสื่อสาร</th><th></th></tr></thead><tbody id="motors-body"></tbody></table></div></section>
       <section id="events-view" class="view" hidden><div class="section-toolbar"><div><h2>บันทึกเหตุการณ์</h2><p>200 เหตุการณ์ล่าสุดในรอบการเปิดโปรแกรมนี้</p></div><button id="clear-events">ล้างหน้าจอเหตุการณ์</button></div><div class="table-scroll panel"><table class="data-table"><thead><tr><th>เวลา</th><th>ประเภท</th><th>มอเตอร์</th><th>รายละเอียด</th></tr></thead><tbody id="events-body"></tbody></table></div></section>
       <section id="power-view" class="view power-view" hidden aria-labelledby="power-title">
-        <header class="power-header"><div><h2 id="power-title">ข้อมูลไฟฟ้า</h2><p>Power Meter · มอเตอร์และเจเนอเรเตอร์</p></div><span class="power-preview">หน้าตัวอย่าง · ยังไม่เชื่อมต่อมิเตอร์</span></header>
+        <header class="power-header"><div><h2 id="power-title">ข้อมูลไฟฟ้า</h2><p>Schneider EasyLogic PM2200 · ไฟเข้ามอเตอร์</p></div><span class="power-preview">ยังไม่รองรับการอ่านต่อเนื่อง</span></header>
         <div class="power-layout">
           <div class="power-main">
             <section class="power-panel power-point" aria-labelledby="power-point-heading">
-              <div class="power-panel-head"><div><h3 id="power-point-heading">จุดวัดไฟฟ้า</h3><p>เลือกตำแหน่งที่ต้องการดู</p></div><span class="power-status"><i></i> ยังไม่มีมิเตอร์</span></div>
-              <div class="power-point-switch" role="group" aria-label="เลือกจุดวัดไฟฟ้า"><button type="button" data-power-point="motor" aria-pressed="true"><span>ไฟเข้ามอเตอร์</span><small>ดูภาระไฟฟ้าของมอเตอร์</small></button><button type="button" data-power-point="generator" aria-pressed="false"><span>ไฟออกเจเนอเรเตอร์</span><small>ดูไฟฟ้าที่จ่ายให้โหลด</small></button></div>
+              <div class="power-panel-head"><div><h3 id="power-point-heading">จุดวัดไฟฟ้า</h3><p>ข้อมูลตำแหน่งตามที่ผู้ใช้ยืนยัน</p></div><span class="power-status"><i></i> ยังไม่ยืนยันการสื่อสาร</span></div>
+              <div class="power-point-confirmed"><strong>ไฟเข้ามอเตอร์</strong><span>PM2200 · RS485 · Slave ID 3</span></div>
             </section>
             <section class="power-panel power-measurements" aria-labelledby="power-measurements-heading">
               <div class="power-panel-head"><div><h3 id="power-measurements-heading">ค่าล่าสุด · <span id="power-selected-point">ไฟเข้ามอเตอร์</span></h3><p>แสดงค่าเมื่อเชื่อมต่อและกำหนด Register แล้ว</p></div><span class="power-time">อัปเดตล่าสุด —</span></div>
@@ -86,7 +86,7 @@
             </section>
             <section class="power-panel power-trend" aria-labelledby="power-trend-heading"><div class="power-panel-head"><div><h3 id="power-trend-heading">แนวโน้มไฟฟ้า</h3><p>กระแส แรงดัน และกำลังตามเวลา</p></div></div><div class="power-chart-empty"><span class="power-chart-icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36" fill="none"><path d="M5 27V7M5 27H31M9 22L15 16L20 20L28 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><strong>ยังไม่มีข้อมูลสำหรับแสดงกราฟ</strong><p>กราฟจะใช้ค่าที่อ่านได้เมื่อรองรับ Power Meter</p></div></div></section>
           </div>
-          <aside class="power-panel power-setup"><h3>สถานะ Power Meter</h3><div class="power-setup-state"><span class="power-status"><i></i> ยังไม่ได้ตั้งค่า</span><p>หน้าข้อมูลไฟฟ้ายังไม่อ่านหรือบันทึกค่าจากมิเตอร์</p></div><h4>ข้อมูลที่ต้องใช้สำหรับเชื่อมต่อ</h4><ul><li>รุ่นและคู่มือ Modbus Register</li><li>COM Port, Slave ID และค่าการสื่อสาร</li><li>จุดวัดและชนิดวงจรไฟฟ้า</li></ul><p class="power-setup-note">หลังทราบรุ่นมิเตอร์ จึงกำหนดช่องอ่าน หน่วย และวิธีแปลงค่าได้ถูกต้อง</p></aside>
+          <aside class="power-panel power-setup"><h3>สถานะ Power Meter</h3><div class="power-setup-state"><span class="power-status"><i></i> ยังไม่ยืนยันการสื่อสาร</span><p>PM2200 วัดไฟเข้ามอเตอร์ · Slave 3<br>ยังไม่อ่านหรือบันทึกค่าไฟฟ้าต่อเนื่อง</p></div><h4>ข้อมูลที่ต้องยืนยัน</h4><ul><li>Address และลำดับ Float เทียบกับมิเตอร์</li><li>Register กระแสแต่ละเฟส</li><li>COM Port และค่าการสื่อสาร</li></ul><p class="power-setup-note">ใช้การทดสอบด้านล่างอ่านค่าดิบ ก่อนตั้งค่าการอ่านต่อเนื่อง</p></aside>
         </div>
       </section>
     </main>

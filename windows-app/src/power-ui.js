@@ -4,13 +4,6 @@ const powerTab = document.createElement('button');
 powerTab.dataset.tab = 'power';
 powerTab.textContent = 'ข้อมูลไฟฟ้า';
 document.querySelector('.tabs').append(powerTab);
-document.querySelectorAll('[data-power-point]').forEach(button => {
-  button.addEventListener('click', () => {
-    document.querySelectorAll('[data-power-point]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
-    document.getElementById('power-selected-point').textContent = button.dataset.powerPoint === 'motor' ? 'ไฟเข้ามอเตอร์' : 'ไฟออกเจเนอเรเตอร์';
-  });
-});
-
 const diagnostic = document.createElement('details');
 diagnostic.className = 'power-diagnostic';
 diagnostic.innerHTML = `<summary>ตรวจสอบการสื่อสาร</summary><p>อ่าน 2 Register จากมิเตอร์ Slave 3 โดยใช้ COM และการสื่อสารของมอเตอร์ที่เลือก · หยุดการอ่านก่อนทดสอบ</p><label>Address ที่ส่งในคำสั่ง<input id="power-test-address" type="number" min="0" max="65534" step="1" value="3019"></label><label>Function<select id="power-test-function"><option value="holding">FC03 · Holding</option><option value="input">FC04 · Input</option></select></label><button id="power-test-button" type="button">ทดสอบอ่านค่าดิบ</button><p id="power-test-result" role="status" aria-live="polite">3019 เป็นเลขจากตาราง ยังต้องเทียบค่ากับหน้ามิเตอร์</p>`;

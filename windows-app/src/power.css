@@ -11,6 +11,9 @@ main:has(#power-view:not([hidden])) > .document-heading { display:none; }
 .power-panel h3 { margin:0 0 4px; font-size:15px; color:#2d3953; }
 .power-status { display:inline-flex; align-items:center; gap:6px; color:#5f687a; font-size:11px; white-space:nowrap; }
 .power-status i { width:7px; height:7px; border-radius:50%; background:#818a9b; }
+.power-point-confirmed { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:13px; padding:10px 12px; background:#efedff; border:1px solid #c6bff1; border-radius:6px; }
+.power-point-confirmed strong { color:#4333ad; font-size:13px; }
+.power-point-confirmed span { color:#524985; font-size:11px; }
 .power-point-switch { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:13px; }
 .power-point-switch button { min-width:0; display:flex; flex-direction:column; align-items:flex-start; text-align:left; gap:2px; padding:9px 12px; border:1px solid #dbe0ed; background:#f8f9fc; }
 .power-point-switch button span { font-size:13px; font-weight:600; }
@@ -63,6 +66,7 @@ main:has(#power-view:not([hidden])) > .document-heading { display:none; }
   .power-main { gap:8px; }
   .power-panel { padding:10px 12px; }
   .power-point-switch { margin-top:7px; }
+  .power-point-confirmed { margin-top:7px; padding:7px 10px; }
   .power-point-switch button { padding:6px 10px; }
   .power-measurement-grid { margin-top:8px; }
   .power-measurement { padding:7px 10px; }

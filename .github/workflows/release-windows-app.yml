@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Adds a read-only, two-register PM2200 communication diagnostic at Slave 3 while acquisition is stopped. It displays raw words and unconfirmed Float32 candidates; addresses, byte order and actual meter readings require verification. Continuous power meter acquisition and recording are not implemented. Existing vibration monitoring remains available."
+            --notes "Windows x64 release. Corrects the PM2200 measurement point to motor electrical input, Slave 3. The read-only two-register diagnostic is available while acquisition is stopped; addresses and Float32 order still require verification. Continuous power meter acquisition and recording are not implemented."
