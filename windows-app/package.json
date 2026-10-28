@@ -1,6 +1,6 @@
 {
   "name": "vectra-sensor-monitor",
-  "version": "0.18.4",
+  "version": "0.18.5",
   "author": "VECTRA",
   "private": true,
   "description": "Windows desktop application for RS485 Modbus motor vibration monitoring",

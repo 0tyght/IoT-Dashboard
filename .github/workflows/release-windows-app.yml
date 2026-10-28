@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Adds FFT of recorded overall values over PC receive time, under saved-data analysis. Loads original records without chart reduction, isolates motor/run/unit series, separates gaps and missing values, and exposes strict timing or explicitly labelled bounded linear jitter adjustment. Shows FFT/PSD in 2D with optional time-frequency 3D views. This is slow overall-trend analysis, not a reconstructed motor vibration spectrum. Waveform FFT remains a separate source. Numerical, storage and packaged UI suites verify timing, known slow-cycle peaks, units, source isolation and responsive layouts."
+            --notes "Windows x64 release. Adds an electrical monitoring UI preview for motor input and generator output. The preview does not connect to, read, or record Power Meter data; a verified meter register map is needed for future integration. Existing vibration monitoring and analysis remain available."
