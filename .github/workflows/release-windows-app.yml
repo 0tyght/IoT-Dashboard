@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Adds editable measurement groups, shared-bus sequential polling of multiple vibration sensors and PM2200 meters, and separate per-run electrical CSV/NDJSON. PM2200 register offsets and Float32 order remain unverified against the user's physical meter; unconfirmed values remain raw. Per-phase current and power readings are not implemented."
+            --notes "Windows x64 release. Adds an interactive overview of configured sensors, power meters, Modbus ports and the computer, with access to device settings and measurement groups. Connections reflect configuration, not physical detection. PM2200 register offsets and Float32 order must be verified against the physical meter; unconfirmed values remain raw."

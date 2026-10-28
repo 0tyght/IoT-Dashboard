@@ -55,7 +55,8 @@ function updateControls() {
 }
 function setTab(tab) {
   currentTab = tab;
-  $('graph-tools').hidden = !['fleet', 'monitor'].includes(tab);
+  $('graph-tools').hidden = !(tab === 'monitor' || (tab === 'fleet' && fleetViewMode === 'list'));
+  if (tab === 'fleet') renderFlow();
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
   document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
   document.querySelector('main').scrollTop = 0;
@@ -146,7 +147,7 @@ function renderProfiles() {
   }
   if (!profiles.length) emptyRow(body, 6, 'ยังไม่มีมอเตอร์ กดเพิ่มมอเตอร์เพื่อตั้งค่าการเชื่อมต่อ');
   renderHistoryMotors();
-  renderMotorList(); buildFleet(); updateControls();
+  renderMotorList(); buildFleet(); renderFlow(); updateControls();
 }
 function renderSelected() {
   updateWorkbenchLayout();
@@ -525,6 +526,7 @@ setInterval(() => {
 }, 1000);
 setupControls();
 setupGroupsUI();
+setupFlowUI();
 setupAssetView();
 setupWorkbench();
 setupAcquisitionUI();

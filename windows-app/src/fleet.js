@@ -96,4 +96,5 @@ function refreshFleet() {
   }
   $('fleet-total').textContent = profiles.length; $('fleet-online').textContent = online; $('fleet-fault').textContent = faults; $('fleet-disabled').textContent = profiles.filter(profile => profile.enabled === false).length;
   $('fleet-empty').hidden = profiles.length > 0; $('fleet-no-matches').hidden = !profiles.length || visible > 0;
+  refreshFlowStatus();
 }

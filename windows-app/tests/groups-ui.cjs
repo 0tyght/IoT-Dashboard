@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {_electron:electron}=require('playwright');
 (async()=>{
  const project=path.resolve(__dirname,'..'),base=path.join(project,'.test-tmp');fs.mkdirSync(base,{recursive:true});const root=fs.mkdtempSync(path.join(base,'groups-ui-'));
- fs.writeFileSync(path.join(root,'motors.json'),JSON.stringify([{motorId:'M1',path:'COM8',slaveId:1,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'},{motorId:'M2',path:'COM8',slaveId:2,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'}]));
+ fs.writeFileSync(path.join(root,'motors.json'),JSON.stringify([{motorId:'M1',path:'COM8',slaveId:1,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'},{motorId:'M2',path:'COM9',slaveId:2,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'}]));
  let app;try{
   app=await electron.launch({...process.env.ELECTRON_EXECUTABLE?{executablePath:process.env.ELECTRON_EXECUTABLE,args:[]}:{args:['.'],cwd:project},env:{...process.env,TEMP:base,TMP:base,VECTRA_TEST_DATA:root}});
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.waitForLoadState('domcontentloaded');await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
@@ -13,7 +13,23 @@ const {_electron:electron}=require('playwright');
   let saved=JSON.parse(fs.readFileSync(path.join(root,'measurement-groups.json'),'utf8'));assert.equal(saved.length,1);assert.equal(saved[0].meters.length,2);assert.equal(saved[0].meters[0].motorId,'M1');assert.equal(saved[0].meters[0].byteOrder,'unconfirmed');
   await page.screenshot({path:path.join(project,'.artifacts','measurement-groups.png'),animations:'disabled'});
   await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('sensor:connect');ipcMain.handle('sensor:connect',(_e,configs,id)=>{globalThis.groupUITestSelected=id;return{ok:true,configs:[configs[0]],readings:[],powerReadings:[{state:'receiving',meterId:'PM1',name:'มิเตอร์ 1',point:'motor-input',motorId:'M1',path:'COM8',slaveId:3,timestamp:new Date().toISOString(),quality:'unconfirmed',values:{voltageAB:null},raw:{voltageAB:[0x42c8,0]},recorded:false}],recording:{settings:{startMode:'on-connect',durationMinutes:0},connected:true,active:true,count:0}};});ipcMain.removeHandler('sensor:disconnect');ipcMain.handle('sensor:disconnect',()=>({ok:true,recording:{settings:{startMode:'on-connect',durationMinutes:0},connected:false,active:false,count:0}}));});
-  await page.locator('#groups-close').click();await page.locator('#connect-all').click();await page.locator('#disconnect').waitFor();assert.equal(await app.evaluate(()=>globalThis.groupUITestSelected),saved[0].id);
+  await page.locator('#groups-close').click();
+  await page.locator('[data-tab="fleet"]').click();
+  assert.equal(await page.locator('[data-node-type="sensor"]').count(),1);
+  assert.equal(await page.locator('[data-node-type="meter"]').count(),2);
+  assert.equal(await page.locator('[data-node-type="bus"]').count(),2);
+  assert.equal(await page.locator('[data-node-type="computer"]').count(),1);
+  await page.waitForFunction(()=>document.querySelectorAll('.flow-wires path').length===5);
+  assert.equal(await page.locator('[data-node-type="sensor"][data-node-port="COM8"]').count(),1);
+  assert.equal(await page.locator('[data-node-type="meter"][data-node-port="COM9"]').count(),1);
+  assert((await page.locator('#flow-panel').textContent()).includes('ไม่ใช่การตรวจพบสายจริง'));
+  await page.locator('[data-node-type="sensor"]').click();await page.locator('#connection-dialog[open]').waitFor();assert((await page.locator('#dialog-title').textContent()).includes('M1'));await page.locator('#connection-dialog').evaluate(d=>d.close());
+  await page.locator('[data-node-type="meter"][data-node-id="PM2"]').click();await page.locator('#groups-dialog[open]').waitFor();assert.equal(await page.evaluate(()=>document.activeElement.closest('.groups-meter')?.dataset.meterId),'PM2');await page.locator('#groups-close').click();
+  await page.locator('[data-node-type="bus"][data-node-port="COM8"]').click();assert.equal(await page.locator('.flow-dialog-body button').count(),2);await page.locator('.flow-dialog .dialog-header button').click();
+  await page.locator('[data-node-type="computer"]').click();await page.locator('#recording-dialog[open]').waitFor();await page.locator('#close-recording').click();
+  await page.locator('#list-mode').click();assert(await page.locator('#fleet-list').isVisible());await page.locator('#flow-mode').click();
+  await page.screenshot({path:path.join(project,'.artifacts','device-flow.png'),animations:'disabled'});
+  await page.locator('#connect-all').click();await page.locator('#disconnect').waitFor();assert.equal(await app.evaluate(()=>globalThis.groupUITestSelected),saved[0].id);
   await page.locator('[data-tab="power"]').click();await page.locator('.power-live').filter({hasText:'มิเตอร์ 1'}).waitFor();assert((await page.locator('.power-live').textContent()).includes('0x42C8 0x0000'));assert((await page.locator('.power-live').textContent()).includes('รอยืนยัน'));
   await page.locator('#disconnect').click();await page.locator('#connect-all').waitFor();await page.locator('#session-actions summary').click();await page.locator('#groups-open').click();
   await page.locator('#groups-edit').click();await page.locator('#groups-name').fill('ชุดแก้ไข');await page.locator('.meter-remove').last().click();await page.locator('#groups-save').click();await page.locator('#groups-active').filter({hasText:'ชุดแก้ไข'}).waitFor();

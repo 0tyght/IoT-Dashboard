@@ -66,6 +66,7 @@ const { _electron: electron } = require('playwright');
     assert.equal(await page.locator('.motor-item').count(), 2);
     assert.equal(await page.locator('.fleet-card').count(), 2);
     await page.locator('[data-tab="fleet"]').click();
+    await page.locator('#list-mode').click();
     await page.getByRole('button', { name: 'แก้ไข MTR-01', exact: true }).click();
     await page.locator('[name="name"]').fill('Cooling water pump 01');
     await page.locator('[name="area"]').fill('Utility / Pump room');
