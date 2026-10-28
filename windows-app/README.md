@@ -185,7 +185,9 @@ Primary references: [LabDeck vibration analysis](https://labdeck.com/vibrations-
 
 ## Validation and limits
 
-The **ข้อมูลไฟฟ้า** tab is a UI preview only. Its motor-input and generator-output selectors change the preview context; there are no configured meters, Modbus reads, live values, trends or electrical recordings behind this screen. Meter model, register map and installation details are required before implementing acquisition.
+The **ข้อมูลไฟฟ้า** dashboard is a UI preview only. Its motor-input and generator-output selectors change the preview context; there are no configured meters, continuous acquisition, live values, trends or electrical recordings behind this screen. Meter model, register map and installation details are required before implementing acquisition.
+
+The Power Meter panel also offers a separate **ตรวจสอบการสื่อสาร** diagnostic while acquisition is stopped. It uses the selected motor's serial port settings, reads two registers from slave 3 using FC03 or FC04, and displays raw words and four unconfirmed Float32 interpretations. Address 3019 was supplied as a table entry and must be verified against the actual meter; the app does not infer the addressing convention. A zero or a plausible number is not enough to prove byte order. The diagnostic does not write registers, save the result or enable continuous power metering. The supplied 3017–3035 voltage/unbalance table does not establish per-phase current registers.
 
 In History or Analysis, the **วันที่มีข้อมูล** selector lists daily NDJSON journals already stored in this computer's data directory, newest first. Selecting a day loads that day's records; choose a motor and, optionally, a run to inspect the table or charts. A run spanning midnight can appear under more than one day; choose a wider date/time range to inspect across days. CSV files are exports, not the journal used by this selector, and importing an external CSV is not supported.
 

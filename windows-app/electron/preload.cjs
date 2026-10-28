@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   listPorts: () => ipcRenderer.invoke('sensor:list-ports'),
   saveProfiles: profiles => ipcRenderer.invoke('profiles:save', profiles),
   testConnection: config => ipcRenderer.invoke('sensor:test', config),
+  testPowerRegister: (config, options) => ipcRenderer.invoke('power:test-register', config, options),
   connect: configs => ipcRenderer.invoke('sensor:connect', configs),
   disconnect: () => ipcRenderer.invoke('sensor:disconnect'),
   history: filter => ipcRenderer.invoke('data:history', filter),

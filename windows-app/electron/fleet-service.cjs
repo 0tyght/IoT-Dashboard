@@ -84,6 +84,22 @@ class FleetService {
     } finally { await closeClient(client); }
   }
 
+  async testPower(rawConfig, { address = 3019, slaveId = 3, registerType = 'holding' } = {}) {
+    if (this.buses.length) throw new Error('หยุดการอ่านก่อนทดสอบ Power Meter');
+    const base = normalizeConfig(rawConfig);
+    if (!Number.isInteger(address) || address < 0 || address > 65534) throw new Error('Address ต้องอยู่ระหว่าง 0–65534');
+    if (!Number.isInteger(slaveId) || slaveId < 1 || slaveId > 247) throw new Error('Slave ID ต้องอยู่ระหว่าง 1–247');
+    if (!['holding','input'].includes(registerType)) throw new Error('Modbus function ไม่ถูกต้อง');
+    if (base.slaveId === slaveId) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ที่เลือก');
+    let client;
+    try {
+      client = await this.open(base); client.setID(slaveId); client.setTimeout(base.timeout);
+      const response = registerType === 'input' ? await client.readInputRegisters(address, 2) : await client.readHoldingRegisters(address, 2);
+      if (!Array.isArray(response.data) || response.data.length !== 2 || response.data.some(value => !Number.isInteger(value) || value < 0 || value > 65535)) throw new Error('ได้รับ Register ไม่ครบ');
+      return { ok:true, path:base.path, slaveId, address, registerType, raw:response.data };
+    } finally { await closeClient(client); }
+  }
+
   async connect(rawConfigs) {
     const configs = normalizeFleet(rawConfigs).filter(config => config.enabled);
     if (!configs.length) throw new Error('ไม่มีมอเตอร์ที่เปิดใช้งาน');

@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Adds an electrical monitoring UI preview for motor input and generator output. The preview does not connect to, read, or record Power Meter data; a verified meter register map is needed for future integration. Existing vibration monitoring and analysis remain available."
+            --notes "Windows x64 release. Adds a read-only, two-register PM2200 communication diagnostic at Slave 3 while acquisition is stopped. It displays raw words and unconfirmed Float32 candidates; addresses, byte order and actual meter readings require verification. Continuous power meter acquisition and recording are not implemented. Existing vibration monitoring remains available."

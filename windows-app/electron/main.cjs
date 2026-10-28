@@ -58,6 +58,11 @@ app.whenReady().then(() => {
     return { ok: true, profiles: store.saveProfiles(raw) };
   });
   handle('sensor:test', config => exclusive(() => fleet.test(config)));
+  handle('power:test-register', (config, options) => exclusive(() => {
+    const port = String(config?.path || '').toUpperCase(), slaveId = options?.slaveId ?? 3;
+    if (store.loadProfiles().some(profile => profile.path.toUpperCase() === port && profile.slaveId === slaveId)) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');
+    return fleet.testPower(config, options);
+  }));
   handle('sensor:connect', raw => exclusive(async () => {
     const result = await fleet.connect(raw);
     recording.connect();
