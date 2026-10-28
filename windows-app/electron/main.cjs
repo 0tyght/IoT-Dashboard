@@ -51,7 +51,8 @@ app.whenReady().then(() => {
       try { return await action(...args); } catch (error) { return { ok: false, message: error.message }; }
     });
   }
-  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), groups:store.loadGroups(), buses:store.loadBuses(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), groups:store.loadGroups(), selectedGroup:store.loadSelectedGroup(), buses:store.loadBuses(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('group-selection:save', id => {if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนเปลี่ยนชุด');return {ok:true,id:store.saveSelectedGroup(id)};});
   handle('buses:save', raw => { if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขบัส'); return {ok:true,buses:store.saveBuses(raw)}; });
   handle('groups:save', raw => {
     if(fleet.buses.length||busy) throw new Error('หยุดอ่านก่อนแก้ไขชุดการวัด');
@@ -71,6 +72,12 @@ app.whenReady().then(() => {
     return { ok: true, profiles: store.saveProfiles(raw) };
   });
   handle('sensor:test', config => exclusive(() => fleet.test(config)));
+  handle('power:test-meter', (groupId,meterId,options) => exclusive(() => {
+    const group=store.loadGroups().find(item=>item.id===groupId),meter=group?.meters.find(item=>item.id===meterId);
+    if(!meter)throw new Error('ไม่พบ Power Meter ในชุดที่เลือก');
+    if(store.loadProfiles().some(profile=>profile.path.toUpperCase()===meter.path.toUpperCase()&&profile.slaveId===meter.slaveId))throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');
+    return fleet.testPower({...meter,motorId:meter.id,sensorModel:'custom',byteOrder:'ABCD',registerAddress:3017,dataType:'float32',scale:1,unit:'V'},{address:options?.address,slaveId:meter.slaveId,registerType:options?.registerType||meter.registerType,meterConfig:true});
+  }));
   handle('power:test-register', (config, options) => exclusive(() => {
     const port = String(config?.path || '').toUpperCase(), slaveId = options?.slaveId ?? 3;
     if (store.loadProfiles().some(profile => profile.path.toUpperCase() === port && profile.slaveId === slaveId)) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');

@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Adds devices and Modbus buses separately, supports unconnected devices and drag-to-connect with an accessible bus selector, and validates duplicate slave IDs. The diagram represents configured connections, not physical detection. PM2200 register offsets and Float32 order must be verified against the physical meter; unconfirmed values remain raw."
+            --notes "Windows x64 release. Simplifies startup and navigation, remembers the selected measurement set, makes meter-specific settings and diagnostics easier to find, and clarifies which devices are included in a run. PM2200 register offsets and Float32 order must be verified against the physical meter; unconfirmed values remain raw."

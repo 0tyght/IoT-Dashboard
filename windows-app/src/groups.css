@@ -19,3 +19,5 @@
 @media(max-width:600px) { .meter-independent { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
 .meter-register-note { grid-column:1 / -1; margin:0; color:#586277; font-size:11px; }
+
+#groups-dialog.meter-focus .groups-body > label, #groups-dialog.meter-focus #groups-active, #groups-dialog.meter-focus #groups-members, #groups-dialog.meter-focus .groups-body > .groups-actions, #groups-dialog.meter-focus #groups-editor > label, #groups-dialog.meter-focus #groups-editor > h3, #groups-dialog.meter-focus #groups-editor > p.footnote, #groups-dialog.meter-focus #groups-motors, #groups-dialog.meter-focus #groups-add-meter { display:none; }

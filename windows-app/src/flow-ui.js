@@ -8,7 +8,7 @@ function setupFlowUI(){
   for(const item of [$('fleet-empty'),$('fleet-list'),$('fleet-no-matches'),view.querySelector(':scope > .footnote')]) legacy.append(item);
   view.append(legacy);
   const switcher=node('div',null,'flow-switch');switcher.setAttribute('aria-label','มุมมองภาพรวม');
-  const flow=node('button','แผนผัง'),list=node('button','รายการและกราฟ');flow.type=list.type='button';flow.id='flow-mode';list.id='list-mode';
+  const flow=node('button','แผนผัง'),list=node('button','รายการเซ็นเซอร์');flow.type=list.type='button';flow.id='flow-mode';list.id='list-mode';
   flow.onclick=()=>setFleetMode('flow');list.onclick=()=>setFleetMode('list');switcher.append(flow,list);toolbar.querySelector('.inline-controls').prepend(switcher);
   const panel=node('section',null,'flow-panel');panel.id='flow-panel';toolbar.after(panel);
   setFleetMode('flow');
@@ -17,7 +17,7 @@ function setFleetMode(value){
   fleetViewMode=value; if(!$('flow-panel'))return;
   $('flow-panel').hidden=value!=='flow';$('fleet-legacy').hidden=value!=='list';document.querySelector('.fleet-totals').hidden=value==='flow';$('fleet-filter').hidden=value!=='list';
   $('flow-mode').setAttribute('aria-pressed',String(value==='flow'));$('list-mode').setAttribute('aria-pressed',String(value==='list'));
-  $('graph-tools').hidden=!(currentTab==='monitor'||(currentTab==='fleet'&&value==='list'));
+  $('graph-tools').hidden=!((currentTab==='monitor'&&profiles.length)||(currentTab==='fleet'&&value==='list'));
   if(value==='flow')renderFlow();else refreshFleet();
 }
 function renderFlow(){
@@ -28,10 +28,14 @@ function renderFlow(){
   groupProfiles.forEach(p=>addBus(p,'sensor'));meters.forEach(m=>addBus(m,'meter'));
   for(const config of flowSavedBuses()){const key=String(config.path||'').toUpperCase();if(key&&!buses.has(key))buses.set(key,{key,path:config.path,items:[],config});}
   panel.replaceChildren();
+  const groupChoice=node('label',null,'flow-group-choice');groupChoice.append(node('span','ชุดที่ใช้สำหรับรอบถัดไป'));const groupSelect=node('select');groupSelect.id='flow-group-select';groupSelect.setAttribute('aria-label','เลือกชุดการวัดสำหรับรอบถัดไป');groupSelect.add(new Option('เซ็นเซอร์ทั้งหมดที่เปิดใช้งาน (ไม่รวม Power Meter)',''));measurementGroups.forEach(item=>groupSelect.add(new Option(`${item.name} · ${item.motorIds.length+item.meters.length} อุปกรณ์`,item.id)));groupSelect.value=selectedMeasurementGroup;groupSelect.disabled=mode!=='offline'||busy;groupSelect.onchange=()=>{const target=$('groups-select');target.value=groupSelect.value;target.dispatchEvent(new Event('change'));};groupChoice.append(groupSelect);panel.append(groupChoice);
+  const missing=[...groupProfiles,...meters].filter(item=>String(item.path||'').toUpperCase().startsWith('UNBOUND:'));
+  if(missing.length){const warning=node('p',`ยังมี ${missing.length} อุปกรณ์ที่ไม่ได้เชื่อมบัส · กดเปลี่ยนบัสหรือลากไปยังพอร์ตก่อนเริ่มอ่าน`,'flow-setup-warning');warning.setAttribute('role','status');panel.append(warning);}
+  else if(!group&&measurementGroups.some(item=>item.meters.length)){const warning=node('p','ยังไม่ได้เลือกชุด · รอบนี้อ่านเฉพาะเซ็นเซอร์ที่เปิดใช้งาน และไม่รวม Power Meter','flow-setup-warning');warning.setAttribute('role','status');panel.append(warning);}
   const head=node('div',null,'flow-header'), title=node('div');title.append(node('h2','แผนผังการเชื่อมต่อ'),node('p',group?`ชุดการวัด: ${group.name}`:'เซ็นเซอร์ที่เปิดอ่านทั้งหมด · ยังไม่ได้เลือกชุดการวัด'));
   const actions=node('div',null,'flow-actions');const addButton=node('button','＋ เพิ่มอุปกรณ์','primary');addButton.type='button';addButton.onclick=openFlowAddDevice;actions.append(addButton);const busAdd=node('button','＋ เพิ่มบัส Modbus');busAdd.type='button';busAdd.onclick=()=>openFlowNewBus(buses);actions.append(busAdd);const groupButton=node('button','เลือก / จัดการชุด');groupButton.type='button';groupButton.onclick=()=>{if(busy)return;if(mode!=='offline')return stopBeforeChange(()=>groupButton.click());$('groups-quick').click();};actions.append(groupButton);head.append(title,actions);panel.append(head);
   const note=node('p','เส้นแสดงการตั้งค่าในโปรแกรม ไม่ใช่การตรวจพบสายจริง · ลากอุปกรณ์ไปยังบัส หรือกดเปลี่ยนบัส · อ่านตามลำดับ','flow-note');panel.append(note);
-  if(!buses.size){const empty=node('div',null,'flow-empty');empty.append(node('strong','ยังไม่มีอุปกรณ์ในแผนผัง'),node('p','เพิ่มเซ็นเซอร์ หรือเลือกชุดการวัดที่มีเซ็นเซอร์และ Power Meter'));const b=node('button','เพิ่มเซ็นเซอร์','primary');b.onclick=()=>openEditor();empty.append(b);panel.append(empty);return;}
+  if(!buses.size){const empty=node('div',null,'flow-empty');empty.append(node('strong','ยังไม่มีอุปกรณ์ในแผนผัง'),node('p','เพิ่มเซ็นเซอร์ หรือเลือกชุดการวัดที่มีเซ็นเซอร์และ Power Meter'));const b=node('button','เพิ่มอุปกรณ์','primary');b.onclick=openFlowAddDevice;empty.append(b);panel.append(empty);return;}
   const canvas=node('div',null,'flow-canvas'), lanes=node('div',null,'flow-lanes'), devices=node('div',null,'flow-column'),buscol=node('div',null,'flow-column flow-buses'),hostcol=node('div',null,'flow-column flow-computer');
   devices.append(node('h3','อุปกรณ์วัด'));buscol.append(node('h3','บัสสื่อสาร'));hostcol.append(node('h3','เครื่องรับข้อมูล'));
   const links=[];

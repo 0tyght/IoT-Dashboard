@@ -48,14 +48,14 @@ function updateControls() {
   $('export-profiles').disabled = locked || !profiles.length;
   document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = locked || dataError || isTemporaryMotor(button.dataset.edit || button.dataset.delete); });
   $('mode-indicator').className = `mode-indicator ${mode === 'live' ? 'live' : mode === 'demo' ? 'demo-mode' : ''}`;
-  $('mode-indicator').textContent = mode === 'live' ? 'ACQUIRING' : mode === 'demo' ? 'SIMULATION' : 'OFFLINE';
+  $('mode-indicator').textContent = mode === 'live' ? 'กำลังอ่าน' : mode === 'demo' ? 'ข้อมูลจำลอง' : 'หยุดอ่าน';
   $('connect-all').setAttribute('aria-busy', String(locked));
   $('disconnect').setAttribute('aria-busy', String(locked));
   renderRecording();
 }
 function setTab(tab) {
   currentTab = tab;
-  $('graph-tools').hidden = !(tab === 'monitor' || (tab === 'fleet' && fleetViewMode === 'list'));
+  $('graph-tools').hidden = !((tab === 'monitor' && profiles.length) || (tab === 'fleet' && fleetViewMode === 'list'));
   if (tab === 'fleet') renderFlow();
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
   document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
@@ -147,7 +147,7 @@ function renderProfiles() {
   }
   if (!profiles.length) emptyRow(body, 6, 'ยังไม่มีเซ็นเซอร์ กดเพิ่มเซ็นเซอร์เพื่อตั้งค่าการเชื่อมต่อ');
   renderHistoryMotors();
-  renderMotorList(); buildFleet(); renderFlow(); updateControls();
+  renderMotorList(); buildFleet(); renderFlow(); if(currentTab==='monitor')$('graph-tools').hidden=!profiles.length; updateControls();
 }
 function renderSelected() {
   updateWorkbenchLayout();
@@ -159,14 +159,14 @@ function renderSelected() {
   $('chart-description').textContent = frozen ? 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ' : state?.restored && mode === 'offline' ? `ข้อมูลย้อนหลังที่บันทึกล่าสุด · ไม่ใช่ข้อมูลสด · ${$('fleet-window').selectedOptions[0].textContent}` : `${$('fleet-window').selectedOptions[0].textContent} · เวลาคอมพิวเตอร์รับข้อมูล (UTC+07:00)`;
   const limit = Math.min(20000, Math.floor(200000 / Math.max(1, profiles.length)));
   $('graph-buffer-note').textContent = currentTab === 'monitor' && state?.restored ? `ข้อมูลจากไฟล์ประวัติ · ${state.samples.toLocaleString()} ค่าที่บันทึก${state.reduced ? ' · ลดจุดเพื่อแสดงผล' : ''}` : `หน่วยความจำ ${limit.toLocaleString()} ค่าต่อเซ็นเซอร์ · ช่วงเก่ากว่าโหลดจากประวัติ${state?.dropped ? ' · ตัดค่าเก่าจากหน้าจอแล้ว' : ''}`;
-  $('selected-title').textContent = profile ? profile.name || profile.motorId : 'สถานีตรวจวัดมอเตอร์';
+  $('selected-title').textContent = profile ? profile.name || profile.motorId : 'ตรวจวัดการสั่นและไฟฟ้า';
   $('selected-area').textContent = profile?.area || 'LOCAL WORKSPACE';
-  $('selected-subtitle').textContent = profile ? `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee SN-3001-WZ3A-N01' : 'Custom Modbus sensor'} · ${profile.path} / Slave ${profile.slaveId}` : 'ตั้งค่าเซ็นเซอร์เพื่อเริ่มเก็บข้อมูลในเครื่องนี้';
+  $('selected-subtitle').textContent = profile ? `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee SN-3001-WZ3A-N01' : 'Custom Modbus sensor'} · ${profile.path} / Slave ${profile.slaveId}` : 'เพิ่มเซ็นเซอร์หรือ Power Meter เพื่อเริ่มต้น';
   $('welcome').hidden = Boolean(last) || mode !== 'offline';
   $('welcome').setAttribute('aria-busy', String(Boolean(state?.restoring)));
   $('monitor-content').hidden = !last && mode === 'offline';
-  $('empty-state-title').textContent = state?.restoring ? 'กำลังค้นหาข้อมูลที่บันทึกไว้' : profiles.length ? 'ยังไม่มีข้อมูลการวัด' : 'ยังไม่มีเซ็นเซอร์';
-  $('empty-state-description').textContent = state?.restoring ? 'กำลังโหลดข้อมูลล่าสุดจากไฟล์ในเครื่อง' : state?.restoreError ? `เปิดประวัติไม่ได้: ${state.restoreError} · ยังเริ่มอ่านข้อมูลใหม่ได้` : profiles.length ? 'กดปุ่มเริ่มเพื่อตรวจการเชื่อมต่อและรับข้อมูลตามโหมดที่เลือก' : 'เพิ่มเซ็นเซอร์และกำหนดค่าการเชื่อมต่อเพื่อเริ่มอ่านข้อมูล';
+  $('empty-state-title').textContent = state?.restoring ? 'กำลังค้นหาข้อมูลที่บันทึกไว้' : profiles.length ? 'ยังไม่มีข้อมูลการวัด' : 'เริ่มต้นตรวจวัด';
+  $('empty-state-description').textContent = state?.restoring ? 'กำลังโหลดข้อมูลล่าสุดจากไฟล์ในเครื่อง' : state?.restoreError ? `เปิดประวัติไม่ได้: ${state.restoreError} · ยังเริ่มอ่านข้อมูลใหม่ได้` : profiles.length ? 'กดปุ่มเริ่มเพื่อตรวจการเชื่อมต่อและรับข้อมูลตามโหมดที่เลือก' : 'เพิ่มอุปกรณ์ ตั้งพอร์ต แล้วเริ่มอ่านและบันทึก';
   controlLabel($('welcome-setup'), profiles.length ? 'ตั้งค่าการเชื่อมต่อ' : 'เพิ่มเซ็นเซอร์', profiles.length ? 'settings' : 'plus');
   if (profile) {
     $('connection-name').textContent = mode === 'demo' ? 'DEMO' : profile.path;
@@ -539,6 +539,7 @@ setInterval(() => {
 setupControls();
 setupGroupsUI();
 setupFlowUI();
+$('welcome-add-power').onclick=()=>openFlowNewMeter();$('welcome-flow').onclick=()=>setTab('fleet');
 setupAssetView();
 setupWorkbench();
 setupAcquisitionUI();
@@ -550,11 +551,11 @@ controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
 (async () => {
   $('history-date').value ||= today(); renderLogs(); renderChannels(); emptyRow($('history-body'), 20, 'เลือกวันที่แล้วโหลดข้อมูล');
   try {
-    const initial = check(await api.initialize()); profiles = initial.profiles; measurementGroups=initial.groups || []; savedFlowBuses=initial.buses || []; renderGroupOptions(); selected = profiles[0]?.motorId || '';
+    const initial = check(await api.initialize()); profiles = initial.profiles; measurementGroups=initial.groups || []; selectedMeasurementGroup=initial.selectedGroup || ''; savedFlowBuses=initial.buses || []; renderGroupOptions(); const activeGroup=measurementGroups.find(group=>group.id===selectedMeasurementGroup); selected = profiles.find(profile=>activeGroup?.motorIds.includes(profile.motorId))?.motorId || profiles[0]?.motorId || '';
     if (initial.recording) renderRecording(initial.recording);
     $('record-path').textContent = `โฟลเดอร์: ${initial.dataPath}`;
     $('app-version').textContent = `v${initial.version}`; $('data-path').textContent = `ข้อมูลในเครื่อง: ${initial.dataPath}`;
     addLog('info', '', 'เปิดโปรแกรมพร้อมใช้งาน');
   } catch (error) { dataError = true; message(error.message); }
-  renderProfiles(); if (selected) setHistoryMotor(selected); renderSelected(); setTab('monitor'); if (selected) void restoreSavedMotorHistory(selected);
+  renderProfiles(); if (selected) setHistoryMotor(selected); renderSelected(); const startupGroup=measurementGroups.find(group=>group.id===selectedMeasurementGroup);setTab(startupGroup?.meters.length&&!startupGroup.motorIds.length?'power':'monitor'); if (selected) void restoreSavedMotorHistory(selected);
 })();

@@ -1,6 +1,6 @@
 {
   "name": "vectra-sensor-monitor",
-  "version": "0.20.1",
+  "version": "0.21.0",
   "author": "VECTRA",
   "private": true,
   "description": "Windows desktop application for RS485 Modbus motor vibration monitoring",
@@ -10,7 +10,7 @@
     "test": "npm run test:unit && npm run test:desktop",
     "test:unit": "node tests/sensor-codec.cjs && node tests/power-meter-codec.cjs && node tests/measurement-groups.cjs && node tests/fleet-store.cjs && node tests/acquisition.cjs && node tests/conversions.cjs && node tests/history-integrity.cjs && node tests/history-surface.cjs && node tests/run-recording.cjs && node tests/spectral-analysis.cjs && node tests/spectral-mesh.cjs && node tests/history-scatter.cjs && node tests/scatter-store.cjs && node tests/trend-analysis.cjs && node tests/trend-store.cjs",
     "test:sensor": "npm run test:unit",
-    "test:desktop": "node tests/desktop-smoke.cjs && node tests/history-ui.cjs && node tests/session-ui.cjs && node tests/spectral-ui.cjs && node tests/layout-stability.cjs && node tests/analysis-workspace.cjs && node tests/trend-ui.cjs && node tests/power-ui.cjs && node tests/groups-ui.cjs",
+    "test:desktop": "node tests/desktop-smoke.cjs && node tests/history-ui.cjs && node tests/session-ui.cjs && node tests/spectral-ui.cjs && node tests/layout-stability.cjs && node tests/analysis-workspace.cjs && node tests/trend-ui.cjs && node tests/power-ui.cjs && node tests/groups-ui.cjs && node tests/workflow-ui.cjs && node tests/onboarding-ui.cjs",
     "dist:win": "node scripts/create-icon.cjs && electron-builder --win nsis portable",
     "postinstall": "electron-builder install-app-deps"
   },

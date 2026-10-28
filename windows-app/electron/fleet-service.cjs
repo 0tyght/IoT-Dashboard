@@ -96,13 +96,13 @@ class FleetService {
     } finally { await closeClient(client); }
   }
 
-  async testPower(rawConfig, { address = 3019, slaveId = 3, registerType = 'holding' } = {}) {
+  async testPower(rawConfig, { address = 3019, slaveId = 3, registerType = 'holding', meterConfig = false } = {}) {
     if (this.buses.length) throw new Error('หยุดการอ่านก่อนทดสอบ Power Meter');
     const base = normalizeConfig(rawConfig);
     if (!Number.isInteger(address) || address < 0 || address > 65534) throw new Error('Address ต้องอยู่ระหว่าง 0–65534');
     if (!Number.isInteger(slaveId) || slaveId < 1 || slaveId > 247) throw new Error('Slave ID ต้องอยู่ระหว่าง 1–247');
     if (!['holding','input'].includes(registerType)) throw new Error('Modbus function ไม่ถูกต้อง');
-    if (base.slaveId === slaveId) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ที่เลือก');
+    if (!meterConfig && base.slaveId === slaveId) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ที่เลือก');
     let client;
     try {
       client = await this.open(base); client.setID(slaveId); client.setTimeout(base.timeout);

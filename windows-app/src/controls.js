@@ -26,6 +26,7 @@ function setupControls() {
     'load-history': ['โหลดข้อมูล', 'refresh'], 'export-csv': ['ส่งออก CSV', 'download']
   };
   for (const [id, [label, icon]] of Object.entries(labels)) controlLabel(document.getElementById(id), label, icon);
+  for (const [key,description] of Object.entries({fleet:'แผนผัง ชุดการวัด และการเชื่อมต่ออุปกรณ์',monitor:'ค่าการสั่นและกราฟของเซ็นเซอร์ที่เลือก',power:'ค่าจาก Power Meter และประวัติไฟฟ้า',history:'ค้นหาและส่งออกข้อมูลที่บันทึก',analysis:'วิเคราะห์ข้อมูลย้อนหลังหรือคลื่นดิบ',model:'โมเดล 3D',registers:'ค่าดิบจาก Register',motors:'จัดการเซ็นเซอร์ในทะเบียน',events:'เหตุการณ์ระหว่างทำงาน'})){const tab=document.querySelector(`[data-tab="${key}"]`);if(tab)tab.title=description;}
   const sessionMenu = document.getElementById('session-actions');
   document.addEventListener('pointerdown', event => { if (!sessionMenu.contains(event.target)) sessionMenu.open = false; });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && sessionMenu.open) { sessionMenu.open = false; sessionMenu.querySelector('summary').focus(); } });

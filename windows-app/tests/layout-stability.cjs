@@ -26,8 +26,8 @@ const { _electron: electron } = require('playwright');
         if (tab === 'power') {
           assert(await page.locator('.power-preview').isVisible(), 'electrical preview is labelled');
           assert((await page.locator('.power-measurements').textContent()).includes('—'), 'missing electrical readings are not fabricated');
-          assert.equal(await page.locator('#power-selected-point').textContent(), 'ไฟเข้ามอเตอร์');
-          assert((await page.locator('.power-point-confirmed').textContent()).includes('Slave ID 3'));
+          assert.equal(await page.locator('#power-selected-point').textContent(), 'ยังไม่มีมิเตอร์ที่เลือก');
+          assert((await page.locator('.power-point-confirmed').textContent()).includes('ยังไม่ได้เลือก Power Meter'));
           assert.equal(await page.locator('[data-power-point="generator"]').count(), 0, 'the one meter is not presented as generator output');
           if (width === 1366) {
             const vertical = await page.locator('main').evaluate(element => element.scrollHeight - element.clientHeight);

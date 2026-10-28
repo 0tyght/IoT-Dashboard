@@ -128,6 +128,14 @@ class DataStore {
   }
   loadBuses() { try{return this.normalizeBuses(JSON.parse(fs.readFileSync(path.join(this.directory,'modbus-buses.json'),'utf8')));}catch(error){if(error.code==='ENOENT')return [];throw new Error(`อ่านบัส Modbus ไม่ได้: ${error.message}`);} }
   saveBuses(raw) { const buses=this.normalizeBuses(raw),file=path.join(this.directory,'modbus-buses.json');fs.mkdirSync(this.directory,{recursive:true});fs.writeFileSync(`${file}.tmp`,JSON.stringify(buses,null,2),'utf8');fs.renameSync(`${file}.tmp`,file);return buses; }
+  loadSelectedGroup() {
+    try { const value=JSON.parse(fs.readFileSync(path.join(this.directory,'selected-group.json'),'utf8')); if(typeof value.id!=='string'||(value.id&&!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(value.id))) throw new Error('รหัสชุดไม่ถูกต้อง');return value.id; }
+    catch(error){if(error.code==='ENOENT')return '';throw new Error(`อ่านชุดที่เลือกล่าสุดไม่ได้: ${error.message}`);}
+  }
+  saveSelectedGroup(id) {
+    if(typeof id!=='string'||(id&&!this.loadGroups().some(group=>group.id===id)))throw new Error('ไม่พบชุดการวัดที่เลือก');
+    const file=path.join(this.directory,'selected-group.json');fs.mkdirSync(this.directory,{recursive:true});fs.writeFileSync(`${file}.tmp`,JSON.stringify({id},null,2),'utf8');fs.renameSync(`${file}.tmp`,file);return id;
+  }
   loadGroups() {
     try { return normalizeGroups(JSON.parse(fs.readFileSync(path.join(this.directory, 'measurement-groups.json'), 'utf8'))); }
     catch(error) { if(error.code==='ENOENT') return []; throw new Error(`อ่านชุดการวัดไม่ได้: ${error.message}`); }
