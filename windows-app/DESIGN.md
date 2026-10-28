@@ -2,6 +2,8 @@
 
 Scope: `windows-app/src`. The repository-root website is a separate application.
 
+The motor registry uses a deep navy surface and a violet selected row to anchor navigation; the content canvas is a cool pale gray with white charts. A light violet chart heading and muted telemetry surfaces establish hierarchy without assigning motor severity. Axis colors retain their measurement meaning; text labels and focus states remain present. The compact monitor dimensions and separate 3D model page remain unchanged.
+
 The supplied white and violet vibration-dashboard reference (`codex-clipboard-1310d809-2def-4225-b2c6-a02d1c04b72f.png`) defines the visual world. Keep acquisition, recording, motor management, timestamps and history. The current monitoring workspace fits three vibration plots and all numerical channels in one viewport, with a quiet white registry and pale-violet selection. The user explicitly excludes the 3D model from this dashboard; it belongs to a separate lazily loaded 3D tab. Use direct Thai product language without slogans.
 
 ## Palette and surfaces

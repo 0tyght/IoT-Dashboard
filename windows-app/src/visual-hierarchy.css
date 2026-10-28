@@ -1,0 +1,61 @@
+/* Navigation anchors the workspace; color in the plots still identifies X/Y/Z. */
+:root {
+  --registry-surface: #202940;
+  --registry-control: #2c3851;
+  --registry-text: #f5f7ff;
+  --registry-muted: #c5cde0;
+  --workspace-surface: #f4f6fb;
+}
+.shell .sidebar,
+.shell:has(#monitor-view:not([hidden])) .sidebar { color: var(--registry-text); background: var(--registry-surface); border-color: #354059; }
+.shell .sidebar .side-heading h2,
+.shell:has(#monitor-view:not([hidden])) .sidebar .side-heading h2 { color: var(--registry-text); }
+.shell .sidebar .count,
+.shell:has(#monitor-view:not([hidden])) .sidebar .count { color: #f4f0ff; background: #554c89; }
+.shell .sidebar .search,
+.shell:has(#monitor-view:not([hidden])) .sidebar .search { color: var(--registry-text); background: var(--registry-control); border-color: #53607a; }
+.shell .sidebar .search :is(input, span),
+.shell:has(#monitor-view:not([hidden])) .sidebar .search :is(input, span) { color: var(--registry-text); }
+.shell .sidebar .search input::placeholder,
+.shell:has(#monitor-view:not([hidden])) .sidebar .search input::placeholder { color: var(--registry-muted); }
+.shell .sidebar .motor-item,
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item { color: var(--registry-text); background: transparent; border-color: transparent; }
+.shell .sidebar .motor-item :is(small, .item-value),
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item :is(small, .item-value) { color: var(--registry-muted); }
+.shell .sidebar .motor-item:hover:not(:disabled),
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item:hover:not(:disabled) { background: #35425c; border-color: #677593; color: #fff; }
+.shell .sidebar .motor-item.selected,
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected { background: #493d76; border-color: #a399eb; color: #fff; }
+.shell .sidebar .motor-item.selected :is(strong, .item-value),
+.shell:has(#monitor-view:not([hidden])) .sidebar .motor-item.selected :is(strong, .item-value) { color: #fff; }
+.shell .sidebar-bottom,
+.shell:has(#monitor-view:not([hidden])) .sidebar-bottom { background: #202940; border-color: #3f4b64; }
+.shell .sidebar-bottom :is(p, p span, .legend),
+.shell:has(#monitor-view:not([hidden])) .sidebar-bottom :is(p, p span, .legend) { color: var(--registry-muted); }
+.shell .sidebar .empty-ports { color: var(--registry-muted); }
+.shell .sidebar .sidebar-close { color: #edf1ff; border-color: transparent; background: transparent; }
+.shell .sidebar .sidebar-close:hover:not(:disabled) { color: #fff; background: #44516b; border-color: #8390a8; }
+.shell main { background: var(--workspace-surface); }
+.shell main > .tabs { border-color: #d9ddec; }
+.shell main > .tabs button.active { color: #4d39cf; border-bottom-color: #6252e9; }
+.shell .document-heading h1, .shell .section-toolbar h2 { color: #27334d; }
+.shell .selection-state { background: #eeeafe; color: #5141a7; border-color: #d0c8f4; }
+#monitor-content > .trend-panel { border-color: #c9c7e5; }
+#monitor-content > .trend-panel > .panel-heading { background: #eeecfb; border-bottom: 1px solid #dddaf2; }
+#monitor-content > .trend-panel > .panel-heading h2 { color: #292e54; }
+#monitor-content .chart-legend { background: #f8f7ff; }
+#detail-plots .measurement-plot-heading { background: #f1f3fa; border-color: #d9deed; }
+#detail-plots .measurement-plot:hover .measurement-plot-heading,
+#detail-plots .measurement-plot:focus-within .measurement-plot-heading { background: #eae9fa; border-color: #bdb6ed; }
+#monitor-content .motor-facts .temperature-metric,
+#monitor-content .motor-facts .acquisition-metric { background: #edf0fb; border-color: #d4d9ee; }
+#monitor-content .motor-facts .connection-metric { background: #f4f2fc; border-color: #dcd7ef; }
+#monitor-content .compact-frequency-panel { background: #f1f6fa; border-color: #d4e2ec; }
+#monitor-content .context-heading { color: #303a59; }
+.analysis-navigation h2, .history-range .panel-heading h2 { color: #27334d; }
+.analysis-sources, .history-view-switch { background: #eceaf8; border-color: #d5d1ed; }
+.data-table th { background: #e9edf8; color: #394664; border-color: #d5dced; }
+.data-table tbody tr:hover { background: #f0effc; }
+@media (prefers-reduced-motion: reduce) {
+  #detail-plots .measurement-plot { transition: none; }
+}
