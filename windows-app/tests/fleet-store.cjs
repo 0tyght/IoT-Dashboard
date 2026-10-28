@@ -58,7 +58,7 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
   await new Promise(resolve => setTimeout(resolve, 350));
   assert.equal(frequencyReads - previousFrequencyReads, 1, 'unsupported supplemental registers do not overload every poll or block primary data');
   await service.disconnect();
-  await assert.rejects(service.connect([{ ...config, enabled: false }]), /ไม่มีมอเตอร์/);
+  await assert.rejects(service.connect([{ ...config, enabled: false }]), /ไม่มีอุปกรณ์/);
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vectra-store-test-'));
   try {

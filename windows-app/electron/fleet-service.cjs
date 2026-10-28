@@ -2,6 +2,7 @@
 
 const ModbusRTU = require('modbus-serial');
 const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, decodeVemseeFrequency, registerCount } = require('./sensor-codec.cjs');
+const { decodePowerMeter } = require('./power-meter-codec.cjs');
 const frequencyUnsupported = new WeakMap();
 
 function normalizeFleet(raw) {
@@ -59,10 +60,20 @@ async function readSnapshot(client, config) {
   const registers = await read(config.registerAddress, registerCount(config.dataType));
   return { value: decodeRegisters(registers, config), unit: config.unit, rawRegisters: registers, channels: null };
 }
+async function readPowerSnapshot(client, meter) {
+  client.setID(meter.slaveId); client.setTimeout(meter.timeout);
+  const read = async (address,count) => {
+    const response = meter.registerType === 'input' ? await client.readInputRegisters(address,count) : await client.readHoldingRegisters(address,count);
+    if (!Array.isArray(response.data) || response.data.length!==count || response.data.some(value=>!Number.isInteger(value)||value<0||value>65535)) throw new Error('ข้อมูล Power Meter ตอบกลับไม่ครบ');
+    return response.data;
+  };
+  const first=await read(3017+meter.offsetAdjust,16),last=await read(3035+meter.offsetAdjust,2);
+  return decodePowerMeter({first,last},meter.byteOrder);
+}
 
 class FleetService {
-  constructor({ onReading = () => {}, onStatus = () => {}, clientFactory = () => new ModbusRTU() } = {}) {
-    this.onReading = onReading; this.onStatus = onStatus; this.clientFactory = clientFactory;
+  constructor({ onReading = () => {}, onPower = () => {}, onStatus = () => {}, clientFactory = () => new ModbusRTU() } = {}) {
+    this.onReading = onReading; this.onPower = onPower; this.onStatus = onStatus; this.clientFactory = clientFactory;
     this.buses = []; this.generation = 0;
   }
 
@@ -100,18 +111,18 @@ class FleetService {
     } finally { await closeClient(client); }
   }
 
-  async connect(rawConfigs) {
-    const configs = normalizeFleet(rawConfigs).filter(config => config.enabled);
-    if (!configs.length) throw new Error('ไม่มีมอเตอร์ที่เปิดใช้งาน');
+  async connect(rawConfigs, meters = []) {
+    const configs = rawConfigs.length ? normalizeFleet(rawConfigs).filter(config => config.enabled) : [];
+    if (!configs.length && !meters.length) throw new Error('ไม่มีอุปกรณ์ที่เปิดใช้งาน');
     await this.disconnect();
     const generation = this.generation;
     const groups = new Map();
-    for (const config of configs) {
+    for (const config of [...configs, ...meters.map(meter=>({...meter,deviceType:'power'}))]) {
       const key = config.path.toUpperCase();
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(config);
     }
-    const initialReadings = [];
+    const initialReadings = [], initialPower = [];
     try {
       for (const entries of groups.values()) {
         const bus = { configs: entries, client: null, timer: null, work: null, nextDue: new Map(), lastReceived: new Map() };
@@ -119,6 +130,12 @@ class FleetService {
         bus.client = await this.open(entries[0]);
         for (const config of entries) {
           const started = Date.now();
+          if (config.deviceType === 'power') {
+            const key=`power:${config.id}`;
+            try { const snapshot=await readPowerSnapshot(bus.client,config); initialPower.push({state:'receiving',meterId:config.id,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date().toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs:null,...snapshot}); bus.lastReceived.set(key,Date.now()); }
+            catch(error) { initialPower.push({state:'read-error',meterId:config.id,path:config.path,slaveId:config.slaveId,message:error.message}); }
+            bus.nextDue.set(key,Date.now()+config.pollInterval); continue;
+          }
           this.onStatus({ state: 'testing', motorId: config.motorId, path: config.path });
           let snapshot;
           try { snapshot = await readSnapshot(bus.client, config); }
@@ -129,7 +146,7 @@ class FleetService {
         }
       }
       for (const bus of this.buses) this.schedule(bus, generation, 10);
-      return { ok: true, configs, readings: initialReadings };
+      return { ok: true, configs, readings: initialReadings, powerReadings:initialPower };
     } catch (error) {
       await this.disconnect();
       throw new Error(`ทดสอบก่อนเริ่มอ่านไม่สำเร็จ: ${error.message}`);
@@ -151,10 +168,16 @@ class FleetService {
   async poll(bus, generation) {
     for (const config of bus.configs) {
       if (generation !== this.generation) return;
-      if ((bus.nextDue.get(config.motorId) || 0) > Date.now()) continue;
+      const key=config.deviceType==='power'?`power:${config.id}`:config.motorId;
+      if ((bus.nextDue.get(key) || 0) > Date.now()) continue;
       const started = Date.now();
       try {
         if (!bus.client?.isOpen) bus.client = await this.open(config);
+        if (config.deviceType === 'power') {
+          const snapshot=await readPowerSnapshot(bus.client,config); if(generation!==this.generation)return;
+          const received=Date.now(),actualIntervalMs=bus.lastReceived.has(key)?received-bus.lastReceived.get(key):null; bus.lastReceived.set(key,received);
+          this.onPower({state:'receiving',meterId:config.id,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date(received).toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs,...snapshot});
+        } else {
         const snapshot = await readSnapshot(bus.client, config);
         if (generation !== this.generation) return;
         const received = Date.now(), reading = this.reading(config, snapshot, received - started);
@@ -162,14 +185,16 @@ class FleetService {
         bus.lastReceived.set(config.motorId, received);
         this.onReading(reading);
         this.onStatus({ state: 'receiving', motorId: config.motorId, path: config.path });
+        }
       } catch (error) {
         if (generation !== this.generation) return;
-        this.onStatus({ state: 'read-error', motorId: config.motorId, path: config.path, message: error.message });
+        if(config.deviceType==='power')this.onPower({state:'read-error',meterId:config.id,path:config.path,slaveId:config.slaveId,message:error.message});
+        else this.onStatus({ state: 'read-error', motorId: config.motorId, path: config.path, message: error.message });
       }
       // Start-to-start requested period; slow devices/shared buses may run longer.
-      bus.nextDue.set(config.motorId, Math.max(Date.now() + 20, started + config.pollInterval));
+      bus.nextDue.set(key, Math.max(Date.now() + 20, started + config.pollInterval));
     }
-    const delay = Math.max(20, Math.min(...bus.configs.map(config => (bus.nextDue.get(config.motorId) || 0) - Date.now())));
+    const delay = Math.max(20, Math.min(...bus.configs.map(config => (bus.nextDue.get(config.deviceType==='power'?`power:${config.id}`:config.motorId) || 0) - Date.now())));
     this.schedule(bus, generation, delay);
   }
 

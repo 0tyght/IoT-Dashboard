@@ -1,0 +1,30 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {randomUUID}=require('node:crypto');
+const {normalizeConfig}=require('../electron/sensor-codec.cjs');
+const {normalizeGroups,resolveGroup}=require('../electron/measurement-groups.cjs');
+const {FleetService}=require('../electron/fleet-service.cjs');
+const {DataStore,dayKey}=require('../electron/data-store.cjs');
+const {RecordingService}=require('../electron/recording-service.cjs');
+(async()=>{
+ const sensor=normalizeConfig({motorId:'M1',path:'COM8',slaveId:1,sensorModel:'custom',registerType:'holding',registerAddress:100,dataType:'uint16',unit:'mm/s',pollInterval:250});
+ const group=normalizeGroups([{id:'G1',name:'ทดสอบ',motorIds:['M1'],meters:[{id:'P1',path:'COM8',slaveId:3,baudRate:9600,parity:'none',stopBits:1,pollInterval:250},{id:'P2',path:'COM8',slaveId:4,baudRate:9600,parity:'none',stopBits:1,pollInterval:250}]}])[0];
+ assert.equal(group.meters[0].byteOrder,'unconfirmed');assert.equal(resolveGroup(group,[sensor]).meters.length,2);
+ assert.throws(()=>resolveGroup({...group,meters:[{...group.meters[0],slaveId:1}]},[sensor]),/ซ้ำ/);
+ const unselected=normalizeConfig({...sensor,motorId:'M2',slaveId:3});assert.throws(()=>resolveGroup(group,[sensor,unselected]),/ซ้ำกับเซ็นเซอร์/);
+ assert.throws(()=>resolveGroup({...group,meters:[{...group.meters[0],baudRate:19200}]},[sensor]),/เดียวกัน/);
+ assert.throws(()=>resolveGroup(group,[]),/เซ็นเซอร์/);
+ const pendingRecorder=new RecordingService({settings:{startMode:'monitor-only'}});pendingRecorder.connect();const unsaved=await pendingRecorder.acceptPower({meterId:'P1',timestamp:new Date().toISOString()},{appendPower:()=>{throw new Error('must not write');}});assert.equal(unsaved.recorded,false);
+ const namedRecorder=new RecordingService();const named=namedRecorder.connect({id:'G1',name:'ชุดเดิม'});assert.equal(named.groupName,'ชุดเดิม');namedRecorder.disconnect();assert.equal(namedRecorder.snapshot().groupName,'ชุดเดิม');assert.equal(namedRecorder.connect({id:'G2',name:'ชุดใหม่'}).groupName,'ชุดใหม่');
+ const failingRecorder=new RecordingService();failingRecorder.connect();const failed=await failingRecorder.acceptPower({meterId:'P1',timestamp:new Date(Date.now()+1000).toISOString()},{appendPower:async()=>{throw new Error('disk full');}});assert.equal(failed.recorded,false);assert.equal(failingRecorder.snapshot().lastError,'disk full');
+ let active=0,maxActive=0,opened=0,fail=false;const seen=[],power=[];
+ class Fake {async connectRTUBuffered(){this.isOpen=true;opened++;}setID(id){this.id=id;}setTimeout(){}async readHoldingRegisters(address,count){active++;maxActive=Math.max(maxActive,active);try{await new Promise(r=>setTimeout(r,3));seen.push([this.id,address,count]);if(fail&&this.id===3)throw new Error('timeout');return {data:Array(count).fill(this.id===1?7:0)};}finally{active--;}}readInputRegisters(a,n){return this.readHoldingRegisters(a,n);}close(cb){this.isOpen=false;cb();}}
+ const fleet=new FleetService({clientFactory:()=>new Fake(),onReading:reading=>seen.push(['sensor',reading.motorId]),onPower:reading=>power.push(reading)});
+ const started=await fleet.connect([sensor],group.meters);assert.equal(opened,1);assert.equal(started.powerReadings.length,2);assert.equal(started.powerReadings[0].values.voltageAB,null);
+ assert(seen.some(row=>row[0]===3&&row[1]===3017&&row[2]===16));assert(seen.some(row=>row[0]===3&&row[1]===3035&&row[2]===2));
+ fail=true;await new Promise(resolve=>setTimeout(resolve,650));assert(power.some(reading=>reading.meterId==='P1'&&reading.state==='read-error'));assert(power.some(reading=>reading.meterId==='P2'&&reading.state==='receiving'));assert(seen.some(row=>row[0]==='sensor'));assert.equal(maxActive,1,'one physical bus never has overlapping requests');await fleet.disconnect();
+ const base=path.resolve(__dirname,'..','.test-tmp');fs.mkdirSync(base,{recursive:true});const temp=fs.mkdtempSync(path.join(base,'groups-store-'));
+ try{const store=new DataStore(temp);assert.deepEqual(store.loadGroups(),[]);assert.deepEqual(await store.powerDays(),[]);store.saveGroups([group]);assert.equal(store.loadGroups()[0].name,'ทดสอบ');const stamp=started.powerReadings[0].timestamp;const recorder=new RecordingService({clock:()=>Date.parse(stamp)-1000});const run=recorder.connect();const row=await recorder.acceptPower({...started.powerReadings[0],groupId:group.id,groupName:group.name},store);assert.equal(row.runId,run.runId);assert.equal(row.recorded,true);assert.equal(recorder.snapshot().count,1);const date=dayKey(new Date(row.timestamp));const csv=fs.readFileSync(path.join(store.runDataPath(run.runId),`power-${date}.csv`),'utf8');assert(csv.includes(run.runId)&&csv.includes('P1')&&csv.includes('unconfirmed'));assert(fs.existsSync(path.join(store.dataPath(),`power-${date}.ndjson`)));assert.deepEqual(await store.powerDays(),[date]);const history=await store.powerHistory({date,runId:run.runId});assert.equal(history.total,1);assert.equal(history.rows[0].meterId,'P1');assert.equal((await store.powerHistory({date,runId:randomUUID()})).total,0);await assert.rejects(store.powerHistory({date:'../escape'}),/วันที่/);recorder.stop();const unrecorded=await recorder.acceptPower({...started.powerReadings[0]},store);assert.equal(unrecorded.recorded,false);assert.equal((await store.powerHistory({date})).total,1);}
+ finally{assert.equal(path.dirname(temp),base);assert(path.basename(temp).startsWith('groups-store-'));fs.rmSync(temp,{recursive:true,force:true});}
+ console.log('PASS: group validation, shared-bus serialization, meter failure isolation, raw data and per-run power CSV');
+})().catch(error=>{console.error(error);process.exitCode=1;});

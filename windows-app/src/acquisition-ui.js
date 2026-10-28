@@ -49,7 +49,7 @@ function renderHistoryRuns(runs = []) {
   const previous = select.value; historyRuns = runs;
   select.replaceChildren(new Option('ทุกรอบ', ''));
   for (const run of runs) {
-    const label = run.runId === '__legacy__' ? `ข้อมูลเดิม · ไม่ระบุรอบ · ${run.total.toLocaleString()} ค่า` : `${runDateLabel(run.runStartedAt || run.firstTimestamp)} · ${shortIdentity(run.runId)} · ${run.total.toLocaleString()} ค่า`;
+    const label = run.runId === '__legacy__' ? `ข้อมูลเดิม · ไม่ระบุรอบ · ${run.total.toLocaleString()} ค่า` : `${run.groupName ? `${run.groupName} · ` : ''}${runDateLabel(run.runStartedAt || run.firstTimestamp)} · ${shortIdentity(run.runId)} · ${run.total.toLocaleString()} ค่า`;
     const option = new Option(label, run.runId);
     option.title = run.runId === '__legacy__' ? 'ข้อมูลจากรุ่นเดิมที่ยังไม่มีรหัสรอบอ่าน' : `รอบอ่าน ${run.runId}\nเริ่ม ${runDateLabel(run.runStartedAt || run.firstTimestamp)} (UTC+07:00)`;
     select.add(option);
@@ -88,7 +88,7 @@ function renderRecording(state) {
   const runLabel = $('recording-run');
   if (runLabel) {
     runLabel.hidden = !recordingState.runId || mode === 'demo';
-    runLabel.textContent = recordingState.runId ? `รอบ ${runDateLabel(recordingState.runStartedAt)} · ${shortIdentity(recordingState.runId)}` : '';
+    runLabel.textContent = recordingState.runId ? `${recordingState.groupName?`${recordingState.groupName} · `:''}รอบ ${runDateLabel(recordingState.runStartedAt)} · ${shortIdentity(recordingState.runId)}` : '';
     runLabel.title = recordingState.runId ? `รอบอ่าน ${recordingState.runId}\nเริ่ม ${runDateLabel(recordingState.runStartedAt)} (UTC+07:00)${recordingState.recordingId ? `\nรอบบันทึก ${recordingState.recordingId}\nเริ่มบันทึก ${runDateLabel(recordingState.recordingStartedAt)}` : '\nยังไม่เริ่มบันทึกในรอบนี้'}` : '';
     runLabel.dataset.runId = recordingState.runId || '';
   }

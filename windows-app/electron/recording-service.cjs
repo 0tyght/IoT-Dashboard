@@ -18,18 +18,18 @@ class RecordingService {
   constructor({ settings = {}, onChange = () => {}, onError = () => {}, clock = Date.now } = {}) {
     this.settings = normalizeRecording(settings); this.onChange = onChange; this.onError = onError; this.clock = clock;
     this.connected = false; this.active = false; this.startedAt = ''; this.endsAt = ''; this.waiting = false; this.scheduleMissed = false; this.count = 0;
-    this.runId = ''; this.runStartedAt = ''; this.recordingId = ''; this.recordingStartedAt = '';
+    this.runId = ''; this.runStartedAt = ''; this.runGroupId=''; this.runGroupName=''; this.recordingId = ''; this.recordingStartedAt = '';
     this.lastSavedAt = ''; this.lastError = ''; this.stopReason = '';
   }
-  snapshot() { return { settings: this.settings, connected: this.connected, active: this.active, waiting: this.waiting, scheduleMissed: this.scheduleMissed, runId: this.runId, runStartedAt: this.runStartedAt, recordingId: this.recordingId, recordingStartedAt: this.recordingStartedAt, startedAt: this.startedAt, endsAt: this.endsAt, count: this.count, lastSavedAt: this.lastSavedAt, lastError: this.lastError, stopReason: this.stopReason }; }
+  snapshot() { return { settings: this.settings, connected: this.connected, active: this.active, waiting: this.waiting, scheduleMissed: this.scheduleMissed, runId: this.runId, runStartedAt: this.runStartedAt, groupId:this.runGroupId, groupName:this.runGroupName, recordingId: this.recordingId, recordingStartedAt: this.recordingStartedAt, startedAt: this.startedAt, endsAt: this.endsAt, count: this.count, lastSavedAt: this.lastSavedAt, lastError: this.lastError, stopReason: this.stopReason }; }
   emit() { this.onChange(this.snapshot()); return this.snapshot(); }
   configure(raw) {
     if (this.connected) throw new Error('หยุดอ่านก่อนเปลี่ยนเงื่อนไขการบันทึก');
     this.settings = normalizeRecording(raw); this.scheduleMissed = false; return this.emit();
   }
-  connect() {
+  connect(group = null) {
     const now = this.clock();
-    this.runId = randomUUID(); this.runStartedAt = new Date(now).toISOString(); this.recordingId = ''; this.recordingStartedAt = '';
+    this.runId = randomUUID(); this.runStartedAt = new Date(now).toISOString(); this.runGroupId=group?.id||'';this.runGroupName=group?.name||'';this.recordingId = ''; this.recordingStartedAt = '';
     this.scheduleMissed = this.settings.startMode === 'scheduled' && Date.parse(this.settings.startAt) <= now;
     this.connected = true; this.active = false; this.waiting = this.settings.startMode === 'scheduled' && !this.scheduleMissed; this.count = 0;
     this.startedAt = ''; this.endsAt = ''; this.lastSavedAt = ''; this.lastError = ''; this.stopReason = '';
@@ -70,6 +70,19 @@ class RecordingService {
     } catch (error) {
       if (this.runId === runId && this.recordingId === recordingId) { this.lastError = error.message; this.emit(); this.onError(reading.motorId, error.message); }
       return { ...tagged, recorded: false, recordingState: 'error' };
+    }
+  }
+  async acceptPower(reading, store) {
+    const save=this.shouldRecord(reading.timestamp),runId=this.runId,recordingId=this.recordingId;
+    const tagged={...reading,runId,runStartedAt:this.runStartedAt,recordingId:save?recordingId:'',recordingStartedAt:save?this.recordingStartedAt:''};
+    if(!save)return {...tagged,recorded:false,recordingState:'monitor-only'};
+    try {
+      await store.appendPower(tagged);
+      if(this.runId===runId&&this.recordingId===recordingId){this.count++;this.lastSavedAt=new Date(this.clock()).toISOString();this.lastError='';this.emit();}
+      return {...tagged,recorded:true,recordingState:'saved'};
+    } catch(error) {
+      if(this.runId===runId&&this.recordingId===recordingId){this.lastError=error.message;this.emit();this.onError(reading.meterId,error.message);}
+      return {...tagged,recorded:false,recordingState:'error',storageError:error.message};
     }
   }
 }

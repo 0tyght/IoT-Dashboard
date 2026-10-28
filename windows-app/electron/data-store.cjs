@@ -5,6 +5,7 @@ const path = require('node:path');
 const readline = require('node:readline');
 const { normalizeFleet } = require('./fleet-service.cjs');
 const { normalizeRecording } = require('./recording-service.cjs');
+const { normalizeGroups } = require('./measurement-groups.cjs');
 
 function dayKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -104,8 +105,30 @@ class DataStore {
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
     return names.filter(name => /^readings-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name)).map(name => name.slice(9, 19)).sort().reverse();
   }
+  async powerDays() {
+    await this.queue; let names;
+    try { names=await fs.promises.readdir(this.dataPath()); } catch(error) { if(error.code==='ENOENT')return []; throw error; }
+    return names.filter(name=>/^power-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name)).map(name=>name.slice(6,16)).sort().reverse();
+  }
+  async powerHistory({date,runId=''}) {
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !Number.isFinite(Date.parse(date)))throw new Error('วันที่ไม่ถูกต้อง');
+    await this.queue;const file=path.join(this.dataPath(),`power-${date}.ndjson`),rows=[],runs=new Map();let total=0,skipped=0;
+    let stream;try{const size=(await fs.promises.stat(file)).size;if(!size)return{rows,total,skipped,runs:[]};stream=fs.createReadStream(file,{encoding:'utf8',start:0,end:size-1});}catch(error){if(error.code==='ENOENT')return{rows,total,skipped,runs:[]};throw error;}
+    const lines=readline.createInterface({input:stream,crlfDelay:Infinity});
+    try{for await(const line of lines){if(!line.trim())continue;let row;try{row=JSON.parse(line);if(!row||!Number.isFinite(Date.parse(row.timestamp))||!row.meterId)throw new Error('invalid');}catch{skipped++;continue;}const id=row.runId||'';if(!runs.has(id))runs.set(id,{runId:id,groupName:row.groupName||'',firstTimestamp:row.timestamp});if(runId&&id!==runId)continue;total++;rows.push(row);if(rows.length>200)rows.shift();}}
+    finally{lines.close();stream.destroy();}
+    return {rows,total,skipped,runs:[...runs.values()].reverse()};
+  }
   runDataPath(runId) { return runDataPath(this.dataPath(), runId); }
   profilesPath() { return path.join(this.directory, 'motors.json'); }
+  loadGroups() {
+    try { return normalizeGroups(JSON.parse(fs.readFileSync(path.join(this.directory, 'measurement-groups.json'), 'utf8'))); }
+    catch(error) { if(error.code==='ENOENT') return []; throw new Error(`อ่านชุดการวัดไม่ได้: ${error.message}`); }
+  }
+  saveGroups(raw) {
+    const groups=normalizeGroups(raw), file=path.join(this.directory,'measurement-groups.json');
+    fs.mkdirSync(this.directory,{recursive:true}); fs.writeFileSync(`${file}.tmp`,JSON.stringify(groups,null,2),'utf8'); fs.renameSync(`${file}.tmp`,file); return groups;
+  }
   loadRecording() {
     try { return normalizeRecording(JSON.parse(fs.readFileSync(path.join(this.directory, 'recording.json'), 'utf8'))); }
     catch (error) { if (error.code === 'ENOENT') return normalizeRecording(); throw new Error(`อ่านการตั้งค่าบันทึกไม่ได้: ${error.message}`); }
@@ -148,6 +171,19 @@ class DataStore {
     this.queue = write.catch(() => {});
     return write;
   }
+  appendPower(reading) {
+    const write=this.queue.then(async()=>{
+      const directory=this.runDataPath(reading.runId), date=dayKey(new Date(reading.timestamp));
+      await fs.promises.mkdir(this.dataPath(),{recursive:true});
+      await fs.promises.appendFile(path.join(this.dataPath(),`power-${date}.ndjson`),`${JSON.stringify(reading)}\n`,'utf8');
+      const keys=['timestamp','groupId','groupName','runId','recordingId','meterId','name','point','motorId','path','slaveId','registerType','offsetAdjust','byteOrder','quality','pollIntervalMs','actualIntervalMs','raw','values'];
+      const row=keys.map(key=>csvCell(typeof reading[key]==='object'&&reading[key]!==null?JSON.stringify(reading[key]):reading[key])).join(',')+'\r\n';
+      const append=async file=>{try{await fs.promises.writeFile(file,'\uFEFF'+keys.join(',')+'\r\n',{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}await fs.promises.appendFile(file,row,'utf8');};
+      await append(path.join(this.dataPath(),`power-${date}.csv`));
+      await fs.promises.mkdir(directory,{recursive:true}); await append(path.join(directory,`power-${date}.csv`));
+    });
+    this.queue=write.catch(()=>{}); return write;
+  }
   async history({ date, endDate = date, motorId = '', runId = '' }, visitor) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error('วันที่ไม่ถูกต้อง');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(endDate)) || !Number.isFinite(Date.parse(date)) || !Number.isFinite(Date.parse(endDate)) || endDate < date) throw new Error('ช่วงวันที่ไม่ถูกต้อง');
@@ -166,7 +202,7 @@ class DataStore {
           if (typeof record.motorId === 'string' && record.motorId) motorIds.add(record.motorId);
           if (motorId && record.motorId !== motorId) continue;
           const id = recordedRunId(record);
-          if (!runCatalog.has(id)) runCatalog.set(id, { runId: id, runStartedAt: id === LEGACY_RUN_ID ? '' : record.runStartedAt || '', firstTimestamp: record.timestamp, lastTimestamp: record.timestamp, total: 0, recordingIds: new Set(), motorIds: new Set() });
+          if (!runCatalog.has(id)) runCatalog.set(id, { runId: id, runStartedAt: id === LEGACY_RUN_ID ? '' : record.runStartedAt || '', groupId:record.groupId || '', groupName:record.groupName || '', firstTimestamp: record.timestamp, lastTimestamp: record.timestamp, total: 0, recordingIds: new Set(), motorIds: new Set() });
           const run = runCatalog.get(id);
           run.total++;
           if (Date.parse(record.timestamp) < Date.parse(run.firstTimestamp)) run.firstTimestamp = record.timestamp;

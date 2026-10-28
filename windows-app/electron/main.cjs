@@ -7,9 +7,10 @@ const { SerialPort } = require('serialport');
 const { FleetService } = require('./fleet-service.cjs');
 const { DataStore, CSV_KEYS, csvRow } = require('./data-store.cjs');
 const { RecordingService } = require('./recording-service.cjs');
+const { normalizeGroups, resolveGroup } = require('./measurement-groups.cjs');
 
 if (process.env.VECTRA_TEST_DATA) app.setPath('userData', process.env.VECTRA_TEST_DATA);
-let mainWindow, fleet, store, recording, recordingTimer, busy = false, quitting = false;
+let mainWindow, fleet, store, recording, recordingTimer, busy = false, quitting = false, activeGroup = null;
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => { if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
 const send = (channel, payload) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload); };
@@ -19,7 +20,12 @@ async function exclusive(action) {
   try { return await action(); } finally { busy = false; }
 }
 async function record(reading) {
-  return recording.accept(reading, store);
+  const group=activeGroup; return recording.accept({...reading,groupId:group?.id||'',groupName:group?.name||''}, store);
+}
+async function recordPower(reading) {
+  if(reading.state!=='receiving') { send('power:reading',reading); return reading; }
+  const group=activeGroup, result=await recording.acceptPower({...reading,groupId:group?.id||'',groupName:group?.name||''},store);
+  send('power:reading',result); return result;
 }
 
 app.whenReady().then(() => {
@@ -27,7 +33,7 @@ app.whenReady().then(() => {
   store = new DataStore(app.getPath('userData'));
   recording = new RecordingService({ onChange: state => send('recording:state', state), onError: (motorId, message) => send('sensor:status', { state: 'storage-error', motorId, message }) });
   recordingTimer = setInterval(() => recording.tick(), 250);
-  fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)), onStatus: status => send('sensor:status', status) });
+  fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)), onPower: reading => void recordPower(reading), onStatus: status => send('sensor:status', status) });
   const available = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
     width: Math.min(1440, available.width), height: Math.min(940, available.height), minWidth: Math.min(768, available.width), minHeight: Math.min(680, available.height), backgroundColor: '#f7f8fb', show: false, autoHideMenuBar: true,
@@ -45,7 +51,13 @@ app.whenReady().then(() => {
       try { return await action(...args); } catch (error) { return { ok: false, message: error.message }; }
     });
   }
-  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), groups:store.loadGroups(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('groups:save', raw => {
+    if(fleet.buses.length||busy) throw new Error('หยุดอ่านก่อนแก้ไขชุดการวัด');
+    const incoming=normalizeGroups(raw), previous=store.loadGroups(), profiles=store.loadProfiles();
+    for(const group of incoming) { const old=previous.find(item=>item.id===group.id); if(!old||JSON.stringify(old)!==JSON.stringify(group)) resolveGroup(group,profiles); }
+    return {ok:true,groups:store.saveGroups(incoming)};
+  });
   handle('recording:configure', raw => {
     if (fleet.buses.length || busy) throw new Error('หยุดอ่านก่อนเปลี่ยนการบันทึก');
     const settings = store.saveRecording(raw); return { ok: true, recording: recording.configure(settings) };
@@ -63,14 +75,18 @@ app.whenReady().then(() => {
     if (store.loadProfiles().some(profile => profile.path.toUpperCase() === port && profile.slaveId === slaveId)) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');
     return fleet.testPower(config, options);
   }));
-  handle('sensor:connect', raw => exclusive(async () => {
-    const result = await fleet.connect(raw);
-    recording.connect();
-    return { ...result, readings: await Promise.all(result.readings.map(record)), recording: recording.snapshot() };
-  }).catch(async error => { recording.disconnect(); await fleet.disconnect(); throw error; }));
-  handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; return { ok: true, recording: recording.snapshot() }; }));
+  handle('sensor:connect', (raw,groupId) => exclusive(async () => {
+    let selection={motors:raw,meters:[]}; activeGroup=null;
+    if(groupId) { const group=store.loadGroups().find(item=>item.id===groupId); if(!group)throw new Error('ไม่พบชุดการวัด'); selection=resolveGroup(group,store.loadProfiles()); activeGroup=group; }
+    const result = await fleet.connect(selection.motors,selection.meters);
+    recording.connect(activeGroup);
+    return { ...result, readings: await Promise.all(result.readings.map(record)), powerReadings:await Promise.all(result.powerReadings.map(recordPower)), recording: recording.snapshot() };
+  }).catch(async error => { recording.disconnect(); await fleet.disconnect(); activeGroup=null; throw error; }));
+  handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; activeGroup=null; return { ok: true, recording: recording.snapshot() }; }));
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
   handle('data:recorded-days', async () => ({ ok: true, days: await store.recordedDays() }));
+  handle('data:power-days', async () => ({ok:true,days:await store.powerDays()}));
+  handle('data:power-history', async filter => ({ok:true,...await store.powerHistory(filter)}));
   handle('data:chart-range', async filter => ({ ok: true, ...await store.chartRange(filter) }));
   handle('data:scatter-range', async filter => ({ ok: true, ...await store.scatterRange(filter) }));
   handle('data:trend-range', async filter => ({ ok: true, ...await store.trendRange(filter) }));

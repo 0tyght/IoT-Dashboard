@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Corrects the PM2200 measurement point to motor electrical input, Slave 3. The read-only two-register diagnostic is available while acquisition is stopped; addresses and Float32 order still require verification. Continuous power meter acquisition and recording are not implemented."
+            --notes "Windows x64 release. Adds editable measurement groups, shared-bus sequential polling of multiple vibration sensors and PM2200 meters, and separate per-run electrical CSV/NDJSON. PM2200 register offsets and Float32 order remain unverified against the user's physical meter; unconfirmed values remain raw. Per-phase current and power readings are not implemented."

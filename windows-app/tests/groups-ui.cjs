@@ -1,0 +1,25 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {_electron:electron}=require('playwright');
+(async()=>{
+ const project=path.resolve(__dirname,'..'),base=path.join(project,'.test-tmp');fs.mkdirSync(base,{recursive:true});const root=fs.mkdtempSync(path.join(base,'groups-ui-'));
+ fs.writeFileSync(path.join(root,'motors.json'),JSON.stringify([{motorId:'M1',path:'COM8',slaveId:1,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'},{motorId:'M2',path:'COM8',slaveId:2,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'}]));
+ let app;try{
+  app=await electron.launch({...process.env.ELECTRON_EXECUTABLE?{executablePath:process.env.ELECTRON_EXECUTABLE,args:[]}:{args:['.'],cwd:project},env:{...process.env,TEMP:base,TMP:base,VECTRA_TEST_DATA:root}});
+  const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.waitForLoadState('domcontentloaded');await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
+  await page.locator('#session-actions summary').click();await page.locator('#groups-open').click();await page.locator('#groups-new').click();await page.locator('#groups-name').fill('ชุดทดสอบ');await page.locator('#groups-motors input[value="M1"]').check();
+  await page.locator('#groups-add-meter').click();let meter=page.locator('.groups-meter').first();await meter.locator('.meter-id').fill('PM1');await meter.locator('.meter-port').selectOption('M1');await meter.locator('.meter-owner').selectOption('M1');
+  await page.locator('#groups-add-meter').click();meter=page.locator('.groups-meter').last();await meter.locator('.meter-id').fill('PM2');await meter.locator('.meter-port').selectOption('M2');await meter.locator('.meter-slave').fill('4');await page.locator('#groups-name').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(project,'.artifacts','measurement-group-editor.png'),animations:'disabled'});await page.locator('#groups-save').click();await page.locator('#groups-active').filter({hasText:'ชุดทดสอบ'}).waitFor();
+  let saved=JSON.parse(fs.readFileSync(path.join(root,'measurement-groups.json'),'utf8'));assert.equal(saved.length,1);assert.equal(saved[0].meters.length,2);assert.equal(saved[0].meters[0].motorId,'M1');assert.equal(saved[0].meters[0].byteOrder,'unconfirmed');
+  await page.screenshot({path:path.join(project,'.artifacts','measurement-groups.png'),animations:'disabled'});
+  await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('sensor:connect');ipcMain.handle('sensor:connect',(_e,configs,id)=>{globalThis.groupUITestSelected=id;return{ok:true,configs:[configs[0]],readings:[],powerReadings:[{state:'receiving',meterId:'PM1',name:'มิเตอร์ 1',point:'motor-input',motorId:'M1',path:'COM8',slaveId:3,timestamp:new Date().toISOString(),quality:'unconfirmed',values:{voltageAB:null},raw:{voltageAB:[0x42c8,0]},recorded:false}],recording:{settings:{startMode:'on-connect',durationMinutes:0},connected:true,active:true,count:0}};});ipcMain.removeHandler('sensor:disconnect');ipcMain.handle('sensor:disconnect',()=>({ok:true,recording:{settings:{startMode:'on-connect',durationMinutes:0},connected:false,active:false,count:0}}));});
+  await page.locator('#groups-close').click();await page.locator('#connect-all').click();await page.locator('#disconnect').waitFor();assert.equal(await app.evaluate(()=>globalThis.groupUITestSelected),saved[0].id);
+  await page.locator('[data-tab="power"]').click();await page.locator('.power-live').filter({hasText:'มิเตอร์ 1'}).waitFor();assert((await page.locator('.power-live').textContent()).includes('0x42C8 0x0000'));assert((await page.locator('.power-live').textContent()).includes('รอยืนยัน'));
+  await page.locator('#disconnect').click();await page.locator('#connect-all').waitFor();await page.locator('#session-actions summary').click();await page.locator('#groups-open').click();
+  await page.locator('#groups-edit').click();await page.locator('#groups-name').fill('ชุดแก้ไข');await page.locator('.meter-remove').last().click();await page.locator('#groups-save').click();await page.locator('#groups-active').filter({hasText:'ชุดแก้ไข'}).waitFor();
+  saved=JSON.parse(fs.readFileSync(path.join(root,'measurement-groups.json'),'utf8'));assert.equal(saved[0].meters.length,1);
+  await page.locator('#groups-delete').click();await page.locator('#accept-confirm').click();await page.waitForFunction(()=>document.querySelector('#toast').hidden===false||!document.querySelector('#confirm-dialog').open);await page.waitForFunction(()=>document.querySelector('#groups-select').options.length===1);
+  saved=JSON.parse(fs.readFileSync(path.join(root,'measurement-groups.json'),'utf8'));assert.deepEqual(saved,[]);assert.deepEqual(errors,[]);
+  console.log('PASS: create, edit and delete a multi-device group with per-meter motor association');
+ }finally{if(app)await app.close();assert.equal(path.dirname(root),base);assert(path.basename(root).startsWith('groups-ui-'));fs.rmSync(root,{recursive:true,force:true});}
+})().catch(error=>{console.error(error);process.exitCode=1;});
