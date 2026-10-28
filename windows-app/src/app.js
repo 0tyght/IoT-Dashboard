@@ -59,9 +59,10 @@ function setTab(tab) {
   document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
   document.querySelector('main').scrollTop = 0;
   if (tab === 'history') {
+    void refreshRecordedDays();
     loadHistory();
   }
-  if (tab === 'analysis' && analysisSource === 'history') void openHistoryAnalysis();
+  if (tab === 'analysis' && analysisSource === 'history') { void refreshRecordedDays(); void openHistoryAnalysis(); }
   renderSelected();
 }
 function renderMotorList() {

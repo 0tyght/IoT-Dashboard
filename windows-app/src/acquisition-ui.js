@@ -5,6 +5,33 @@ let rangeView = 'scatter', rangeSampling = 'all', rangeCompleteTotal = 0;
 let invalidateHistoryRange = () => {};
 let recordActionBusy = false;
 let historyRuns = [];
+let recordedDaysGeneration = 0;
+async function refreshRecordedDays() {
+  const generation = ++recordedDaysGeneration;
+  try {
+    const { days } = check(await api.recordedDays());
+    if (generation !== recordedDaysGeneration) return;
+    for (const id of ['recorded-day', 'analysis-recorded-day']) {
+      const select = $(id); if (!select) continue;
+      const current = $('history-date').value === $('history-end-date').value ? $('history-date').value : '';
+      select.replaceChildren(new Option(days.length ? 'เลือกวันที่บันทึก' : 'ยังไม่มีข้อมูลที่บันทึก', ''), ...days.map(day => new Option(day, day)));
+      select.value = days.includes(current) ? current : '';
+      select.disabled = !days.length;
+    }
+  } catch (error) {
+    if (generation !== recordedDaysGeneration) return;
+    for (const id of ['recorded-day', 'analysis-recorded-day']) { const select = $(id); if (select) { select.replaceChildren(new Option('โหลดรายการไม่สำเร็จ', '')); select.disabled = true; } }
+    toast(`อ่านรายการข้อมูลไม่สำเร็จ: ${error.message}`);
+  }
+}
+async function selectRecordedDay(day) {
+  if (!day) return;
+  $('history-date').value = day; $('history-end-date').value = day;
+  $('history-date').dispatchEvent(new Event('change'));
+  for (const id of ['recorded-day', 'analysis-recorded-day']) if ($(id)) $(id).value = day;
+  await loadHistory();
+  if (analysisHistoryActive() && $('history-motor').value) $('load-range').click();
+}
 let restoreHistoryRange = () => {};
 function shortIdentity(value) { return typeof value === 'string' && value ? value.slice(0, 8) : '—'; }
 function runDateLabel(value) {
@@ -94,7 +121,10 @@ function setupAcquisitionUI() {
   const runLabel = node('span'); runLabel.id = 'recording-run'; runLabel.hidden = true;
   $('recording-status').after(runLabel);
   const historyControls = $('history-view').querySelector('.section-toolbar .inline-controls');
-  const historyNote = node('p', 'ประวัติและกราฟอ่านจากข้อมูลที่บันทึกในเครื่องนี้ · CSV ใช้ส่งออก ยังนำกลับเข้าโปรแกรมไม่ได้', 'footnote');
+  const dayLabel = node('label', 'วันที่มีข้อมูล'), daySelect = node('select');
+  daySelect.id = 'recorded-day'; daySelect.setAttribute('aria-label', 'เลือกวันที่บันทึกไว้'); daySelect.add(new Option('กำลังโหลดรายการ…', '')); daySelect.disabled = true;
+  daySelect.onchange = () => void selectRecordedDay(daySelect.value); dayLabel.append(daySelect); historyControls.prepend(dayLabel);
+  const historyNote = node('p', 'เลือกวันที่มีข้อมูล แล้วเลือกรอบอ่านและมอเตอร์เพื่อดูข้อมูลที่บันทึกในเครื่องนี้', 'footnote');
   historyNote.id = 'history-source-note';
   $('history-view').querySelector('.table-scroll').before(historyNote);
   const runSelectLabel = node('label', 'รอบอ่าน', 'history-run-label'), runSelect = node('select');

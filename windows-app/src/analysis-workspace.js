@@ -46,10 +46,12 @@ function setupAnalysisWorkspace() {
   range.querySelector('.panel-heading h2').textContent='ข้อมูลการสั่นย้อนหลัง';
   range.querySelector('.panel-heading p').textContent='จุดกระจายแสดงความสัมพันธ์ X/Y/Z ของค่ารวม · ไม่ใช่คลื่นดิบหรือสเปกตรัม FFT';
   const controls=range.querySelector('.history-range-controls');
+  const dayWrap=node('label','วันที่มีข้อมูล'),daySelect=node('select');daySelect.id='analysis-recorded-day';daySelect.setAttribute('aria-label','เลือกวันที่บันทึกไว้');daySelect.add(new Option('กำลังโหลดรายการ…',''));daySelect.disabled=true;daySelect.onchange=()=>void selectRecordedDay(daySelect.value);dayWrap.append(daySelect);controls.prepend(dayWrap);
   for(const [id,label,original]of[['analysis-history-run','รอบอ่าน','history-run'],['analysis-history-motor','มอเตอร์','history-motor']]){
     const wrap=node('label',label),select=node('select');select.id=id;select.setAttribute('aria-label',label);wrap.append(select);controls.prepend(wrap);
     select.onchange=()=>{$(original).value=select.value;$(original).dispatchEvent(new Event('change'));};
   }
+  controls.prepend(dayWrap);
   const actions=node('div',null,'analysis-history-actions'),tableButton=node('button','ดูตาราง / ส่งออก CSV'),folderButton=node('button','โฟลเดอร์รอบนี้');
   tableButton.type=folderButton.type='button';folderButton.id='analysis-history-open-folder';
   tableButton.onclick=()=>setTab('history');folderButton.onclick=()=>{if(!$('open-run-folder').disabled)$('open-run-folder').click();};actions.append(tableButton,folderButton);range.querySelector('.panel-heading').append(actions);
@@ -60,6 +62,7 @@ function setupAnalysisWorkspace() {
     resetHistoryRun();
     $('range-from').value=`${$('history-date').value}T00:00:00`;
     $('range-to').value=`${$('history-end-date').value}T23:59:59.999`;
+    for (const id of ['recorded-day','analysis-recorded-day']) { const select=$(id), day=$('history-date').value===$('history-end-date').value?$('history-date').value:''; if(select) select.value=[...select.options].some(option=>option.value===day)?day:''; }
     historyGeneration++;emptyRow($('history-body'),20,'ตัวกรองเปลี่ยนแล้ว · กำลังโหลดข้อมูล');invalidateHistoryRange();syncAnalysisHistoryControls();
     if(currentTab==='history'||analysisHistoryActive())void loadHistory();
   };
@@ -67,6 +70,7 @@ function setupAnalysisWorkspace() {
   for(const id of ['range-from','range-to'])$(id).addEventListener('change',()=>{
     const start=$('range-from').value.slice(0,10),end=$('range-to').value.slice(0,10);
     if(start)$('history-date').value=start;if(end)$('history-end-date').value=end;
+    for (const id of ['recorded-day','analysis-recorded-day']) { const select=$(id), day=start===end?start:''; if(select) select.value=[...select.options].some(option=>option.value===day)?day:''; }
     historyGeneration++;emptyRow($('history-body'),20,'ช่วงเวลาข้อมูลเปลี่ยนแล้ว');
     if(analysisHistoryActive())void loadHistory();
   });

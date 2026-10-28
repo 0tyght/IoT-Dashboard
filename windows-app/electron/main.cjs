@@ -65,6 +65,7 @@ app.whenReady().then(() => {
   }).catch(async error => { recording.disconnect(); await fleet.disconnect(); throw error; }));
   handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; return { ok: true, recording: recording.snapshot() }; }));
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
+  handle('data:recorded-days', async () => ({ ok: true, days: await store.recordedDays() }));
   handle('data:chart-range', async filter => ({ ok: true, ...await store.chartRange(filter) }));
   handle('data:scatter-range', async filter => ({ ok: true, ...await store.scatterRange(filter) }));
   handle('data:trend-range', async filter => ({ ok: true, ...await store.trendRange(filter) }));

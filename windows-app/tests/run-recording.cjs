@@ -23,6 +23,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
   const input = (changes = {}) => ({ motorId: 'MTR-01', timestamp: new Date(now).toISOString(), value: 1.2, unit: 'mm/s', port: 'COM987', slaveId: 1, sensorModel: 'custom', source: 'RS485 / Modbus RTU', pollIntervalMs: 1000, rawRegisters: [12], decodeConfig: { sensorModel: 'custom', registerType: 'holding', registerAddress: 200, dataType: 'uint16', byteOrder: 'ABCD', scale: .1, unit: 'mm/s' }, ...changes });
   try {
     const store = new DataStore(path.join(directory, 'recording'));
+    assert.deepEqual(await store.recordedDays(), [], 'no journal gives an empty date list');
     const writer = new RecordingService({ settings: { startMode: 'monitor-only' }, clock });
     const monitoring = writer.connect();
     assert.match(monitoring.runId, UUID, 'even read-only acquisition has a stable run identity');
@@ -69,6 +70,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
     await store.queue;
 
     const firstDate = dayKey(new Date(first.timestamp)), secondDate = dayKey(new Date(fourth.timestamp));
+    assert.deepEqual(await store.recordedDays(), [secondDate, firstDate], 'saved journal days are listed newest first');
     assert.notEqual(firstDate, secondDate, 'fixture tests per-run and daily Bangkok midnight rotation');
     for (const key of identityKeys) assert(CSV_KEYS.includes(key), `CSV exposes ${key}`);
     for (const date of [firstDate, secondDate]) {

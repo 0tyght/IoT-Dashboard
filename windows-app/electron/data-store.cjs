@@ -97,6 +97,13 @@ async function visitSnapshot(files, visitor) {
 class DataStore {
   constructor(directory) { this.directory = directory; this.queue = Promise.resolve(); }
   dataPath() { return path.join(this.directory, 'data'); }
+  async recordedDays() {
+    await this.queue;
+    let names;
+    try { names = await fs.promises.readdir(this.dataPath()); }
+    catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+    return names.filter(name => /^readings-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name)).map(name => name.slice(9, 19)).sort().reverse();
+  }
   runDataPath(runId) { return runDataPath(this.dataPath(), runId); }
   profilesPath() { return path.join(this.directory, 'motors.json'); }
   loadRecording() {

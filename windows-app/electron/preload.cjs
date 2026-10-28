@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   connect: configs => ipcRenderer.invoke('sensor:connect', configs),
   disconnect: () => ipcRenderer.invoke('sensor:disconnect'),
   history: filter => ipcRenderer.invoke('data:history', filter),
+  recordedDays: () => ipcRenderer.invoke('data:recorded-days'),
   chartRange: filter => ipcRenderer.invoke('data:chart-range', filter),
   scatterRange: filter => ipcRenderer.invoke('data:scatter-range', filter),
   trendRange: filter => ipcRenderer.invoke('data:trend-range', filter),

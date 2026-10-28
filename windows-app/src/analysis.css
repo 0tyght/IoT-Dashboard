@@ -36,7 +36,7 @@
 #analysis-history .history-range > .panel-heading p { font-size:11px; margin:0; }
 .analysis-history-actions { display:flex; gap:6px; margin-left:auto; }
 .analysis-history-actions button { font-size:11px; min-height:29px; padding:4px 8px; }
-#analysis-history .history-range-controls { display:grid; grid-template-columns:minmax(140px,1fr) minmax(190px,1.3fr) minmax(175px,1fr) minmax(175px,1fr) auto; gap:8px; align-items:end; padding:8px 12px; border-block:1px solid #ebe8f5; }
+#analysis-history .history-range-controls { display:grid; grid-template-columns:minmax(125px,.8fr) minmax(120px,1fr) minmax(165px,1.3fr) minmax(150px,1fr) minmax(150px,1fr) auto; gap:8px; align-items:end; padding:8px 12px; border-block:1px solid #ebe8f5; }
 #analysis-history .history-range-controls label { display:flex; flex-direction:column; min-width:0; gap:4px; font-size:11px; }
 #analysis-history .history-range-controls :is(select,input) { min-width:0; width:100%; min-height:31px; padding:4px 6px; font-size:12px; }
 #analysis-history #history-series-label { grid-column:1/-2; grid-row:auto; }
