@@ -18,6 +18,14 @@ const missing=rows(200);missing[100].channels.velocityX=null;assert.equal(Trend.
 const duplicate=rows(200);duplicate[100].timestamp=duplicate[99].timestamp;assert(Trend.prepare(duplicate).originalSampleCount<200,'duplicate receive times split a segment');
 assert.throws(()=>Trend.prepare(rows(63)),/64 ค่า/);assert.throws(()=>Trend.prepare([]),/64 ค่า/);
 assert.throws(()=>Trend.prepare(rows(100,2000,i=>i%2?600:0)),/เกิน 20%/);
+const higherJitter=rows(256,2000,i=>i%2?500:0), originalHigh=JSON.stringify(higherJitter);
+assert.throws(()=>Trend.prepare(higherJitter),/เกิน 20%/);
+const exploratory=Trend.prepare(higherJitter,{timing:'linear30'});
+assert(exploratory.maxJitterPercent>25&&exploratory.maxJitterPercent<30);
+assert.equal(exploratory.timingMode,'linear30');assert.equal(exploratory.timingSource,'linear-resampled-pc-receive');assert.equal(JSON.stringify(higherJitter),originalHigh);
+assert.throws(()=>Trend.prepare(rows(256,2000,i=>i===100?700:0),{timing:'linear30'}),/เกิน 30%/);
+const gapHigh=[...rows(80,2000,i=>i%2?500:0),...rows(100,2000,i=>i%2?500:0).map(row=>({...row,timestamp:new Date(Date.parse(row.timestamp)+400000).toISOString()}))];
+assert.equal(Trend.prepare(gapHigh,{timing:'linear30'}).originalSampleCount,100,'exploratory mode never interpolates across a gap');
 assert.throws(()=>Trend.prepare(rows(100).map(r=>({...r,frequencyStatus:'unconfirmed'})),{metric:'frequency'}),/ไม่มีช่วงข้อมูล/);
 assert.equal(Trend.prepare(rows(100),{metric:'temperature',axis:'Z'}).unit,'°C');assert.equal(Trend.prepare(rows(100),{metric:'temperature',axis:'Z'}).axis,'X');
 assert.equal(Trend.prepare(rows(100),{sensorModel:'custom',unit:'kPa',axis:'Y'}).unit,'kPa');assert.equal(Trend.prepare(rows(100),{sensorModel:'custom'}).axis,'X');
