@@ -280,7 +280,9 @@ class DataStore {
 
 function csvCell(value) {
   let text = value == null ? '' : String(value);
-  if (/^[=+\-@\t\r]/.test(text) && !/^[-+]?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
+  // Number.toString() can use exponent notation (e.g. -1e-7). Preserve
+  // genuine measurements as numbers while protecting user-supplied text.
+  if (!(typeof value === 'number' && Number.isFinite(value)) && /^[=+\-@\t\r]/.test(text) && !/^[-+]?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 async function appendCsv(file, reading) {

@@ -5,13 +5,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { RecordingService } = require('../electron/recording-service.cjs');
-const { DataStore, CSV_KEYS, dayKey } = require('../electron/data-store.cjs');
+const { DataStore, CSV_KEYS, csvRow, dayKey } = require('../electron/data-store.cjs');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const identityKeys = ['schemaVersion', 'runId', 'runStartedAt', 'recordingId', 'recordingStartedAt'];
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
 (async () => {
+  const scientific = csvRow({ value: -1e-7, motorId: '=1+1', unit: '-1e-7' });
+  assert(scientific.includes('"-1e-7"'), 'negative scientific measurements remain numeric in CSV');
+  assert(scientific.includes('"\'=1+1"') && scientific.includes('"\'-1e-7"'), 'user-provided text remains protected from spreadsheet formulas');
   const tempRoot = path.resolve(__dirname, '..', '.test-tmp');
   fs.mkdirSync(tempRoot, { recursive: true });
   const directory = fs.mkdtempSync(path.join(tempRoot, 'vectra-run-recording-'));

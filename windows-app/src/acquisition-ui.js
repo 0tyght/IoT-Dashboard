@@ -94,6 +94,9 @@ function setupAcquisitionUI() {
   const runLabel = node('span'); runLabel.id = 'recording-run'; runLabel.hidden = true;
   $('recording-status').after(runLabel);
   const historyControls = $('history-view').querySelector('.section-toolbar .inline-controls');
+  const historyNote = node('p', 'ประวัติและกราฟอ่านจากข้อมูลที่บันทึกในเครื่องนี้ · CSV ใช้ส่งออก ยังนำกลับเข้าโปรแกรมไม่ได้', 'footnote');
+  historyNote.id = 'history-source-note';
+  $('history-view').querySelector('.table-scroll').before(historyNote);
   const runSelectLabel = node('label', 'รอบอ่าน', 'history-run-label'), runSelect = node('select');
   runSelect.id = 'history-run'; runSelect.setAttribute('aria-label', 'กรองรอบอ่าน'); runSelect.add(new Option('ทุกรอบ', '')); runSelectLabel.append(runSelect);
   $('history-motor').after(runSelectLabel);

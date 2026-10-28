@@ -67,18 +67,20 @@ function setupSpectralUI({host:providedHost,prefix='spectral',mode='waveform'} =
   const values = frame => $('spectral-scale').value === 'psd' ? frame.psd : frame.amplitudes;
   const setStatus = (text, error = false) => { $('spectral-status').textContent = text; $('spectral-status').classList.toggle('error', error); };
   function resetWorker() {
-    if (worker) worker.terminate();
+    if (worker) { worker.onmessage = null; worker.onerror = null; worker.terminate(); }
     for (const request of pending.values()) request.reject(new Error('ยกเลิกการวิเคราะห์เดิม'));
     pending.clear(); worker = null;
   }
   function request(type, data = {}) {
     if (!worker) {
       worker = new Worker('spectral-worker.js');
-      worker.onmessage = ({data: response}) => {
+      const currentWorker = worker;
+      currentWorker.onmessage = ({data: response}) => {
+        if (worker !== currentWorker) return;
         const task = pending.get(response.id); if (!task) return; pending.delete(response.id);
         response.ok ? task.resolve(response.result) : task.reject(new Error(response.message));
       };
-      worker.onerror = () => { for (const task of pending.values()) task.reject(new Error('เปิดเครื่องมือ FFT ไม่สำเร็จ ล้างข้อมูลแล้วลองใหม่')); pending.clear(); worker.terminate(); worker = null; };
+      currentWorker.onerror = () => { if (worker !== currentWorker) return; for (const task of pending.values()) task.reject(new Error('เปิดเครื่องมือ FFT ไม่สำเร็จ ล้างข้อมูลแล้วลองใหม่')); pending.clear(); currentWorker.terminate(); worker = null; };
     }
     return new Promise((resolve, reject) => { const id = ++serial; pending.set(id, {resolve,reject}); worker.postMessage({id,type,...data}); });
   }

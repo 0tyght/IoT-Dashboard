@@ -1,5 +1,9 @@
 # UX/UI review — 25 October 2026
 
+## 0.18.1 follow-up
+
+History states that its table and charts read this computer's journal and exported CSV cannot yet be imported. A verified import/backup workflow is still needed for moving history between computers. CSV serialization preserves negative measurements in exponential notation while protecting formula-like text. FFT callbacks ignore superseded workers when settings change quickly. Tests cover scientific notation, formula-like text and rapid trend changes. Hardware commissioning, frequency byte order, screen-reader use and internal sensor refresh timing remain unverified.
+
 Overall-trend FFT now appears as a third saved-data graph mode alongside XYZ scatter and time plots. It loads unreduced records, exposes metric/axis and continuous-segment selection, labels time interpolation and receive cadence, and clears prior results on invalid data or a changed filter. Default 2D plots use the remaining workspace; 3D time-frequency plots are a separate display toggle so a compact desktop does not squeeze all plots into unreadable strips. Waveform input state remains isolated. `trend-ui.cjs` verifies known slow-cycle frequency, strict-jitter rejection/recovery, units/axes, fullscreen source labels and narrow layouts. The underlying sensor's waveform capability has not changed.
 
 Finish review: the existing Operate interface and white/violet palette are retained. The rendered 1366×768 view fits the two readable trend/FFT plots without workspace scrolling; narrow layouts retain full content width and allow vertical scrolling. The mechanical detector returned no findings. All seven packaged desktop suites passed, including waveform/trend state isolation and clock-rollback preservation in storage tests. This remains local recorded-data analysis, not a waveform-capability or field-calibration claim.
