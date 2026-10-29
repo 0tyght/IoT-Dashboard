@@ -49,7 +49,7 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
   const directMeter=await service.testPower({...config,slaveId:4},{slaveId:4,address:3019,meterConfig:true});assert.equal(directMeter.slaveId,4);assert.deepEqual(directMeter.raw,[12,12]);
   await assert.rejects(service.testPower(config, {slaveId:3,address:65535}), /Address/);
   await new Promise(resolve => setTimeout(resolve, 300)); assert.equal(readings.length, stoppedCount, 'no late reading after disconnect');
-  await assert.rejects(service.connect([config, second]), /ทดสอบก่อนเริ่ม/); assert.equal(service.buses.length, 0);
+  const isolated=await service.connect([config,second]);assert.equal(isolated.readings.length,1);assert.equal(isolated.initialFailures[0].motorId,'MTR-02');assert.equal(service.buses.length,1);await service.disconnect();
   const maintenance = await service.connect([config, { ...second, enabled: false }]);
   assert.equal(maintenance.configs.length, 1);
   await service.disconnect();

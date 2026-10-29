@@ -21,3 +21,19 @@
 .meter-register-note { grid-column:1 / -1; margin:0; color:#586277; font-size:11px; }
 
 #groups-dialog.meter-focus .groups-body > label, #groups-dialog.meter-focus #groups-active, #groups-dialog.meter-focus #groups-members, #groups-dialog.meter-focus .groups-body > .groups-actions, #groups-dialog.meter-focus #groups-editor > label, #groups-dialog.meter-focus #groups-editor > h3, #groups-dialog.meter-focus #groups-editor > p.footnote, #groups-dialog.meter-focus #groups-motors, #groups-dialog.meter-focus #groups-add-meter { display:none; }
+
+.points-enable { display:flex; flex-direction:row; align-items:center; gap:8px; } .points-enable input,.points-table input[type=checkbox] { width:auto; min-height:auto; }
+.points-scroll { overflow:auto; max-width:100%; } .points-table { border-collapse:collapse; font-size:12px; min-width:1100px; } .points-table th,.points-table td { padding:5px; text-align:left; border-bottom:1px solid #e0e5f0; } .points-table input,.points-table select { width:90px; } .points-table .point-name { width:140px; } .points-table button { min-height:28px; padding:3px 6px; }
+
+.custom-points-live { max-height:150px; overflow:auto; margin:6px 0; } .custom-points-live h3 { font-size:13px; margin:0 0 5px; } .custom-points-live table { width:100%; border-collapse:collapse; font-size:12px; } .custom-points-live td,.custom-points-live th { text-align:left; padding:5px; border-bottom:1px solid #e2e5ef; } .custom-points-live button { min-height:26px; padding:3px 7px; }
+
+.point-history { margin-top:14px; padding:14px; background:#fff; border:1px solid #dfe4ef; border-radius:8px; } .point-history summary { cursor:pointer; font-weight:600; color:#5144c5; } .point-history-controls { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; } .point-history-controls label { display:grid; flex:1 1 150px; gap:4px; } .point-history-controls select { max-width:100%; } #point-history-chart { width:100%; height:160px; } .point-history-table { max-height:280px; overflow:auto; } .point-history-table table { border-collapse:collapse; width:100%; font-size:12px; } .point-history-table td,.point-history-table th { text-align:left; padding:6px; border-bottom:1px solid #e2e5ef; }
+
+.sidebar-groups { max-height:180px; overflow:auto; padding:0 9px 6px; display:grid; gap:3px; } .sidebar-group,.sidebar-group-add,.sidebar-meter { width:100%; min-width:0; justify-content:space-between; text-align:left; background:transparent; border-color:transparent; color:#e7ecfa; white-space:normal; font-size:12px; } .sidebar-group[aria-pressed=true] { background:#493d76; border-color:#a399eb; color:#fff; } .sidebar-group:hover,.sidebar-group-add:hover,.sidebar-meter:hover { background:#35425c; color:#fff; } .sidebar-group small { color:#d1d7ea; } .sidebar-device-label { color:#c4cee0; font-size:11px; margin:8px 14px; } .sidebar-meter { display:grid; justify-items:start; gap:2px; } .sidebar-meter small { color:#c4cee0; }
+
+.settings-pane { min-width:0; } .custom-points-editor { min-inline-size:0; max-width:100%; } .custom-points-editor .points-scroll { width:100%; max-width:100%; overflow-x:auto; }
+.points-table th:nth-child(1),.points-table td:nth-child(1) { position:sticky; left:0; z-index:2; background:#fff; }
+.points-table th:nth-child(2),.points-table td:nth-child(2) { position:sticky; left:100px; z-index:2; background:#fff; box-shadow:3px 0 4px #27375512; }
+.points-table thead th { z-index:3; }
+
+.custom-point-visuals { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; } .custom-point-number,.custom-point-chart { display:grid; gap:4px; padding:8px; background:#f5f6fc; border:1px solid #e0e4ef; border-radius:6px; font-size:12px; } .custom-point-number span { font-size:20px; color:#4840b6; } .custom-point-chart svg { width:100%; height:80px; }

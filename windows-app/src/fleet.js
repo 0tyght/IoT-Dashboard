@@ -12,6 +12,7 @@ function fleetStatus(profile, state) {
   if (profile.enabled === false) return { text: 'พักอ่าน', kind: 'idle' };
   if (mode === 'demo') return { text: 'จำลอง', kind: 'demo' };
   if (mode !== 'live') return { text: 'หยุดอ่าน', kind: 'idle' };
+  if (state.status === 'partial') return { text: 'บางจุดอ่านไม่สำเร็จ', kind: 'fault' };
   if (state.status === 'fault') return { text: 'ขัดข้อง', kind: 'fault' };
   if (state.status === 'stale') return { text: 'ข้อมูลเก่า', kind: 'fault' };
   return state.status === 'online' ? { text: 'รับข้อมูล', kind: 'online' } : { text: 'รอข้อมูล', kind: 'idle' };

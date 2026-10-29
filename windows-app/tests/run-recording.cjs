@@ -24,7 +24,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
   try {
     const store = new DataStore(path.join(directory, 'recording'));
     assert.deepEqual(await store.recordedDays(), [], 'no journal gives an empty date list');
-    const writer = new RecordingService({ settings: { startMode: 'monitor-only' }, clock });
+    const writer = new RecordingService({ settings: { startMode: 'monitor-only',runName:'ทดสอบ',runNote:'โหลด 50%' }, clock });
     const monitoring = writer.connect();
     assert.match(monitoring.runId, UUID, 'even read-only acquisition has a stable run identity');
     assert.equal(monitoring.runStartedAt, new Date(now).toISOString());
@@ -45,6 +45,8 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
     assert.equal(firstRecording.startedAt, firstRecording.recordingStartedAt, 'existing startedAt remains the current recording start');
     assert.equal(writer.start().recordingId, firstRecording.recordingId, 'starting an active recording does not silently allocate another segment');
     const first = await writer.accept(input(), store);
+    assert.equal(first.runName,'ทดสอบ');assert.equal(first.runNote,'โหลด 50%');
+    const metadata=JSON.parse(fs.readFileSync(path.join(store.runDataPath(first.runId),'run-metadata.json'),'utf8'));assert.equal(metadata.runName,'ทดสอบ');assert.equal(metadata.runNote,'โหลด 50%');
     for (const key of identityKeys) assert.equal(first[key], key === 'schemaVersion' ? 4 : firstRecording[key]);
     now += 1000;
     const second = await writer.accept(input({ value: 1.3 }), store);
@@ -86,7 +88,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
     const resumedCsv = fs.readFileSync(path.join(store.dataPath(), 'runs', third.runId, `readings-${secondDate}-v4.csv`), 'utf8');
     assert(resumedCsv.includes(`"${first.recordingId}"`) && resumedCsv.includes(`"${third.recordingId}"`), 'separate recording segments retain their IDs inside a shared run file');
     assert(fs.existsSync(path.join(store.dataPath(), 'runs', fourth.runId, `readings-${secondDate}-v4.csv`)));
-    for (const runId of [first.runId, fourth.runId]) assert(fs.readdirSync(path.join(store.dataPath(), 'runs', runId)).every(name => name.endsWith('-v4.csv')), 'NDJSON remains stored only in the daily archive');
+    for (const runId of [first.runId, fourth.runId]) assert(fs.readdirSync(path.join(store.dataPath(), 'runs', runId)).every(name => name.endsWith('-v4.csv') || name === 'run-metadata.json'), 'NDJSON remains stored only in the daily archive');
     const savedRows = (await store.history({ date: firstDate, endDate: secondDate })).rows;
     assert.equal(savedRows.length, 4, 'per-run copies do not duplicate history records');
     assert(savedRows.every(row => row.schemaVersion === 4 && UUID.test(row.runId) && UUID.test(row.recordingId)), 'identities are persisted before append rather than only added to UI readings');

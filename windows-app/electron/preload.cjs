@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   disconnect: () => ipcRenderer.invoke('sensor:disconnect'),
   history: filter => ipcRenderer.invoke('data:history', filter),
   recordedDays: () => ipcRenderer.invoke('data:recorded-days'),
+  pointDays: () => ipcRenderer.invoke('data:point-days'),
+  pointHistory: filter => ipcRenderer.invoke('data:point-history',filter),
   powerDays: () => ipcRenderer.invoke('data:power-days'),
   powerHistory: filter => ipcRenderer.invoke('data:power-history',filter),
   chartRange: filter => ipcRenderer.invoke('data:chart-range', filter),

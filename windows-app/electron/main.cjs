@@ -8,6 +8,7 @@ const { FleetService } = require('./fleet-service.cjs');
 const { DataStore, CSV_KEYS, csvRow } = require('./data-store.cjs');
 const { RecordingService } = require('./recording-service.cjs');
 const { normalizeGroups, resolveGroup } = require('./measurement-groups.cjs');
+const { applyBus, applyGroupBuses } = require('./bus-config.cjs');
 
 if (process.env.VECTRA_TEST_DATA) app.setPath('userData', process.env.VECTRA_TEST_DATA);
 let mainWindow, fleet, store, recording, recordingTimer, busy = false, quitting = false, activeGroup = null;
@@ -51,14 +52,19 @@ app.whenReady().then(() => {
       try { return await action(...args); } catch (error) { return { ok: false, message: error.message }; }
     });
   }
-  handle('app:initialize', () => { recording.configure(store.loadRecording()); return { ok: true, profiles: store.loadProfiles(), groups:store.loadGroups(), selectedGroup:store.loadSelectedGroup(), buses:store.loadBuses(), dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('app:initialize', () => { recording.configure(store.loadRecording());const buses=store.loadBuses(); return { ok: true, profiles: store.loadProfiles().map(item=>applyBus(item,buses)), groups:store.loadGroups().map(item=>applyGroupBuses(item,buses)), selectedGroup:store.loadSelectedGroup(), buses, dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
   handle('group-selection:save', id => {if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนเปลี่ยนชุด');return {ok:true,id:store.saveSelectedGroup(id)};});
-  handle('buses:save', raw => { if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขบัส'); return {ok:true,buses:store.saveBuses(raw)}; });
+  handle('buses:save', raw => {
+    if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขบัส');
+    const previous=store.loadBuses(),next=store.normalizeBuses(raw),used=[...store.loadProfiles(),...store.loadGroups().flatMap(group=>group.meters)];
+    for(const bus of previous)if(!next.some(item=>item.path.toUpperCase()===bus.path.toUpperCase())&&used.some(item=>item.path.toUpperCase()===bus.path.toUpperCase()))throw new Error(`บัส ${bus.path} ยังมีอุปกรณ์ใช้งานอยู่`);
+    return {ok:true,buses:store.saveBuses(next)};
+  });
   handle('groups:save', raw => {
     if(fleet.buses.length||busy) throw new Error('หยุดอ่านก่อนแก้ไขชุดการวัด');
-    const incoming=normalizeGroups(raw), previous=store.loadGroups(), profiles=store.loadProfiles();
-    for(const group of incoming) { const old=previous.find(item=>item.id===group.id); if(!old||JSON.stringify(old)!==JSON.stringify(group)) resolveGroup(group,profiles); }
-    return {ok:true,groups:store.saveGroups(incoming)};
+    const incoming=normalizeGroups(raw), previous=store.loadGroups(), buses=store.loadBuses(),profiles=store.loadProfiles().map(item=>applyBus(item,buses));
+    for(const group of incoming) { const old=previous.find(item=>item.id===group.id); if(!old||JSON.stringify(old)!==JSON.stringify(group)) resolveGroup(applyGroupBuses(group,buses),profiles); }
+    return {ok:true,groups:store.saveGroups(incoming.map(group=>applyGroupBuses(group,buses)))};
   });
   handle('recording:configure', raw => {
     if (fleet.buses.length || busy) throw new Error('หยุดอ่านก่อนเปลี่ยนการบันทึก');
@@ -69,23 +75,23 @@ app.whenReady().then(() => {
   handle('sensor:list-ports', async () => ({ ok: true, ports: (await SerialPort.list()).map(port => ({ path: port.path, manufacturer: port.manufacturer || '', vendorId: port.vendorId || '', productId: port.productId || '' })) }));
   handle('profiles:save', raw => {
     if (fleet.buses.length || busy) throw new Error('หยุดการอ่านก่อนแก้ไขมอเตอร์');
-    return { ok: true, profiles: store.saveProfiles(raw) };
+    return { ok: true, profiles: store.saveProfiles(raw.map(item=>applyBus(item,store.loadBuses()))) };
   });
-  handle('sensor:test', config => exclusive(() => fleet.test(config)));
+  handle('sensor:test', config => exclusive(() => fleet.test(applyBus(config,store.loadBuses()))));
   handle('power:test-meter', (groupId,meterId,options) => exclusive(() => {
     const group=store.loadGroups().find(item=>item.id===groupId),meter=group?.meters.find(item=>item.id===meterId);
     if(!meter)throw new Error('ไม่พบ Power Meter ในชุดที่เลือก');
     if(store.loadProfiles().some(profile=>profile.path.toUpperCase()===meter.path.toUpperCase()&&profile.slaveId===meter.slaveId))throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');
-    return fleet.testPower({...meter,motorId:meter.id,sensorModel:'custom',byteOrder:'ABCD',registerAddress:3017,dataType:'float32',scale:1,unit:'V'},{address:options?.address,slaveId:meter.slaveId,registerType:options?.registerType||meter.registerType,meterConfig:true});
+    return fleet.testPower({...applyBus(meter,store.loadBuses()),motorId:meter.id,sensorModel:'custom',byteOrder:'ABCD',registerAddress:3017,dataType:'float32',scale:1,unit:'V'},{address:options?.address,slaveId:meter.slaveId,registerType:options?.registerType||meter.registerType,meterConfig:true});
   }));
   handle('power:test-register', (config, options) => exclusive(() => {
     const port = String(config?.path || '').toUpperCase(), slaveId = options?.slaveId ?? 3;
     if (store.loadProfiles().some(profile => profile.path.toUpperCase() === port && profile.slaveId === slaveId)) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');
-    return fleet.testPower(config, options);
+    return fleet.testPower(applyBus(config,store.loadBuses()), options);
   }));
   handle('sensor:connect', (raw,groupId) => exclusive(async () => {
-    let selection={motors:raw,meters:[]}; activeGroup=null;
-    if(groupId) { const group=store.loadGroups().find(item=>item.id===groupId); if(!group)throw new Error('ไม่พบชุดการวัด'); selection=resolveGroup(group,store.loadProfiles()); activeGroup=group; }
+    const buses=store.loadBuses();let selection={motors:raw.map(item=>applyBus(item,buses)),meters:[]}; activeGroup=null;
+    if(groupId) { const group=store.loadGroups().find(item=>item.id===groupId); if(!group)throw new Error('ไม่พบชุดการวัด'); selection=resolveGroup(applyGroupBuses(group,buses),store.loadProfiles().map(item=>applyBus(item,buses))); activeGroup=group; }
     const result = await fleet.connect(selection.motors,selection.meters);
     recording.connect(activeGroup);
     return { ...result, readings: await Promise.all(result.readings.map(record)), powerReadings:await Promise.all(result.powerReadings.map(recordPower)), recording: recording.snapshot() };
@@ -93,6 +99,8 @@ app.whenReady().then(() => {
   handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; activeGroup=null; return { ok: true, recording: recording.snapshot() }; }));
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
   handle('data:recorded-days', async () => ({ ok: true, days: await store.recordedDays() }));
+  handle('data:point-days', async () => ({ok:true,days:await store.pointDays()}));
+  handle('data:point-history', async filter => ({ok:true,...await store.pointHistory(filter)}));
   handle('data:power-days', async () => ({ok:true,days:await store.powerDays()}));
   handle('data:power-history', async filter => ({ok:true,...await store.powerHistory(filter)}));
   handle('data:chart-range', async filter => ({ ok: true, ...await store.chartRange(filter) }));

@@ -57,6 +57,20 @@ async function readSnapshot(client, config) {
     const { channels: extraChannels, ...frequencyInfo } = frequency;
     return { ...snapshot, ...frequencyInfo, channels, rawRegisters };
   }
+  if (config.points) {
+    const points=[];
+    for (const point of config.points) {
+      if (!point.enabled) { points.push({...point,status:'disabled',raw:null,value:null,timestamp:null}); continue; }
+      try {
+        const response=point.registerType==='input'?await client.readInputRegisters(point.registerAddress,registerCount(point.dataType)):await client.readHoldingRegisters(point.registerAddress,registerCount(point.dataType));
+        const raw=response.data;if(!Array.isArray(raw)||raw.length!==registerCount(point.dataType)||raw.some(word=>!Number.isInteger(word)||word<0||word>65535))throw new Error('ข้อมูล Register ตอบกลับไม่ครบหรือไม่ถูกต้อง');
+        const value=decodeRegisters(raw,point)+point.offset;if(!Number.isFinite(value))throw new Error('ค่าหลังแปลงไม่ใช่ตัวเลข');
+        points.push({...point,status:'ok',raw,value,timestamp:new Date().toISOString()});
+      } catch(error) { points.push({...point,status:'read-error',raw:null,value:null,timestamp:new Date().toISOString(),message:String(error.message||error)}); }
+    }
+    const primary=points.find(point=>point.enabled);
+    return {value:primary?.status==='ok'?primary.value:null,unit:primary?.unit||'',primaryPointId:primary?.id||'',points,rawRegisters:null,channels:null};
+  }
   const registers = await read(config.registerAddress, registerCount(config.dataType));
   return { value: decodeRegisters(registers, config), unit: config.unit, rawRegisters: registers, channels: null };
 }
@@ -124,12 +138,16 @@ class FleetService {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(config);
     }
-    const initialReadings = [], initialPower = [];
+    const initialReadings = [], initialPower = [], initialFailures = [];
     try {
       for (const entries of groups.values()) {
         const bus = { configs: entries, client: null, timer: null, work: null, nextDue: new Map(), lastReceived: new Map() };
         this.buses.push(bus);
-        bus.client = await this.open(entries[0]);
+        try { bus.client = await this.open(entries[0]); }
+        catch(error) {
+          for(const config of entries){const key=config.deviceType==='power'?`power:${config.id}`:config.motorId;bus.nextDue.set(key,Date.now()+config.pollInterval);if(config.deviceType==='power')initialPower.push({state:'read-error',meterId:config.id,path:config.path,slaveId:config.slaveId,message:error.message});else initialFailures.push({motorId:config.motorId,path:config.path,message:error.message});}
+          continue;
+        }
         for (const config of entries) {
           const started = Date.now();
           if (config.deviceType === 'power') {
@@ -141,14 +159,14 @@ class FleetService {
           this.onStatus({ state: 'testing', motorId: config.motorId, path: config.path });
           let snapshot;
           try { snapshot = await readSnapshot(bus.client, config); }
-          catch (error) { throw new Error(`${config.motorId} (${config.path} / Slave ${config.slaveId}): ${error.message}`); }
+          catch (error) { initialFailures.push({motorId:config.motorId,path:config.path,message:error.message});bus.nextDue.set(config.motorId,Date.now()+config.pollInterval);continue; }
           initialReadings.push(this.reading(config, snapshot, Date.now() - started));
           bus.lastReceived.set(config.motorId, Date.now());
           bus.nextDue.set(config.motorId, Date.now() + config.pollInterval);
         }
       }
       for (const bus of this.buses) this.schedule(bus, generation, 10);
-      return { ok: true, configs, readings: initialReadings, powerReadings:initialPower };
+      return { ok: true, configs, readings: initialReadings, powerReadings:initialPower,initialFailures };
     } catch (error) {
       await this.disconnect();
       throw new Error(`ทดสอบก่อนเริ่มอ่านไม่สำเร็จ: ${error.message}`);
@@ -186,7 +204,8 @@ class FleetService {
         reading.actualIntervalMs = bus.lastReceived.has(config.motorId) ? received - bus.lastReceived.get(config.motorId) : null;
         bus.lastReceived.set(config.motorId, received);
         this.onReading(reading);
-        this.onStatus({ state: 'receiving', motorId: config.motorId, path: config.path });
+        const noData=Array.isArray(snapshot.points)&&!snapshot.points.some(point=>point.status==='ok');
+        this.onStatus({ state: noData?'read-error':'receiving', motorId: config.motorId, path: config.path, ...(noData?{message:'จุดวัดทั้งหมดไม่ตอบกลับ'}:{}) });
         }
       } catch (error) {
         if (generation !== this.generation) return;

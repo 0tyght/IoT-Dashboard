@@ -15,7 +15,7 @@ async function loadPowerHistory(){
   const generation=++powerHistoryGeneration,day=document.getElementById('power-history-day').value,run=document.getElementById('power-history-run'),status=document.getElementById('power-history-status'),rows=document.getElementById('power-history-rows');rows.replaceChildren();
   if(!day){status.textContent='ยังไม่มีข้อมูลที่บันทึก';run.replaceChildren(new Option('ทุกรอบ',''));return;}
   status.textContent='กำลังโหลดข้อมูล…';
-  try{const result=check(await api.powerHistory({date:day,runId:run.value}));if(generation!==powerHistoryGeneration)return;const selected=run.value;run.replaceChildren(new Option('ทุกรอบ',''),...result.runs.map(item=>new Option(`${item.groupName||'ไม่ระบุชุด'} · ${item.firstTimestamp} · ${item.runId.slice(0,8)}`,item.runId)));run.value=[...run.options].some(option=>option.value===selected)?selected:'';
+  try{const result=check(await api.powerHistory({date:day,runId:run.value}));if(generation!==powerHistoryGeneration)return;const selected=run.value;run.replaceChildren(new Option('ทุกรอบ',''),...result.runs.map(item=>new Option(`${item.groupName||'ไม่ระบุชุด'} · ${item.runName?item.runName+' · ':''}${item.firstTimestamp} · ${item.runId.slice(0,8)}`,item.runId)));run.value=[...run.options].some(option=>option.value===selected)?selected:'';
     status.textContent=`${result.total.toLocaleString()} รายการ · แสดงล่าสุด ${result.rows.length} รายการ${result.skipped?` · ข้ามข้อมูลเสีย ${result.skipped}`:''}`;
     for(const reading of result.rows.reverse()){const row=document.createElement('p'),value=reading.values?.voltageAB,words=reading.raw?.voltageAB||[];row.textContent=`${reading.timestamp} · ${reading.groupName||'ไม่ระบุชุด'} · ${reading.meterId} · A–B ${Number.isFinite(value)?`${value} V`:'รอยืนยัน Float'} · Raw ${words.map(word=>'0x'+Number(word).toString(16).toUpperCase().padStart(4,'0')).join(' ')}`;rows.append(row);}
   }catch(error){if(generation===powerHistoryGeneration){status.textContent=`โหลดประวัติไม่สำเร็จ: ${error.message}`;rows.replaceChildren();}}
@@ -54,7 +54,7 @@ function refreshPowerDiagnostic(){
   info.querySelector('span').textContent=first?`${first.name||first.id} · ${meters.length} มิเตอร์ในชุด`: 'เลือกชุดที่มีมิเตอร์เพื่อดูอุปกรณ์';
   document.getElementById('power-selected-point').textContent=first?(first.name||first.id):'ยังไม่มีมิเตอร์ที่เลือก';
   const syncSelection=()=>{const meter=meters.find(item=>item.id===select.value),key=meter?`${group.id}:${meter.id}:${meter.offsetAdjust}:${meter.registerType}`:'legacy';if(key!==powerDiagnosticKey){powerDiagnosticKey=key;document.getElementById('power-test-address').value=String(3019+(meter?.offsetAdjust||0));document.getElementById('power-test-function').value=meter?.registerType||'holding';}};
-  select.onchange=syncSelection;syncSelection();
+  select.onchange=()=>{syncSelection();const current=meters.find(item=>item.id===select.value);if(current)document.getElementById('power-selected-point').textContent=current.name||current.id;};syncSelection();
 }
 
 diagnostic.querySelector('#power-test-button').addEventListener('click', async event => {

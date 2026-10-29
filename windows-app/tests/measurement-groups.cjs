@@ -22,6 +22,8 @@ const {RecordingService}=require('../electron/recording-service.cjs');
  const fleet=new FleetService({clientFactory:()=>new Fake(),onReading:reading=>seen.push(['sensor',reading.motorId]),onPower:reading=>power.push(reading)});
  await assert.rejects(fleet.connect([{...sensor,path:'UNBOUND:SENSOR:M1'}],[]),/ยังไม่เชื่อม/);assert.equal(opened,0,'unconnected devices never open a serial port');
  await assert.rejects(fleet.connect([],[{...group.meters[0],path:'UNBOUND:POWER:P1'}]),/ยังไม่เชื่อม/);assert.equal(opened,0);
+ class OneBrokenPort extends Fake { async connectRTUBuffered(port){if(port==='COM-BAD')throw new Error('port unavailable');return super.connectRTUBuffered(port);} }
+ const isolatedFleet=new FleetService({clientFactory:()=>new OneBrokenPort()});const isolated=await isolatedFleet.connect([{...sensor,path:'COM-BAD',motorId:'BAD'},{...sensor,path:'COM-GOOD',motorId:'GOOD'}]);assert.equal(isolated.initialFailures[0].motorId,'BAD');assert.equal(isolated.readings[0].motorId,'GOOD');await isolatedFleet.disconnect();opened=0;
  const started=await fleet.connect([sensor],group.meters);assert.equal(opened,1);assert.equal(started.powerReadings.length,2);assert.equal(started.powerReadings[0].values.voltageAB,null);
  assert(seen.some(row=>row[0]===3&&row[1]===3017&&row[2]===16));assert(seen.some(row=>row[0]===3&&row[1]===3035&&row[2]===2));
  fail=true;await new Promise(resolve=>setTimeout(resolve,650));assert(power.some(reading=>reading.meterId==='P1'&&reading.state==='read-error'));assert(power.some(reading=>reading.meterId==='P2'&&reading.state==='receiving'));assert(seen.some(row=>row[0]==='sensor'));assert.equal(maxActive,1,'one physical bus never has overlapping requests');await fleet.disconnect();

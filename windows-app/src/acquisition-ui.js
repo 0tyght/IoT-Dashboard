@@ -49,7 +49,7 @@ function renderHistoryRuns(runs = []) {
   const previous = select.value; historyRuns = runs;
   select.replaceChildren(new Option('ทุกรอบ', ''));
   for (const run of runs) {
-    const label = run.runId === '__legacy__' ? `ข้อมูลเดิม · ไม่ระบุรอบ · ${run.total.toLocaleString()} ค่า` : `${run.groupName ? `${run.groupName} · ` : ''}${runDateLabel(run.runStartedAt || run.firstTimestamp)} · ${shortIdentity(run.runId)} · ${run.total.toLocaleString()} ค่า`;
+    const label = run.runId === '__legacy__' ? `ข้อมูลเดิม · ไม่ระบุรอบ · ${run.total.toLocaleString()} ค่า` : `${run.groupName ? `${run.groupName} · ` : ''}${run.runName ? `${run.runName} · ` : ''}${runDateLabel(run.runStartedAt || run.firstTimestamp)} · ${shortIdentity(run.runId)} · ${run.total.toLocaleString()} ค่า`;
     const option = new Option(label, run.runId);
     option.title = run.runId === '__legacy__' ? 'ข้อมูลจากรุ่นเดิมที่ยังไม่มีรหัสรอบอ่าน' : `รอบอ่าน ${run.runId}\nเริ่ม ${runDateLabel(run.runStartedAt || run.firstTimestamp)} (UTC+07:00)`;
     select.add(option);
@@ -75,6 +75,7 @@ function storageLabel(last, savedHistory = false) {
   if (savedHistory) return 'ข้อมูลจากไฟล์ประวัติ';
   if (last.recordingState === 'before-start') return 'ค่าทดสอบก่อนเริ่มบันทึก';
   if (last.recordingState === 'monitor-only') return 'ดูอย่างเดียว · ไม่บันทึก';
+  if (last.recordingState === 'no-recording-points') return 'ไม่ได้เลือกจุดวัดสำหรับบันทึก';
   return last.recorded === true || last.recordingState === 'saved' ? 'บันทึก CSV แล้ว' : last.recorded === false ? 'บันทึกไม่สำเร็จ' : 'ข้อมูลที่อ่านได้ · ไม่ยืนยันการบันทึก';
 }
 function renderRecording(state) {
@@ -88,7 +89,7 @@ function renderRecording(state) {
   const runLabel = $('recording-run');
   if (runLabel) {
     runLabel.hidden = !recordingState.runId || mode === 'demo';
-    runLabel.textContent = recordingState.runId ? `${recordingState.groupName?`${recordingState.groupName} · `:''}รอบ ${runDateLabel(recordingState.runStartedAt)} · ${shortIdentity(recordingState.runId)}` : '';
+    runLabel.textContent = recordingState.runId ? `${recordingState.groupName?`${recordingState.groupName} · `:''}${recordingState.runName?`${recordingState.runName} · `:''}รอบ ${runDateLabel(recordingState.runStartedAt)} · ${shortIdentity(recordingState.runId)}` : '';
     runLabel.title = recordingState.runId ? `รอบอ่าน ${recordingState.runId}\nเริ่ม ${runDateLabel(recordingState.runStartedAt)} (UTC+07:00)${recordingState.recordingId ? `\nรอบบันทึก ${recordingState.recordingId}\nเริ่มบันทึก ${runDateLabel(recordingState.recordingStartedAt)}` : '\nยังไม่เริ่มบันทึกในรอบนี้'}` : '';
     runLabel.dataset.runId = recordingState.runId || '';
   }
@@ -143,7 +144,7 @@ function setupAcquisitionUI() {
   const recordingForm = $('recording-form');
   $('record-settings').onclick = () => {
     const settings = recordingState.settings;
-    recordingForm.elements.startMode.value = settings.startMode; recordingForm.elements.durationMinutes.value = settings.durationMinutes;
+    recordingForm.elements.startMode.value = settings.startMode; recordingForm.elements.durationMinutes.value = settings.durationMinutes;recordingForm.elements.runName.value=settings.runName||'';recordingForm.elements.runNote.value=settings.runNote||'';
     $('record-start-at').value = settings.startAt ? inputLocal(settings.startAt) : inputLocal(Date.now() + 3600000);
     $('record-form-error').hidden = true; recordingModeFields(); $('recording-dialog').showModal();
   };
@@ -154,7 +155,7 @@ function setupAcquisitionUI() {
     try {
       const startMode = $('record-start-mode').value, startAt = startMode === 'scheduled' ? new Date($('record-start-at').value).toISOString() : '';
       if (startMode === 'scheduled' && Date.parse(startAt) <= Date.now()) throw new Error('เลือกวันและเวลาเริ่มในอนาคต');
-      const result = check(await api.configureRecording({ startMode, startAt, durationMinutes: startMode === 'monitor-only' ? 0 : Number(recordingForm.elements.durationMinutes.value) }));
+      const result = check(await api.configureRecording({ startMode, startAt, durationMinutes: startMode === 'monitor-only' ? 0 : Number(recordingForm.elements.durationMinutes.value),runName:recordingForm.elements.runName.value,runNote:recordingForm.elements.runNote.value }));
       renderRecording(result.recording); $('recording-dialog').close(); toast('บันทึกเงื่อนไขการบันทึกแล้ว');
     } catch (error) { $('record-form-error').textContent = error.message; $('record-form-error').hidden = false; }
     finally { $('save-recording').disabled = false; }

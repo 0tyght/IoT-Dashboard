@@ -27,6 +27,7 @@ function recordedModel(record) {
   return record.sensorModel || record.decodeConfig?.sensorModel || (PRESET_CHANNELS.every(key => Object.hasOwn(record.channels || {}, key)) ? PRESET_MODEL : 'custom');
 }
 function matchesCurrentProfile(record, profile) {
+  if (Array.isArray(profile.points)) return false;
   if (record.source === 'SIMULATION' || record.recorded === false) return false;
   if (typeof record.port !== 'string' || record.port.toUpperCase() !== String(profile.path).toUpperCase() || record.slaveId !== profile.slaveId || record.unit !== profile.unit) return false;
   const model = recordedModel(record);
@@ -106,6 +107,22 @@ class DataStore {
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
     return names.filter(name => /^readings-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name)).map(name => name.slice(9, 19)).sort().reverse();
   }
+  async pointDays() {
+    await this.queue;let names;try{names=await fs.promises.readdir(this.dataPath());}catch(error){if(error.code==='ENOENT')return [];throw error;}
+    return names.filter(name=>/^points-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name)).map(name=>name.slice(7,17)).sort().reverse();
+  }
+  async pointHistory({date,deviceId='',seriesKey='',runId=''}) {
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date))||!Number.isFinite(Date.parse(date)))throw new Error('วันที่ไม่ถูกต้อง');
+    await this.queue;const file=path.join(this.dataPath(),`points-${date}.ndjson`),rows=[],devices=new Set(),series=new Map(),runs=new Map();let total=0,skipped=0,stream;
+    try{stream=fs.createReadStream(file,{encoding:'utf8'});await new Promise((resolve,reject)=>{stream.once('open',resolve);stream.once('error',reject);});}catch(error){stream?.destroy();if(error.code==='ENOENT')return {rows,total,skipped,devices:[],series:[],runs:[]};throw error;}
+    const lines=readline.createInterface({input:stream,crlfDelay:Infinity});try{for await(const line of lines){if(!line.trim())continue;let row;try{row=JSON.parse(line);if(!row||!row.deviceId||!row.pointId||!Number.isFinite(Date.parse(row.timestamp)))throw new Error('invalid');}catch{skipped++;continue;}devices.add(row.deviceId);if(deviceId&&row.deviceId!==deviceId)continue;
+      if(row.runId&&!runs.has(row.runId))runs.set(row.runId,{runId:row.runId,runName:row.runName||'',groupName:row.groupName||'',timestamp:row.timestamp});if(runId&&row.runId!==runId)continue;
+      const key=JSON.stringify([row.deviceId,row.pointId,row.unit,row.port,row.slaveId,row.registerType,row.registerAddress,row.dataType,row.byteOrder,row.scale,row.offset,row.runId||'']);
+      if(!series.has(key))series.set(key,{key,name:row.name,pointId:row.pointId,unit:row.unit,deviceId:row.deviceId,runId:row.runId||''});
+      if(seriesKey&&key!==seriesKey)continue;total++;rows.push(row);if(rows.length>500)rows.shift();
+    }}finally{lines.close();stream.destroy();}
+    return {rows,total,skipped,devices:[...devices].sort(),series:[...series.values()],runs:[...runs.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp))};
+  }
   async powerDays() {
     await this.queue; let names;
     try { names=await fs.promises.readdir(this.dataPath()); } catch(error) { if(error.code==='ENOENT')return []; throw error; }
@@ -116,7 +133,7 @@ class DataStore {
     await this.queue;const file=path.join(this.dataPath(),`power-${date}.ndjson`),rows=[],runs=new Map();let total=0,skipped=0;
     let stream;try{const size=(await fs.promises.stat(file)).size;if(!size)return{rows,total,skipped,runs:[]};stream=fs.createReadStream(file,{encoding:'utf8',start:0,end:size-1});}catch(error){if(error.code==='ENOENT')return{rows,total,skipped,runs:[]};throw error;}
     const lines=readline.createInterface({input:stream,crlfDelay:Infinity});
-    try{for await(const line of lines){if(!line.trim())continue;let row;try{row=JSON.parse(line);if(!row||!Number.isFinite(Date.parse(row.timestamp))||!row.meterId)throw new Error('invalid');}catch{skipped++;continue;}const id=row.runId||'';if(!runs.has(id))runs.set(id,{runId:id,groupName:row.groupName||'',firstTimestamp:row.timestamp});if(runId&&id!==runId)continue;total++;rows.push(row);if(rows.length>200)rows.shift();}}
+    try{for await(const line of lines){if(!line.trim())continue;let row;try{row=JSON.parse(line);if(!row||!Number.isFinite(Date.parse(row.timestamp))||!row.meterId)throw new Error('invalid');}catch{skipped++;continue;}const id=row.runId||'';if(!runs.has(id))runs.set(id,{runId:id,groupName:row.groupName||'',runName:row.runName||'',firstTimestamp:row.timestamp});if(runId&&id!==runId)continue;total++;rows.push(row);if(rows.length>200)rows.shift();}}
     finally{lines.close();stream.destroy();}
     return {rows,total,skipped,runs:[...runs.values()].reverse()};
   }
@@ -171,17 +188,32 @@ class DataStore {
     fs.renameSync(temporary, this.profilesPath());
     return configs;
   }
+  async writeRunMetadata(directory,reading) {
+    await fs.promises.mkdir(directory,{recursive:true});const info={runId:reading.runId,runStartedAt:reading.runStartedAt||'',runName:reading.runName||'',runNote:reading.runNote||'',groupId:reading.groupId||'',groupName:reading.groupName||''};
+    try{await fs.promises.writeFile(path.join(directory,'run-metadata.json'),JSON.stringify(info,null,2),{encoding:'utf8',flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw new Error(`บันทึกข้อมูลรอบไม่สำเร็จ: ${error.message}`);}
+  }
   append(reading) {
     const write = this.queue.then(async () => {
       // Validate before writing even the daily file; IDs never become arbitrary paths.
       const runDirectory = reading.runId == null || reading.runId === '' ? null : this.runDataPath(reading.runId);
       const date = dayKey(new Date(reading.timestamp));
       await fs.promises.mkdir(this.dataPath(), { recursive: true });
+      if (Array.isArray(reading.points)) {
+        const savedPoints=reading.points.filter(point=>point.enabled && point.record);
+        const rows=savedPoints.map(point=>({timestamp:point.timestamp||reading.timestamp,timestampBangkok:localTimestamp(point.timestamp||reading.timestamp),groupId:reading.groupId||'',groupName:reading.groupName||'',runId:reading.runId||'',runName:reading.runName||'',runNote:reading.runNote||'',recordingId:reading.recordingId||'',deviceId:reading.motorId,port:reading.port,slaveId:reading.slaveId,pointId:point.id,name:point.name,unit:point.unit,status:point.status,value:point.value,raw:point.raw,registerType:point.registerType,registerAddress:point.registerAddress,dataType:point.dataType,byteOrder:point.byteOrder,scale:point.scale,offset:point.offset,pollIntervalMs:reading.pollIntervalMs,message:point.message||''}));
+        if (!rows.length) return;
+        const keys=['timestamp','timestampBangkok','groupId','groupName','runId','runName','runNote','recordingId','deviceId','port','slaveId','pointId','name','unit','status','value','raw','registerType','registerAddress','dataType','byteOrder','scale','offset','pollIntervalMs','message'];
+        await fs.promises.appendFile(path.join(this.dataPath(),`points-${date}.ndjson`),rows.map(row=>JSON.stringify(row)).join('\n')+'\n','utf8');
+        const appendPoints=async file=>{try{await fs.promises.writeFile(file,'\uFEFF'+keys.join(',')+'\r\n',{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}await fs.promises.appendFile(file,rows.map(row=>keys.map(key=>csvCell(key==='raw'?JSON.stringify(row[key]):row[key])).join(',')+'\r\n').join(''),'utf8');};
+        await appendPoints(path.join(this.dataPath(),`points-${date}.csv`));
+        if(runDirectory){await this.writeRunMetadata(runDirectory,reading);await appendPoints(path.join(runDirectory,`points-${date}.csv`));}
+        return;
+      }
       await fs.promises.appendFile(path.join(this.dataPath(), `readings-${date}.ndjson`), `${JSON.stringify(reading)}\n`, 'utf8');
       // A distinct schema suffix avoids appending new columns to older CSV files.
       const name = `readings-${date}-v4.csv`;
       await appendCsv(path.join(this.dataPath(), name), reading);
-      if (runDirectory) { await fs.promises.mkdir(runDirectory, { recursive: true }); await appendCsv(path.join(runDirectory, name), reading); }
+      if (runDirectory) { await this.writeRunMetadata(runDirectory,reading); await appendCsv(path.join(runDirectory, name), reading); }
     });
     this.queue = write.catch(() => {});
     return write;
@@ -195,7 +227,7 @@ class DataStore {
       const row=keys.map(key=>csvCell(typeof reading[key]==='object'&&reading[key]!==null?JSON.stringify(reading[key]):reading[key])).join(',')+'\r\n';
       const append=async file=>{try{await fs.promises.writeFile(file,'\uFEFF'+keys.join(',')+'\r\n',{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}await fs.promises.appendFile(file,row,'utf8');};
       await append(path.join(this.dataPath(),`power-${date}.csv`));
-      await fs.promises.mkdir(directory,{recursive:true}); await append(path.join(directory,`power-${date}.csv`));
+      await this.writeRunMetadata(directory,reading); await append(path.join(directory,`power-${date}.csv`));
     });
     this.queue=write.catch(()=>{}); return write;
   }
@@ -217,7 +249,7 @@ class DataStore {
           if (typeof record.motorId === 'string' && record.motorId) motorIds.add(record.motorId);
           if (motorId && record.motorId !== motorId) continue;
           const id = recordedRunId(record);
-          if (!runCatalog.has(id)) runCatalog.set(id, { runId: id, runStartedAt: id === LEGACY_RUN_ID ? '' : record.runStartedAt || '', groupId:record.groupId || '', groupName:record.groupName || '', firstTimestamp: record.timestamp, lastTimestamp: record.timestamp, total: 0, recordingIds: new Set(), motorIds: new Set() });
+          if (!runCatalog.has(id)) runCatalog.set(id, { runId: id, runStartedAt: id === LEGACY_RUN_ID ? '' : record.runStartedAt || '', groupId:record.groupId || '', groupName:record.groupName || '', runName:record.runName||'',runNote:record.runNote||'', firstTimestamp: record.timestamp, lastTimestamp: record.timestamp, total: 0, recordingIds: new Set(), motorIds: new Set() });
           const run = runCatalog.get(id);
           run.total++;
           if (Date.parse(record.timestamp) < Date.parse(run.firstTimestamp)) run.firstTimestamp = record.timestamp;

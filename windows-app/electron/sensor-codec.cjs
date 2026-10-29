@@ -1,4 +1,5 @@
 'use strict';
+const { normalizePoints } = require('./custom-points.cjs');
 
 const ALLOWED_BAUD_RATES = new Set([1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]);
 const ALLOWED_PARITY = new Set(['none', 'even', 'odd']);
@@ -60,7 +61,8 @@ function normalizeConfig(input = {}) {
     area: String(input.area || '').trim().slice(0, 60),
     nameplate: String(input.nameplate || '').trim().slice(0, 2000),
     unit: String(input.unit || 'mm/s').trim().slice(0, 32) || 'mm/s',
-    timeout: numberInRange(input.timeout ?? 1500, 'Timeout', 200, 30000, true)
+    timeout: numberInRange(input.timeout ?? 1500, 'Timeout', 200, 30000, true),
+    ...(sensorModel==='custom' && Array.isArray(input.points) ? {points:normalizePoints(input.points)} : {})
   };
 }
 

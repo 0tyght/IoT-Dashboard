@@ -11,17 +11,19 @@ function normalizeRecording(input = {}) {
   if (input.startAt && !Number.isFinite(Date.parse(input.startAt))) throw new Error('วันและเวลาเริ่มบันทึกไม่ถูกต้อง');
   const startAt = input.startAt ? new Date(input.startAt).toISOString() : '';
   if (startMode === 'scheduled' && !startAt) throw new Error('เลือกวันและเวลาเริ่มบันทึก');
-  return { startMode, startAt, durationMinutes };
+  const runName=String(input.runName||'').trim(),runNote=String(input.runNote||'').trim();
+  if(runName.length>80||runNote.length>500)throw new Error('ชื่อรอบหรือหมายเหตุยาวเกินกำหนด');
+  return { startMode, startAt, durationMinutes,runName,runNote };
 }
 
 class RecordingService {
   constructor({ settings = {}, onChange = () => {}, onError = () => {}, clock = Date.now } = {}) {
     this.settings = normalizeRecording(settings); this.onChange = onChange; this.onError = onError; this.clock = clock;
     this.connected = false; this.active = false; this.startedAt = ''; this.endsAt = ''; this.waiting = false; this.scheduleMissed = false; this.count = 0;
-    this.runId = ''; this.runStartedAt = ''; this.runGroupId=''; this.runGroupName=''; this.recordingId = ''; this.recordingStartedAt = '';
+    this.runId = ''; this.runStartedAt = '';this.runName='';this.runNote=''; this.runGroupId=''; this.runGroupName=''; this.recordingId = ''; this.recordingStartedAt = '';
     this.lastSavedAt = ''; this.lastError = ''; this.stopReason = '';
   }
-  snapshot() { return { settings: this.settings, connected: this.connected, active: this.active, waiting: this.waiting, scheduleMissed: this.scheduleMissed, runId: this.runId, runStartedAt: this.runStartedAt, groupId:this.runGroupId, groupName:this.runGroupName, recordingId: this.recordingId, recordingStartedAt: this.recordingStartedAt, startedAt: this.startedAt, endsAt: this.endsAt, count: this.count, lastSavedAt: this.lastSavedAt, lastError: this.lastError, stopReason: this.stopReason }; }
+  snapshot() { return { settings: this.settings, connected: this.connected, active: this.active, waiting: this.waiting, scheduleMissed: this.scheduleMissed, runId: this.runId, runStartedAt: this.runStartedAt,runName:this.runName,runNote:this.runNote, groupId:this.runGroupId, groupName:this.runGroupName, recordingId: this.recordingId, recordingStartedAt: this.recordingStartedAt, startedAt: this.startedAt, endsAt: this.endsAt, count: this.count, lastSavedAt: this.lastSavedAt, lastError: this.lastError, stopReason: this.stopReason }; }
   emit() { this.onChange(this.snapshot()); return this.snapshot(); }
   configure(raw) {
     if (this.connected) throw new Error('หยุดอ่านก่อนเปลี่ยนเงื่อนไขการบันทึก');
@@ -29,7 +31,7 @@ class RecordingService {
   }
   connect(group = null) {
     const now = this.clock();
-    this.runId = randomUUID(); this.runStartedAt = new Date(now).toISOString(); this.runGroupId=group?.id||'';this.runGroupName=group?.name||'';this.recordingId = ''; this.recordingStartedAt = '';
+    this.runId = randomUUID(); this.runStartedAt = new Date(now).toISOString();this.runName=this.settings.runName;this.runNote=this.settings.runNote; this.runGroupId=group?.id||'';this.runGroupName=group?.name||'';this.recordingId = ''; this.recordingStartedAt = '';
     this.scheduleMissed = this.settings.startMode === 'scheduled' && Date.parse(this.settings.startAt) <= now;
     this.connected = true; this.active = false; this.waiting = this.settings.startMode === 'scheduled' && !this.scheduleMissed; this.count = 0;
     this.startedAt = ''; this.endsAt = ''; this.lastSavedAt = ''; this.lastError = ''; this.stopReason = '';
@@ -61,8 +63,9 @@ class RecordingService {
     const save = this.shouldRecord(reading.timestamp);
     // Capture identity before asynchronous I/O: a late write belongs to its original run.
     const runId = this.runId, recordingId = this.recordingId;
-    const tagged = { ...reading, schemaVersion: 4, runId, runStartedAt: this.runStartedAt, recordingId: save ? recordingId : '', recordingStartedAt: save ? this.recordingStartedAt : '' };
+    const tagged = { ...reading, schemaVersion: 4, runId, runStartedAt: this.runStartedAt,runName:this.runName,runNote:this.runNote, recordingId: save ? recordingId : '', recordingStartedAt: save ? this.recordingStartedAt : '' };
     if (!save) return { ...tagged, recorded: false, recordingState: this.active && Date.parse(reading.timestamp) < Date.parse(this.startedAt) ? 'before-start' : 'monitor-only' };
+    if (Array.isArray(reading.points) && !reading.points.some(point => point.enabled && point.record)) return {...tagged,recorded:false,recordingState:'no-recording-points'};
     try {
       await store.append(tagged);
       if (this.runId === runId && this.recordingId === recordingId) { this.count++; this.lastSavedAt = new Date(this.clock()).toISOString(); this.lastError = ''; this.emit(); }
@@ -74,7 +77,7 @@ class RecordingService {
   }
   async acceptPower(reading, store) {
     const save=this.shouldRecord(reading.timestamp),runId=this.runId,recordingId=this.recordingId;
-    const tagged={...reading,runId,runStartedAt:this.runStartedAt,recordingId:save?recordingId:'',recordingStartedAt:save?this.recordingStartedAt:''};
+    const tagged={...reading,runId,runStartedAt:this.runStartedAt,runName:this.runName,runNote:this.runNote,recordingId:save?recordingId:'',recordingStartedAt:save?this.recordingStartedAt:''};
     if(!save)return {...tagged,recorded:false,recordingState:'monitor-only'};
     try {
       await store.appendPower(tagged);
