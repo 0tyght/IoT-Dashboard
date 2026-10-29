@@ -37,3 +37,7 @@
 .points-table thead th { z-index:3; }
 
 .custom-point-visuals { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; } .custom-point-number,.custom-point-chart { display:grid; gap:4px; padding:8px; background:#f5f6fc; border:1px solid #e0e4ef; border-radius:6px; font-size:12px; } .custom-point-number span { font-size:20px; color:#4840b6; } .custom-point-chart svg { width:100%; height:80px; }
+
+.meter-extra-points { grid-column:1/-1; min-width:0; padding:10px; border:1px solid #dfe4ef; border-radius:6px; }.meter-extra-points summary { color:#5144c5; font-weight:600; cursor:pointer; }.meter-extra-points p { color:#536078; font-size:12px; }.meter-extra-points .points-scroll { max-width:100%; }
+
+.meter-extra-points .points-table th:nth-child(10),.meter-extra-points .points-table td:nth-child(10){display:none}

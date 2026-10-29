@@ -81,6 +81,7 @@ class RecordingService {
     if(!save)return {...tagged,recorded:false,recordingState:'monitor-only'};
     try {
       await store.appendPower(tagged);
+      if(tagged.points?.some(point=>point.enabled&&point.record))await store.append({...tagged,motorId:`PM:${tagged.meterId}`,port:tagged.path});
       if(this.runId===runId&&this.recordingId===recordingId){this.count++;this.lastSavedAt=new Date(this.clock()).toISOString();this.lastError='';this.emit();}
       return {...tagged,recorded:true,recordingState:'saved'};
     } catch(error) {

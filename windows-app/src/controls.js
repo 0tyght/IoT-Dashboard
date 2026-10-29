@@ -20,9 +20,9 @@ function controlIcon(name) {
 function controlLabel(button, label, icon) { button.replaceChildren(controlIcon(icon), document.createTextNode(label)); }
 function setupControls() {
   const labels = {
-    disconnect: ['หยุดอ่านและบันทึก', 'stop'], 'new-motor': ['เพิ่มเซ็นเซอร์', 'plus'], 'edit-motor': ['ตั้งค่าเซ็นเซอร์', 'settings'],
+    disconnect: ['หยุดอ่านและบันทึก', 'stop'], 'new-motor': ['เพิ่มอุปกรณ์', 'plus'], 'edit-motor': ['ตั้งค่าอุปกรณ์', 'settings'],
     'open-data': ['โฟลเดอร์ข้อมูล', 'folder'], 'help-button': ['คู่มือ', 'help'],
-    'fleet-empty-add': ['เพิ่มเซ็นเซอร์', 'plus'],
+    'fleet-empty-add': ['เพิ่มอุปกรณ์', 'plus'],
     'load-history': ['โหลดข้อมูล', 'refresh'], 'export-csv': ['ส่งออก CSV', 'download']
   };
   for (const [id, [label, icon]] of Object.entries(labels)) controlLabel(document.getElementById(id), label, icon);
@@ -37,7 +37,7 @@ function setupControls() {
   document.getElementById('refresh-ports').setAttribute('aria-label', 'สแกน COM Port');
   document.querySelector('.search > span').replaceChildren(controlIcon('search'));
   const toggle = document.createElement('button'); toggle.id = 'toggle-sidebar'; toggle.className = 'icon-button';
-  toggle.setAttribute('aria-label', 'ย่อหรือขยายทะเบียนเซ็นเซอร์'); toggle.setAttribute('aria-expanded', 'true'); toggle.setAttribute('aria-controls', 'motor-sidebar');
+  toggle.setAttribute('aria-label', 'ย่อหรือขยายพื้นที่งาน'); toggle.setAttribute('aria-expanded', 'true'); toggle.setAttribute('aria-controls', 'motor-sidebar');
   toggle.replaceChildren(controlIcon('menu')); document.querySelector('.sidebar').id = 'motor-sidebar';
   document.querySelector('.appbar').prepend(toggle);
   toggle.onclick = () => { const collapsed = document.querySelector('.shell').classList.toggle('sidebar-collapsed'); toggle.setAttribute('aria-expanded', String(!collapsed)); };

@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Measurement sets and shared Modbus bus settings, multi-register custom devices, per-point tests, run labels and notes, per-point CSV recording and history. PM2200 register offsets and Float32 order must be verified on the physical meter; unconfirmed values remain raw. Custom register points are read-only; verify each device register map and wiring before use."
+            --notes "Windows x64 release. Empty workspaces, device preset selection, separate device and RS485/Modbus bus nodes, and additional read-only configurable register points for PM2200 with CSV and history. PM2200 preset offsets and Float32 order must be verified on the physical meter; unconfirmed preset values remain raw. Verify additional point addresses and byte order from your device manual."

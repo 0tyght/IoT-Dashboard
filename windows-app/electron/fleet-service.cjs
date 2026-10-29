@@ -81,8 +81,11 @@ async function readPowerSnapshot(client, meter) {
     if (!Array.isArray(response.data) || response.data.length!==count || response.data.some(value=>!Number.isInteger(value)||value<0||value>65535)) throw new Error('ข้อมูล Power Meter ตอบกลับไม่ครบ');
     return response.data;
   };
-  const first=await read(3017+meter.offsetAdjust,16),last=await read(3035+meter.offsetAdjust,2);
-  return decodePowerMeter({first,last},meter.byteOrder);
+  let result;
+  try{const first=await read(3017+meter.offsetAdjust,16),last=await read(3035+meter.offsetAdjust,2);result=decodePowerMeter({first,last},meter.byteOrder);}
+  catch(error){if(!meter.points?.length)throw error;result={values:{},raw:{},byteOrder:meter.byteOrder,quality:'read-error',presetError:String(error.message||error)};}
+  if(meter.points?.length){const extra=await readSnapshot(client,{...meter,sensorModel:'custom'});result.points=extra.points;if(result.presetError&&!extra.points.some(point=>point.status==='ok'))throw new Error(`อ่านมิเตอร์และจุดวัดเพิ่มเติมไม่สำเร็จ: ${result.presetError}`);}
+  return result;
 }
 
 class FleetService {
