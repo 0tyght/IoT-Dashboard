@@ -12,7 +12,7 @@ const {RecordingService}=require('../electron/recording-service.cjs');
  const group=normalizeGroups([{id:'G1',name:'ทดสอบ',motorIds:['M1'],meters:[{id:'P1',path:'COM8',slaveId:3,baudRate:9600,parity:'none',stopBits:1,pollInterval:250,points:[{id:'amps',name:'กระแส',registerAddress:3000,dataType:'uint16',scale:.1,offset:0,unit:'A'}]},{id:'P2',path:'COM8',slaveId:4,baudRate:9600,parity:'none',stopBits:1,pollInterval:250}]}])[0];
  assert.equal(group.meters[0].byteOrder,'unconfirmed');assert.equal(resolveGroup(group,[sensor]).meters.length,2);
  assert.throws(()=>resolveGroup({...group,meters:[{...group.meters[0],slaveId:1}]},[sensor]),/ซ้ำ/);
- const unselected=normalizeConfig({...sensor,motorId:'M2',slaveId:3});assert.throws(()=>resolveGroup(group,[sensor,unselected]),/ซ้ำกับเซ็นเซอร์/);
+ const unselected=normalizeConfig({...sensor,motorId:'M2',slaveId:3});assert.equal(resolveGroup(group,[sensor,unselected]).meters.length,2,'devices outside the selected workspace do not conflict');
  assert.throws(()=>resolveGroup({...group,meters:[{...group.meters[0],baudRate:19200}]},[sensor]),/เดียวกัน/);
  assert.throws(()=>resolveGroup(group,[]),/เซ็นเซอร์/);
  const pendingRecorder=new RecordingService({settings:{startMode:'monitor-only'}});pendingRecorder.connect();const unsaved=await pendingRecorder.acceptPower({meterId:'P1',timestamp:new Date().toISOString()},{appendPower:()=>{throw new Error('must not write');}});assert.equal(unsaved.recorded,false);

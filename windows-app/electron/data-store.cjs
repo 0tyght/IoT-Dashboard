@@ -8,9 +8,8 @@ const { normalizeRecording } = require('./recording-service.cjs');
 const { normalizeGroups } = require('./measurement-groups.cjs');
 const { normalizeConfig } = require('./sensor-codec.cjs');
 
-function dayKey(date = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
-}
+const bangkokDayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' });
+function dayKey(date = new Date()) { return bangkokDayFormatter.format(date); }
 
 const PRESET_MODEL = 'vemsee-sn3001-wz3a-n01';
 const PRESET_CHANNELS = ['velocity', 'displacement', 'acceleration'].flatMap(kind => ['X', 'Y', 'Z'].map(axis => `${kind}${axis}`));
@@ -109,19 +108,24 @@ class DataStore {
   }
   async pointDays() {
     await this.queue;let names;try{names=await fs.promises.readdir(this.dataPath());}catch(error){if(error.code==='ENOENT')return [];throw error;}
-    return names.filter(name=>/^points-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name)).map(name=>name.slice(7,17)).sort().reverse();
+    const files=names.filter(name=>/^points-\d{4}-\d{2}-\d{2}\.ndjson$/.test(name)),days=new Set(files.map(name=>name.slice(7,17)));
+    // Older versions could put a point just before midnight in the following day's file.
+    // Inspect the beginning of each journal so those days remain selectable without rewriting data.
+    for(const name of files){const handle=await fs.promises.open(path.join(this.dataPath(),name),'r');try{const buffer=Buffer.alloc(262144),{bytesRead}=await handle.read(buffer,0,buffer.length,0);for(const line of buffer.subarray(0,bytesRead).toString('utf8').split('\n')){try{const row=JSON.parse(line);if(Number.isFinite(Date.parse(row.timestamp)))days.add(dayKey(new Date(row.timestamp)));}catch{}}}finally{await handle.close();}}
+    return [...days].sort().reverse();
   }
-  async pointHistory({date,deviceId='',seriesKey='',runId=''}) {
+  async pointHistory({date,deviceId='',seriesKey='',runId='',offset=0}) {
     if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date))||!Number.isFinite(Date.parse(date)))throw new Error('วันที่ไม่ถูกต้อง');
-    await this.queue;const file=path.join(this.dataPath(),`points-${date}.ndjson`),rows=[],devices=new Set(),series=new Map(),runs=new Map();let total=0,skipped=0,stream;
-    try{stream=fs.createReadStream(file,{encoding:'utf8'});await new Promise((resolve,reject)=>{stream.once('open',resolve);stream.once('error',reject);});}catch(error){stream?.destroy();if(error.code==='ENOENT')return {rows,total,skipped,devices:[],series:[],runs:[]};throw error;}
-    const lines=readline.createInterface({input:stream,crlfDelay:Infinity});try{for await(const line of lines){if(!line.trim())continue;let row;try{row=JSON.parse(line);if(!row||!row.deviceId||!row.pointId||!Number.isFinite(Date.parse(row.timestamp)))throw new Error('invalid');}catch{skipped++;continue;}devices.add(row.deviceId);if(deviceId&&row.deviceId!==deviceId)continue;
-      if(row.runId&&!runs.has(row.runId))runs.set(row.runId,{runId:row.runId,runName:row.runName||'',groupName:row.groupName||'',timestamp:row.timestamp});if(runId&&row.runId!==runId)continue;
-      const key=JSON.stringify([row.deviceId,row.pointId,row.unit,row.port,row.slaveId,row.registerType,row.registerAddress,row.dataType,row.byteOrder,row.scale,row.offset,row.runId||'']);
-      if(!series.has(key))series.set(key,{key,name:row.name,pointId:row.pointId,unit:row.unit,deviceId:row.deviceId,runId:row.runId||''});
-      if(seriesKey&&key!==seriesKey)continue;total++;rows.push(row);if(rows.length>500)rows.shift();
-    }}finally{lines.close();stream.destroy();}
-    return {rows,total,skipped,devices:[...devices].sort(),series:[...series.values()],runs:[...runs.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp))};
+    offset=Number(offset);if(!Number.isSafeInteger(offset)||offset<0)throw new Error('หน้าข้อมูลไม่ถูกต้อง');
+    await this.queue;const next=new Date(Date.parse(date+'T00:00:00Z')+86400000).toISOString().slice(0,10),files=[];
+    for(const day of [date,next]){const file=path.join(this.dataPath(),`points-${day}.ndjson`);try{const size=(await fs.promises.stat(file)).size;if(size)files.push({file,size});}catch(error){if(error.code!=='ENOENT')throw error;}}
+    const rows=[],devices=new Set(),series=new Map(),runs=new Map();let total=0,skipped=0;
+    const matches=row=>{if(!row||!row.deviceId||!row.pointId||!Number.isFinite(Date.parse(row.timestamp)))return false;return dayKey(new Date(row.timestamp))===date;};
+    async function visit(fn){for(const {file,size} of files){const stream=fs.createReadStream(file,{encoding:'utf8',start:0,end:size-1}),lines=readline.createInterface({input:stream,crlfDelay:Infinity});try{for await(const line of lines){if(!line.trim())continue;let row;try{row=JSON.parse(line);if(!row||!row.deviceId||!row.pointId||!Number.isFinite(Date.parse(row.timestamp)))throw new Error('invalid');}catch{fn(null);continue;}if(matches(row))fn(row);}}finally{lines.close();stream.destroy();}}}
+    function keyFor(row){return JSON.stringify([row.deviceId,row.pointId,row.unit,row.port,row.slaveId,row.registerType,row.registerAddress,row.dataType,row.byteOrder,row.scale,row.offset,row.runId||'']);}
+    await visit(row=>{if(!row){skipped++;return;}devices.add(row.deviceId);if(deviceId&&row.deviceId!==deviceId)return;if(row.runId&&!runs.has(row.runId))runs.set(row.runId,{runId:row.runId,runName:row.runName||'',groupName:row.groupName||'',timestamp:row.timestamp});if(runId&&row.runId!==runId)return;const key=keyFor(row);if(!series.has(key))series.set(key,{key,name:row.name,pointId:row.pointId,unit:row.unit,deviceId:row.deviceId,runId:row.runId||''});if(seriesKey&&key!==seriesKey)return;total++;if(!offset){rows.push(row);if(rows.length>500)rows.shift();}});
+    if(offset){let index=0;const from=Math.max(0,total-offset-500),to=Math.max(0,total-offset);await visit(row=>{if(!row||(deviceId&&row.deviceId!==deviceId)||(runId&&row.runId!==runId)||(seriesKey&&keyFor(row)!==seriesKey))return;if(index>=from&&index<to)rows.push(row);index++;});}
+    return {rows,total,skipped,offset,limit:500,devices:[...devices].sort(),series:[...series.values()],runs:[...runs.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp))};
   }
   async powerDays() {
     await this.queue; let names;
@@ -171,7 +175,7 @@ class DataStore {
     return settings;
   }
   loadProfiles() {
-    try { return normalizeFleet(JSON.parse(fs.readFileSync(this.profilesPath(), 'utf8'))); }
+    try { const raw=JSON.parse(fs.readFileSync(this.profilesPath(), 'utf8'));return Array.isArray(raw)&&raw.length===0?[]:normalizeFleet(raw,{allowSharedConnections:true}); }
     catch (error) {
       if (error.code !== 'ENOENT') throw new Error(`อ่านรายชื่อมอเตอร์ไม่ได้: ${error.message} (ไฟล์เดิมยังอยู่)`);
       try {
@@ -181,7 +185,7 @@ class DataStore {
     }
   }
   saveProfiles(raw) {
-    const configs = raw.length ? normalizeFleet(raw) : [];
+    const configs = raw.length ? normalizeFleet(raw,{allowSharedConnections:true}) : [];
     fs.mkdirSync(this.directory, { recursive: true });
     const temporary = `${this.profilesPath()}.tmp`;
     fs.writeFileSync(temporary, JSON.stringify(configs, null, 2), 'utf8');
@@ -203,10 +207,10 @@ class DataStore {
         const rows=savedPoints.map(point=>({timestamp:point.timestamp||reading.timestamp,timestampBangkok:localTimestamp(point.timestamp||reading.timestamp),groupId:reading.groupId||'',groupName:reading.groupName||'',runId:reading.runId||'',runName:reading.runName||'',runNote:reading.runNote||'',recordingId:reading.recordingId||'',deviceId:reading.motorId,port:reading.port,slaveId:reading.slaveId,pointId:point.id,name:point.name,unit:point.unit,status:point.status,value:point.value,raw:point.raw,registerType:point.registerType,registerAddress:point.registerAddress,dataType:point.dataType,byteOrder:point.byteOrder,scale:point.scale,offset:point.offset,pollIntervalMs:reading.pollIntervalMs,message:point.message||''}));
         if (!rows.length) return;
         const keys=['timestamp','timestampBangkok','groupId','groupName','runId','runName','runNote','recordingId','deviceId','port','slaveId','pointId','name','unit','status','value','raw','registerType','registerAddress','dataType','byteOrder','scale','offset','pollIntervalMs','message'];
-        await fs.promises.appendFile(path.join(this.dataPath(),`points-${date}.ndjson`),rows.map(row=>JSON.stringify(row)).join('\n')+'\n','utf8');
-        const appendPoints=async file=>{try{await fs.promises.writeFile(file,'\uFEFF'+keys.join(',')+'\r\n',{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}await fs.promises.appendFile(file,rows.map(row=>keys.map(key=>csvCell(key==='raw'?JSON.stringify(row[key]):row[key])).join(',')+'\r\n').join(''),'utf8');};
-        await appendPoints(path.join(this.dataPath(),`points-${date}.csv`));
-        if(runDirectory){await this.writeRunMetadata(runDirectory,reading);await appendPoints(path.join(runDirectory,`points-${date}.csv`));}
+        const appendPoints=async (file,group)=>{try{await fs.promises.writeFile(file,'\uFEFF'+keys.join(',')+'\r\n',{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}await fs.promises.appendFile(file,group.map(row=>keys.map(key=>csvCell(key==='raw'?JSON.stringify(row[key]):row[key])).join(',')+'\r\n').join(''),'utf8');};
+        const byDay=new Map();for(const row of rows){const key=dayKey(new Date(row.timestamp));if(!byDay.has(key))byDay.set(key,[]);byDay.get(key).push(row);}
+        if(runDirectory)await this.writeRunMetadata(runDirectory,reading);
+        for(const [key,group] of byDay){await fs.promises.appendFile(path.join(this.dataPath(),`points-${key}.ndjson`),group.map(row=>JSON.stringify(row)).join('\n')+'\n','utf8');await appendPoints(path.join(this.dataPath(),`points-${key}.csv`),group);if(runDirectory)await appendPoints(path.join(runDirectory,`points-${key}.csv`),group);}
         return;
       }
       await fs.promises.appendFile(path.join(this.dataPath(), `readings-${date}.ndjson`), `${JSON.stringify(reading)}\n`, 'utf8');

@@ -4,4 +4,5 @@ const sample={id:'temp',name:'อุณหภูมิ',registerAddress:0,dataTy
 const [point]=normalizePoints([sample]);assert.equal(point.offset,-2);assert.equal(point.registerType,'holding');assert.equal(point.record,true);
 assert.throws(()=>normalizePoints([]),/1–64/);assert.throws(()=>normalizePoints([sample,{...sample,id:'TEMP'}]),/ซ้ำ/);assert.throws(()=>normalizePoints([{...sample,registerAddress:65535,dataType:'float32'}]),/Address/);assert.throws(()=>normalizePoints([{...sample,scale:0}]),/ตัวคูณ/);
 assert.throws(()=>normalizePoints([{...sample,registerAddress:null}]),/Address/);assert.throws(()=>normalizePoints([{...sample,offset:null}]),/ตัวคูณ/);
+assert.throws(()=>normalizePoints([{...sample,byteOrder:''}]),/Byte order/);
 console.log('PASS: independent custom register point validation and explicit recording settings');

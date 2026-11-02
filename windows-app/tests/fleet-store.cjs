@@ -65,7 +65,7 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
   try {
     const store = new DataStore(directory);
     assert.deepEqual(store.loadProfiles(), []);
-    store.saveProfiles([config, second]); assert.equal(store.loadProfiles().length, 2);
+    store.saveProfiles([config, second]); assert.equal(store.loadProfiles().length, 2);store.saveProfiles([config,{...second,slaveId:1}]);assert.equal(store.loadProfiles().length,2,'alternative workspaces may reuse port and ID');store.saveProfiles([]);assert.deepEqual(store.loadProfiles(),[]);store.saveProfiles([config,second]);
     await Promise.all(result.readings.map(reading => store.append(reading)));
     const date = dayKey(), history = await store.history({ date }); assert.equal(history.total, 2);
     assert.equal((await store.history({ date, motorId: 'MTR-02' })).rows.length, 1);

@@ -73,20 +73,23 @@ app.whenReady().then(() => {
   handle('recording:start', () => { if (busy) throw new Error('รอการเชื่อมต่อให้เสร็จก่อน'); return { ok: true, recording: recording.start() }; });
   handle('recording:stop', () => exclusive(async () => { recording.stop(); await store.queue; return { ok: true, recording: recording.snapshot() }; }));
   handle('sensor:list-ports', async () => ({ ok: true, ports: (await SerialPort.list()).map(port => ({ path: port.path, manufacturer: port.manufacturer || '', vendorId: port.vendorId || '', productId: port.productId || '' })) }));
-  handle('profiles:save', raw => {
-    if (fleet.buses.length || busy) throw new Error('หยุดการอ่านก่อนแก้ไขมอเตอร์');
+  function saveProfilesChecked(raw) {
+    if (fleet.buses.length || busy) throw new Error('หยุดการอ่านก่อนแก้ไขอุปกรณ์');
+    const old=store.loadProfiles(),groups=store.loadGroups(),nextIds=new Set(raw.map(item=>String(item.motorId||'').toUpperCase()));
+    for(const profile of old)if(!nextIds.has(profile.motorId.toUpperCase())){const refs=groups.filter(group=>group.motorIds.some(id=>id.toUpperCase()===profile.motorId.toUpperCase()));if(refs.length)throw new Error(`อุปกรณ์ ${profile.motorId} ยังอยู่ในพื้นที่งาน ${refs.map(group=>group.name).join(', ')} กรุณานำออกจากพื้นที่งานก่อนลบหรือเปลี่ยนรหัส`);}
+    for(const group of groups)resolveGroup(applyGroupBuses(group,store.loadBuses()),raw.map(item=>applyBus(item,store.loadBuses())),{allowDisabled:true});
     return { ok: true, profiles: store.saveProfiles(raw.map(item=>applyBus(item,store.loadBuses()))) };
-  });
+  }
+  handle('profiles:save', saveProfilesChecked);
   handle('sensor:test', config => exclusive(() => fleet.test(applyBus(config,store.loadBuses()))));
   handle('power:test-meter', (groupId,meterId,options) => exclusive(() => {
     const group=store.loadGroups().find(item=>item.id===groupId),meter=group?.meters.find(item=>item.id===meterId);
     if(!meter)throw new Error('ไม่พบ Power Meter ในชุดที่เลือก');
-    if(store.loadProfiles().some(profile=>profile.path.toUpperCase()===meter.path.toUpperCase()&&profile.slaveId===meter.slaveId))throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');
+    resolveGroup(applyGroupBuses(group,store.loadBuses()),store.loadProfiles().map(item=>applyBus(item,store.loadBuses())),{allowDisabled:true});
     return fleet.testPower({...applyBus(meter,store.loadBuses()),motorId:meter.id,sensorModel:'custom',byteOrder:'ABCD',registerAddress:3017,dataType:'float32',scale:1,unit:'V'},{address:options?.address,slaveId:meter.slaveId,registerType:options?.registerType||meter.registerType,meterConfig:true});
   }));
   handle('power:test-register', (config, options) => exclusive(() => {
     const port = String(config?.path || '').toUpperCase(), slaveId = options?.slaveId ?? 3;
-    if (store.loadProfiles().some(profile => profile.path.toUpperCase() === port && profile.slaveId === slaveId)) throw new Error('Slave ID ของมิเตอร์ซ้ำกับเซ็นเซอร์ในพอร์ตเดียวกัน');
     return fleet.testPower(applyBus(config,store.loadBuses()), options);
   }));
   handle('sensor:connect', (raw,groupId) => exclusive(async () => {
@@ -154,7 +157,7 @@ app.whenReady().then(() => {
     const confirmed = await dialog.showMessageBox(mainWindow, { type: 'question', buttons: ['ยกเลิก', 'แทนที่รายชื่อ'], defaultId: 0, cancelId: 0, message: 'แทนที่รายชื่อมอเตอร์ทั้งหมดด้วยไฟล์นี้?', detail: 'สามารถสำรองรายชื่อปัจจุบันก่อนนำเข้าได้' });
     if (confirmed.response !== 1) return { ok: true, canceled: true };
     if (!Array.isArray(raw.motors)) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง');
-    return { ok: true, profiles: store.saveProfiles(raw.motors) };
+    return saveProfilesChecked(raw.motors);
   });
 });
 

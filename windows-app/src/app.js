@@ -396,7 +396,8 @@ function confirmAction(title, detail, callback) {
 function deleteMotor(profile) {
   if (!profile || busy) return;
   if (mode !== 'offline') return stopBeforeChange(() => deleteMotor(profiles.find(item => item.motorId === profile.motorId)));
-  confirmAction(`ลบ ${profile.motorId}?`, 'ลบการตั้งค่าเซ็นเซอร์ออกจากทะเบียน ข้อมูลที่บันทึกยังเปิดกราฟได้จากแท็บประวัติ โดยเลือกชื่อที่ลงท้ายว่า ประวัติ', async () => {
+  const refs=measurementGroups.filter(group=>group.motorIds.some(id=>id.toUpperCase()===profile.motorId.toUpperCase()));if(refs.length){toast(`ยังลบไม่ได้: ${profile.motorId} อยู่ในพื้นที่งาน ${refs.map(group=>group.name).join(', ')} · นำอุปกรณ์ออกจากพื้นที่งานก่อน`);return;}
+  confirmAction(`ลบ ${profile.motorId}?`, 'ลบการตั้งค่าอุปกรณ์ออกจากทะเบียน ข้อมูลที่บันทึกยังเปิดได้จากประวัติ', async () => {
     profiles = check(await api.saveProfiles(profiles.filter(item => item.motorId !== profile.motorId))).profiles;
     cache.delete(profile.motorId);
     if (selected === profile.motorId) selected = profiles[0]?.motorId || '';

@@ -31,11 +31,10 @@ function normalizeGroups(raw) {
     return {id,name,motorIds,meters};
   });
 }
-function resolveGroup(group, profiles) {
+function resolveGroup(group, profiles, {allowDisabled=false}={}) {
   const motors=group.motorIds.map(id=>profiles.find(profile=>profile.motorId.toUpperCase()===id.toUpperCase()));
   if (motors.some(profile=>!profile)) throw new Error('ชุดนี้มีเซ็นเซอร์ที่ถูกลบหรือเปลี่ยนรหัส กรุณาแก้ไขชุดก่อนเริ่ม');
-  if (motors.some(profile=>profile.enabled===false)) throw new Error('ชุดนี้มีเซ็นเซอร์ที่พักอ่านอยู่ กรุณาเปิดใช้งานหรือแก้ไขชุด');
-  for(const meter of group.meters) if(profiles.some(profile=>profile.path.toUpperCase()===meter.path.toUpperCase() && profile.slaveId===meter.slaveId)) throw new Error(`พอร์ตและ Slave ID ซ้ำกับเซ็นเซอร์ในทะเบียน: ${meter.path}:${meter.slaveId}`);
+  if (!allowDisabled && motors.some(profile=>profile.enabled===false)) throw new Error('ชุดนี้มีเซ็นเซอร์ที่พักอ่านอยู่ กรุณาเปิดใช้งานหรือแก้ไขชุด');
   const buses=new Map(), addresses=new Set();
   for(const device of [...motors,...group.meters]) {
     const port=device.path.toUpperCase(), address=`${port}:${device.slaveId}`, serial=JSON.stringify([device.baudRate,device.parity,device.stopBits]);

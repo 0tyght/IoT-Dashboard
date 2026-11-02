@@ -41,3 +41,5 @@
 .meter-extra-points { grid-column:1/-1; min-width:0; padding:10px; border:1px solid #dfe4ef; border-radius:6px; }.meter-extra-points summary { color:#5144c5; font-weight:600; cursor:pointer; }.meter-extra-points p { color:#536078; font-size:12px; }.meter-extra-points .points-scroll { max-width:100%; }
 
 .meter-extra-points .points-table th:nth-child(10),.meter-extra-points .points-table td:nth-child(10){display:none}
+
+.point-history-pagination{display:flex;gap:8px;margin:8px 0}.point-history-pagination button{min-height:32px}
