@@ -408,6 +408,14 @@ function setDialogBusy(value) { form.querySelectorAll('input,select,textarea,but
 async function saveMotor(event) {
   event.preventDefault(); if (!form.reportValidity()) return;
   const raw = configFromForm(), proposed = editing ? profiles.map(profile => profile.motorId === editing ? raw : profile) : [...profiles, raw];
+  const duplicate = profiles.find(profile => profile.motorId.toUpperCase() === raw.motorId.toUpperCase() && profile.motorId !== editing);
+  if (duplicate) {
+    const workspaces = measurementGroups.filter(group => group.motorIds.some(id => id.toUpperCase() === duplicate.motorId.toUpperCase()));
+    $('form-error').textContent = `รหัส ${raw.motorId} มีอยู่ในทะเบียนอุปกรณ์แล้ว${workspaces.length ? ` ในพื้นที่งาน ${workspaces.map(group => group.name).join(', ')}` : ' แต่ยังไม่ถูกเพิ่มในพื้นที่งานนี้'} · เปิดทะเบียนอุปกรณ์เพื่อใช้รายการเดิม หรือเปลี่ยนรหัสอุปกรณ์ใหม่`;
+    $('form-error').hidden = false;
+    $('form-error').scrollIntoView({block:'nearest',behavior:'instant'});
+    return;
+  }
   setDialogBusy(true);
   try {
     const previous = profiles.find(profile => profile.motorId === editing);

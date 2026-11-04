@@ -15,7 +15,8 @@ function normalizeGroups(raw) {
     const meterIds = new Set();
     const meters = item.meters.map(rawMeter => {
       const meterId = String(rawMeter.id || '').trim();
-      if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,23}$/.test(meterId) || meterIds.has(meterId.toUpperCase())) throw new Error('รหัส Power Meter ไม่ถูกต้องหรือซ้ำ');
+      if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,23}$/.test(meterId)) throw new Error('รหัส Power Meter ต้องมี 1–24 ตัว และใช้ตัวอักษรอังกฤษ ตัวเลข _ หรือ -');
+      if (meterIds.has(meterId.toUpperCase())) throw new Error(`รหัส Power Meter ${meterId} ซ้ำในพื้นที่งาน ${name}`);
       meterIds.add(meterId.toUpperCase());
       const base = normalizeConfig({ ...rawMeter, points:undefined, motorId:meterId, sensorModel:'custom', registerAddress:3017, dataType:'float32', byteOrder:'ABCD', scale:1, unit:'V' });
       const byteOrder = rawMeter.byteOrder || 'unconfirmed';

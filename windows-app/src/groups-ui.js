@@ -69,7 +69,14 @@ function setupGroupsUI() {
     throw new Error('เลือกบัสให้ Power Meter');
   }
   function addMeterEditor(meter={}) {
-    const box=node('div',null,'groups-meter'); box.dataset.meterId=meter.id||'';
+    const newMeter = !meter.id;
+    if (newMeter) {
+      const used = new Set([...$g('groups-meters').querySelectorAll('.meter-id')].map(input => input.value.trim().toUpperCase()));
+      let number = 1;
+      while (used.has(`PM-${String(number).padStart(2,'0')}`)) number++;
+      meter = {...meter,id:`PM-${String(number).padStart(2,'0')}`};
+    }
+    const box=node('div',null,'groups-meter'); box.dataset.meterId=newMeter?'':meter.id;
     box.innerHTML=`<label>รุ่นมิเตอร์<select class="meter-model"><option value="pm2230">Schneider Electric PM2230</option><option value="pm2200">Schneider PM2200 · ผังเดิม</option></select></label><label>รหัสมิเตอร์<input class="meter-id" maxlength="24" placeholder="PM-01"></label><label>ชื่อ<input class="meter-name" maxlength="80" placeholder="ไฟเข้ามอเตอร์"></label><label>จุดวัด<select class="meter-point"><option value="motor-input">ไฟเข้ามอเตอร์</option><option value="generator-output">ไฟออกเจเนอเรเตอร์</option><option value="other">จุดวัดอื่น</option></select></label><label>ตั้งค่าการสื่อสาร<select class="meter-port"></select></label><div class="meter-independent" hidden><label>COM Port<input class="meter-path" placeholder="COM3"></label><label>Baud rate<select class="meter-baud"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>4800</option><option>2400</option><option>1200</option></select></label><label>Parity<select class="meter-parity"><option value="none">None</option><option value="even">Even</option><option value="odd">Odd</option></select></label><label>Stop bits<select class="meter-stop"><option value="1">1</option><option value="2">2</option></select></label><label>ช่วงอ่าน (ms)<input class="meter-interval" type="number" min="250" max="3600000" value="2000"></label><label>Timeout (ms)<input class="meter-timeout" type="number" min="200" max="30000" value="1500"></label></div><label>Slave ID<input class="meter-slave" type="number" min="1" max="247" value="3"></label><label>Function<select class="meter-function"><option value="holding">FC03</option><option value="input">FC04</option></select></label><label>ลำดับ Float ที่ยืนยันแล้ว<select class="meter-order"><option value="unconfirmed">ยังไม่ยืนยัน · บันทึก Raw</option><option>ABCD</option><option>CDAB</option><option>BADC</option><option>DCBA</option></select></label><details class="meter-register-note"><summary>Register ตามรุ่น</summary><p class="meter-map-source footnote"></p><div class="meter-preset-tables"></div></details><label>ปรับ Address ที่ส่ง<select class="meter-offset"><option value="0">0 · ใช้ผังตามรุ่น</option><option value="1">+1</option><option value="-1">−1</option></select></label><button type="button" class="meter-remove">ลบมิเตอร์จากชุด</button>`;
     box.querySelector('.meter-id').value=meter.id||'';box.querySelector('.meter-name').value=meter.name||'';box.querySelector('.meter-slave').value=meter.slaveId??3;
     const ownerLabel=node('label','อุปกรณ์วัดที่เกี่ยวข้อง (ไม่บังคับ)'),owner=node('select');owner.className='meter-owner';owner.add(new Option('ไม่ระบุ',''));profiles.forEach(profile=>owner.add(new Option(`${profile.motorId} · ${profile.name||''}`,profile.motorId)));owner.value=meter.motorId||'';ownerLabel.append(owner);box.querySelector('.meter-point').parentElement.after(ownerLabel);
@@ -82,7 +89,7 @@ function setupGroupsUI() {
     extra.querySelector('.meter-point-add').onclick=()=>addPointRow({},pointBody,testPoint);extra.querySelector('.meter-add-currents').onclick=()=>{for(const phase of ['A','B','C']){if([...pointBody.querySelectorAll('.point-id')].some(input=>input.value.toUpperCase()===`CURRENT_${phase}`))continue;const row=addPointRow({id:`CURRENT_${phase}`,name:`กระแส ${phase}`,registerAddress:'',dataType:'float32',byteOrder:'ABCD',scale:1,offset:0,unit:'A'},pointBody,testPoint);const order=row.querySelector('.point-order');order.prepend(new Option('เลือกลำดับ',''));order.value='';}};(meter.points||[]).forEach(point=>addPointRow(point,pointBody,testPoint));box.querySelector('.meter-register-note').after(extra);
     box.querySelector('.meter-point').value=meter.point||'motor-input';box.querySelector('.meter-function').value=meter.registerType||'holding';box.querySelector('.meter-order').value=meter.byteOrder||'unconfirmed';box.querySelector('.meter-offset').value=String(meter.offsetAdjust??0);box.querySelector('.meter-remove').onclick=()=>box.remove();
     const model=box.querySelector('.meter-model'), offset=box.querySelector('.meter-offset');
-    model.value=meter.model || (meter.id ? 'pm2200' : 'pm2230');
+    model.value=meter.model || (newMeter ? 'pm2230' : 'pm2200');
     const renderPreset = () => {
       box.querySelector('.meter-map-source').textContent=model.value==='pm2230'
         ? 'Schneider FA379514 · Address RTU = เลข Register ในคู่มือ − 1 · Float32 ใช้ 2 Register ต่อค่า'
@@ -116,7 +123,7 @@ function setupGroupsUI() {
     renderPreset();
     $g('groups-meters').append(box);
   }
-  const focusMeter=(box,title='ตั้งค่า Power Meter')=>{dialog.classList.add('meter-focus');$g('groups-meter-settings').open=true;$g('groups-title').textContent=title;dialog.querySelector('.dialog-header p').textContent='ตั้งค่าอุปกรณ์และจุดวัด · การสื่อสารร่วมแก้ไขที่โหนดบัส';$g('groups-save').textContent='บันทึกมิเตอร์';for(const other of $g('groups-meters').children)other.hidden=other!==box;};
+  const focusMeter=(box,title='ตั้งค่า Power Meter')=>{dialog.classList.add('meter-focus');$g('groups-meter-settings').open=true;$g('groups-title').textContent=title;const otherIds=[...$g('groups-meters').children].filter(item=>item!==box).map(item=>item.querySelector('.meter-id').value.trim()).filter(Boolean);dialog.querySelector('.dialog-header p').textContent=otherIds.length?`รหัสมิเตอร์ที่ใช้ในพื้นที่งานนี้ ${otherIds.join(', ')} · กดโหนดเดิมในแผนผังเพื่อตั้งค่า`:'ตั้งค่าอุปกรณ์และจุดวัด · การสื่อสารร่วมแก้ไขที่โหนดบัส';$g('groups-save').textContent='บันทึกมิเตอร์';for(const other of $g('groups-meters').children)other.hidden=other!==box;};
   openFlowNewMeter = (model = 'pm2230') => {
     if (busy) return;
     if (mode !== 'offline') return stopBeforeChange(() => openFlowNewMeter(model));
