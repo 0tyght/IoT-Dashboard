@@ -4,9 +4,72 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { FleetService, normalizeFleet } = require('../electron/fleet-service.cjs');
+const { normalizeGroups } = require('../electron/measurement-groups.cjs');
 const { DataStore, csvRow, dayKey } = require('../electron/data-store.cjs');
 const config = { path: 'COM8', motorId: 'MTR-01', sensorModel: 'vemsee-sn3001-wz3a-n01', slaveId: 1, pollInterval: 250, frequencyByteOrder: 'ABCD' };
 const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
+
+async function waitUntil(condition, label, timeout = 4000) {
+  const deadline = performance.now() + timeout;
+  while (!condition()) {
+    assert(performance.now() < deadline, label);
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+}
+
+async function checkMixedBusTimeoutRecovery() {
+  let failFrequency = true, failPrimary = false, failedAt = 0;
+  const requests = [], readings = [], powerReadings = [], statuses = [];
+  class ThreeDeviceClient {
+    async connectRTUBuffered() { this.isOpen = true; }
+    setID(id) { this.id = id; }
+    setTimeout() {}
+    async readHoldingRegisters(address, count) {
+      requests.push({ id: this.id, address, at: performance.now() });
+      if (this.id === 1 && ((address === 0x21 && failFrequency) || (address === 0 && failPrimary))) {
+        failedAt = performance.now();
+        throw Object.assign(new Error('Timed out'), { errno: 'ETIMEDOUT' });
+      }
+      return { data: address === 0x21 ? [0x4248, 0, 0x4248, 0, 0x4248, 0] : Array(count).fill(0) };
+    }
+    close(done) { this.isOpen = false; done(); }
+  }
+  const group = normalizeGroups([{ id: 'G1', name: 'Three devices', motorIds: [config.motorId, second.motorId], meters: [
+    { id: 'P1', model: 'pm2230', path: 'COM8', slaveId: 3, pollInterval: 250 }
+  ] }])[0];
+  const fleet = new FleetService({
+    clientFactory: () => new ThreeDeviceClient(),
+    onReading: reading => readings.push(reading),
+    onPower: reading => powerReadings.push(reading),
+    onStatus: status => statuses.push(status)
+  });
+  try {
+    const start = await fleet.connect([config, second], group.meters);
+    assert.equal(start.readings[0].frequencyStatus, 'read-error');
+    assert.match(start.readings[0].frequencyMessage, /COM8 · Slave ID 1 · FC03 · Register 33/);
+    assert.equal(start.readings[1].channels.frequencyX, 50);
+    assert.equal(start.powerReadings[0].state, 'receiving');
+    assert(requests.find(request => request.id === 2).at - failedAt >= 50, 'allow time for a late frame after timeout');
+    failFrequency = false;
+    await waitUntil(() => readings.some(reading => reading.motorId === config.motorId), 'primary readings continue while Hz is in cooldown');
+    assert.equal(requests.filter(request => request.id === 1 && request.address === 0x21).length, 1);
+
+    failPrimary = true;
+    await waitUntil(() => statuses.some(status => status.motorId === config.motorId && status.state === 'read-error'), 'primary timeout is reported');
+    assert.match(statuses.find(status => status.state === 'read-error').message, /Timeout 1500 ms · COM8 · Slave ID 1 · FC03 · Register 0/);
+    failPrimary = false;
+    const sensorCount = readings.filter(reading => reading.motorId === second.motorId).length;
+    const powerCount = powerReadings.length;
+    await waitUntil(() => readings.filter(reading => reading.motorId === second.motorId).length > sensorCount && powerReadings.length > powerCount, 'other devices continue while the failing sensor waits');
+    assert(!requests.some(request => request.id === 1 && request.at > failedAt), 'do not immediately retry the failing sensor');
+    await waitUntil(() => requests.some(request => request.id === 1 && request.at > failedAt), 'failing sensor is retried automatically');
+    const retry = requests.find(request => request.id === 1 && request.at > failedAt);
+    assert(retry.at - failedAt >= 990);
+    await waitUntil(() => readings.some(reading => reading.motorId === config.motorId && reading.channels.frequencyX === 50), 'frequency reading resumes after cooldown', 6500);
+  } finally {
+    await fleet.disconnect();
+  }
+}
 
 (async () => {
   assert.throws(() => normalizeFleet([config, { ...second, slaveId: 1 }]), /Slave ID ซ้ำ/);
@@ -62,6 +125,7 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
   assert.equal(frequencyReads - previousFrequencyReads, 1, 'unsupported supplemental registers do not overload every poll or block primary data');
   await service.disconnect();
   await assert.rejects(service.connect([{ ...config, enabled: false }]), /ไม่มีอุปกรณ์/);
+  await checkMixedBusTimeoutRecovery();
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vectra-store-test-'));
   try {
@@ -78,5 +142,5 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
     assert(csvRow({ motorId: '=WEBSERVICE("bad")' }).includes("'=WEBSERVICE"));
     assert(csvRow({ channels: { displacementX: 4000 } }).includes('4000'));
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
-  console.log('PASS: shared-bus serialization, failure isolation, disconnect, atomic profiles, history and CSV');
+  console.log('PASS: shared-bus serialization, mixed-device timeout recovery, disconnect, atomic profiles, history and CSV');
 })().catch(error => { console.error(error); process.exit(1); });
