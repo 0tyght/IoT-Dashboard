@@ -13,13 +13,13 @@
 .groups-meter button { align-self:end; }
 #groups-error { margin-top:10px; }
 @media(max-width:600px) { .groups-body { padding:12px; } .groups-motors,.groups-meter { grid-template-columns:minmax(0,1fr); } }
-@media(max-width:1100px) { #groups-quick { display:none; } }
+@media(max-width:1100px) { #groups-quick { max-width:150px; } }
 .meter-independent { grid-column:1 / -1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; padding:10px; background:#fff; border:1px solid #e2e5ef; border-radius:6px; }
 @media(max-width:600px) { .meter-independent { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
 .meter-register-note { grid-column:1 / -1; margin:0; color:#586277; font-size:11px; }
 
-#groups-dialog.meter-focus .groups-body > label, #groups-dialog.meter-focus #groups-active, #groups-dialog.meter-focus #groups-members, #groups-dialog.meter-focus .groups-body > .groups-actions, #groups-dialog.meter-focus #groups-editor > label, #groups-dialog.meter-focus #groups-editor > h3, #groups-dialog.meter-focus #groups-editor > p.footnote, #groups-dialog.meter-focus #groups-motors, #groups-dialog.meter-focus #groups-add-meter { display:none; }
+#groups-dialog.meter-focus .groups-body > label, #groups-dialog.meter-focus #groups-members, #groups-dialog.meter-focus .groups-body > .groups-actions, #groups-dialog.meter-focus #groups-editor > label, #groups-dialog.meter-focus #groups-editor > h3, #groups-dialog.meter-focus #groups-editor > p.footnote, #groups-dialog.meter-focus #workspace-members, #groups-dialog.meter-focus #groups-add-meter { display:none; }
 
 .points-enable { display:flex; flex-direction:row; align-items:center; gap:8px; } .points-enable input,.points-table input[type=checkbox] { width:auto; min-height:auto; }
 .points-scroll { overflow:auto; max-width:100%; } .points-table { border-collapse:collapse; font-size:12px; min-width:1100px; } .points-table th,.points-table td { padding:5px; text-align:left; border-bottom:1px solid #e0e5f0; } .points-table input,.points-table select { width:90px; } .points-table .point-name { width:140px; } .points-table button { min-height:28px; padding:3px 6px; }
@@ -98,3 +98,9 @@
 .meter-register-note summary { cursor:pointer; font-size:12px; font-weight:650; color:#5144c5; }
 .meter-preset-table :is(th,td) { padding:5px 8px; border-bottom:1px solid #e4e5ef; text-align:left; }
 .meter-preset-table th { background:#f3f2fb; }
+
+#groups-dialog.workspace-create .groups-body > :is(label,p,.groups-actions),
+#groups-dialog.meter-focus #groups-meter-settings > summary { display:none; }
+#groups-meter-settings { margin-top:14px; }
+#groups-meter-settings > summary { font-size:13px; font-weight:650; cursor:pointer; color:#5144c5; }
+#groups-dialog.meter-focus #groups-meter-settings { margin:0; }

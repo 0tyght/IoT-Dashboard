@@ -105,7 +105,7 @@ function updateSessionButtons() {
   const running = mode !== 'offline', settings = recordingState.settings;
   $('connect-all').hidden = running; $('disconnect').hidden = !running;
   $('disconnect').disabled = busy || recordActionBusy || !running;
-  controlLabel($('connect-all'), busy ? 'กำลังตรวจเซ็นเซอร์…' : settings.startMode === 'monitor-only' ? 'เริ่มดูข้อมูล' : settings.startMode === 'scheduled' ? 'เริ่มอ่านและรอบันทึก' : 'เริ่มอ่านและบันทึก', 'play');
+  controlLabel($('connect-all'), busy ? 'กำลังตรวจอุปกรณ์…' : settings.startMode === 'monitor-only' ? 'เริ่มดูข้อมูล' : settings.startMode === 'scheduled' ? 'เริ่มอ่านและรอบันทึก' : 'เริ่มอ่านและบันทึก', 'play');
   controlLabel($('disconnect'), busy ? 'กำลังหยุด…' : recordingState.active ? 'หยุดอ่านและบันทึก' : 'หยุดการทำงาน', 'stop');
 }
 function recordingModeFields() {
@@ -114,7 +114,7 @@ function recordingModeFields() {
   $('record-duration-label').hidden = value === 'monitor-only';
   $('record-duration-note').hidden = value === 'monitor-only';
   $('record-form-error').hidden = true;
-  $('record-mode-help').textContent = scheduled ? 'กดเริ่มเพื่ออ่านค่ารอไว้ แล้วบันทึกเมื่อถึงเวลา · ต้องเปิดโปรแกรมไว้' : value === 'monitor-only' ? 'อ่านค่าจริงโดยไม่เขียนไฟล์ · เริ่มบันทึกภายหลังได้จากเมนูเพิ่มเติม' : 'กดเริ่มครั้งเดียวเพื่อตรวจเซ็นเซอร์ อ่านค่า และบันทึกอัตโนมัติ';
+  $('record-mode-help').textContent = scheduled ? 'กดเริ่มเพื่ออ่านค่ารอไว้ แล้วบันทึกเมื่อถึงเวลา · ต้องเปิดโปรแกรมไว้' : value === 'monitor-only' ? 'อ่านค่าจริงโดยไม่เขียนไฟล์ · เริ่มบันทึกภายหลังได้จากเมนูเพิ่มเติม' : 'กดเริ่มครั้งเดียวเพื่อตรวจอุปกรณ์ อ่านค่า และบันทึกอัตโนมัติ';
 }
 function inputLocal(value) { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 19); }
 function setupAcquisitionUI() {

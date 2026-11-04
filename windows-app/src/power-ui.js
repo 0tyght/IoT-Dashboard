@@ -4,8 +4,8 @@ powerTab.dataset.tab = 'power';
 powerTab.textContent = 'ค่าไฟฟ้า';
 const mainTabs=document.querySelector('.tabs'), analysisTab=mainTabs.querySelector('[data-tab="analysis"]');mainTabs.insertBefore(powerTab,analysisTab);mainTabs.insertBefore(mainTabs.querySelector('[data-tab="history"]'),analysisTab);
 const powerStates=new Map();
-const powerLive=document.createElement('section');powerLive.className='power-panel power-live';powerLive.hidden=true;document.querySelector('.power-main').prepend(powerLive);
-const powerHistory=document.createElement('details');powerHistory.className='power-panel power-history';
+const powerLive=document.createElement('section');powerLive.className='power-panel power-live';powerLive.hidden=true;document.querySelector('.power-main').append(powerLive);
+const powerHistory=document.createElement('details');powerHistory.className='power-history';
 powerHistory.innerHTML=`<summary>ประวัติ Power Meter ที่บันทึก</summary><div class="power-history-controls"><label>วันที่<select id="power-history-day"><option value="">ยังไม่มีข้อมูล</option></select></label><label>รอบอ่าน<select id="power-history-run"><option value="">ทุกรอบ</option></select></label></div><p id="power-history-status" role="status">เลือกวันที่ที่บันทึก</p><div id="power-history-rows"></div>`;
 document.querySelector('.power-setup').append(powerHistory);
 let powerHistoryGeneration=0;
@@ -23,7 +23,7 @@ document.getElementById('power-history-day').onchange=()=>{document.getElementBy
 document.getElementById('power-history-run').onchange=()=>void loadPowerHistory();
 function renderPowerReading(reading) {
   if(!reading?.meterId)return;
-  powerStates.set(reading.meterId,reading);powerLive.hidden=false;document.getElementById('power-view').classList.add('power-live-active');powerLive.replaceChildren();
+  powerStates.set(reading.meterId,reading);powerLive.hidden=false;powerLive.replaceChildren();
   const header=document.createElement('h3');header.textContent='Power Meter ในรอบนี้';powerLive.append(header);
   for(const entry of powerStates.values()) {
     const box=document.createElement('div');box.className='power-live-meter';
@@ -37,37 +37,55 @@ function renderPowerReading(reading) {
     for(const point of entry.points||[]){const row=document.createElement('div'),name=document.createElement('span'),out=document.createElement('strong'),detail=document.createElement('small');name.textContent=point.name;out.textContent=point.status==='disabled'?'พักอ่าน':point.status==='ok'?`${point.value} ${point.unit}`:'อ่านไม่สำเร็จ';detail.textContent=point.status==='ok'?`Raw ${point.raw.join(' / ')} · × ${point.scale} + ${point.offset}`:(point.message||'');row.append(name,out,detail);list.append(row);}
     box.append(list);powerLive.append(box);
   }
-  document.querySelector('.power-preview').textContent='ข้อมูลจากรอบอ่าน · ตรวจสอบคุณภาพข้อมูล';
+  document.querySelector('.power-measurements').hidden=true;
 }
-function clearPowerReadings(){powerStates.clear();powerLive.replaceChildren();powerLive.hidden=true;document.getElementById('power-view').classList.remove('power-live-active');document.querySelector('.power-preview').textContent='ยังไม่เริ่มอ่านมิเตอร์';}
+function clearPowerReadings(){powerStates.clear();powerLive.replaceChildren();powerLive.hidden=true;document.querySelector('.power-measurements').hidden=false;}
 let powerDiagnosticKey='';
 const diagnostic = document.createElement('details');
 diagnostic.className = 'power-diagnostic';
 diagnostic.innerHTML = `<summary>อ่าน Register จากมิเตอร์</summary><p>หยุดรอบอ่านก่อน · อ่าน 2 Register โดยไม่เปลี่ยนค่ามิเตอร์</p><label>Power Meter<select id="power-test-device"></select></label><label>Address ที่ส่งในคำสั่ง<input id="power-test-address" type="number" min="0" max="65534" step="1" value="3019"></label><label>Function<select id="power-test-function"><option value="holding">FC03 · Holding</option><option value="input">FC04 · Input</option></select></label><button id="power-test-button" type="button">อ่านค่าดิบ</button><p id="power-test-result" role="status" aria-live="polite">เทียบค่าที่อ่านกับหน้ามิเตอร์</p>`;
-document.querySelector('.power-setup').append(diagnostic);
-function refreshPowerDiagnostic(){
-  const group=measurementGroups.find(item=>item.id===selectedMeasurementGroup),meters=group?.meters||[],select=document.getElementById('power-test-device'),previous=select.value;
-  select.replaceChildren();if(meters.length){meters.forEach(meter=>select.add(new Option(`${meter.name||meter.id} · ${meter.path.startsWith('UNBOUND:')?'ยังไม่เชื่อมบัส':meter.path} / ID ${meter.slaveId}`,meter.id)));select.value=meters.some(m=>m.id===previous)?previous:meters[0].id;}
-  else select.add(new Option('ใช้พอร์ตเซ็นเซอร์ที่เลือก · Slave 3 (ทดสอบเดิม)','legacy'));
-  const info=document.querySelector('.power-point-confirmed'),first=meters[0];
-  info.querySelector('strong').textContent=first?({'motor-input':'ไฟเข้ามอเตอร์','generator-output':'ไฟออกเจเนอเรเตอร์',other:'จุดวัดอื่น'}[first.point]||'จุดวัดอื่น'):'ยังไม่ได้เลือก Power Meter';
-  info.querySelector('span').textContent=first?`${first.name||first.id} · ${meters.length} มิเตอร์ในชุด`: 'เลือกชุดที่มีมิเตอร์เพื่อดูอุปกรณ์';
-  document.getElementById('power-selected-point').textContent=first?(first.name||first.id):'ยังไม่มีมิเตอร์ที่เลือก';
-  const syncSelection=()=>{const meter=meters.find(item=>item.id===select.value),key=meter?`${group.id}:${meter.id}:${meter.model}:${meter.offsetAdjust}:${meter.registerType}`:'legacy';if(key!==powerDiagnosticKey){powerDiagnosticKey=key;document.getElementById('power-test-address').value=String(3019+(meter?.offsetAdjust||0));document.getElementById('power-test-function').value=meter?.registerType||'holding';}};
-  select.onchange=()=>{syncSelection();const current=meters.find(item=>item.id===select.value);if(current)document.getElementById('power-selected-point').textContent=current.name||current.id;};syncSelection();
+document.querySelector('.power-setup').prepend(diagnostic);
+function refreshPowerDiagnostic() {
+  const group=activeWorkspace(),meters=group?.meters||[];
+  const select=document.getElementById('power-test-device'),previous=select.value;
+  const preview=document.querySelector('.power-preview'),roster=document.getElementById('power-meter-roster');
+  const setup=document.getElementById('power-setup-action');
+  diagnostic.hidden=!meters.length;
+  preview.textContent=!group?'ยังไม่ได้เลือกพื้นที่งาน':!meters.length?'พื้นที่งานนี้ยังไม่มี Power Meter':'ค่าจากมิเตอร์จะปรากฏเมื่อเริ่มอ่าน';
+  roster.replaceChildren(...meters.map(meter=>{
+    const row=node('div',null,'power-meter-entry');
+    row.append(node('strong',meter.name||meter.id),node('span',`${PowerRegisters.label(meter.model)} · ${meter.path.startsWith('UNBOUND:')?'ยังไม่เชื่อมบัส':meter.path} · ID ${meter.slaveId}`));
+    const edit=node('button','ตั้งค่า');edit.type='button';edit.onclick=()=>openFlowMeterEditor(meter.id);
+    row.append(edit);return row;
+  }));
+  setup.hidden=Boolean(meters.length);
+  setup.textContent=group?'เพิ่ม Power Meter':'เลือกพื้นที่งาน';
+  setup.onclick=group?()=>openFlowNewMeter():showWorkspacePicker;
+  select.replaceChildren(...meters.map(meter=>new Option(`${meter.name||meter.id} · ${PowerRegisters.label(meter.model)}`,meter.id)));
+  if (meters.some(meter=>meter.id===previous)) select.value=previous;
+  const syncSelection=()=>{
+    const meter=meters.find(item=>item.id===select.value), key=meter?`${group.id}:${meter.id}:${meter.model}:${meter.offsetAdjust}:${meter.registerType}`:'';
+    document.getElementById('power-test-button').disabled=!meter || meter.path.startsWith('UNBOUND:');
+    if(key===powerDiagnosticKey)return;
+    powerDiagnosticKey=key;
+    document.getElementById('power-test-address').value=String(3019+(meter?.offsetAdjust||0));
+    document.getElementById('power-test-function').value=meter?.registerType||'holding';
+    document.getElementById('power-test-result').textContent=meter?.path.startsWith('UNBOUND:')?'เชื่อมมิเตอร์เข้าบัสจากแผนผังก่อน':'เทียบค่าที่อ่านกับหน้ามิเตอร์';
+  };
+  select.onchange=syncSelection;syncSelection();
 }
 
 diagnostic.querySelector('#power-test-button').addEventListener('click', async event => {
   const result = document.getElementById('power-test-result'), button = event.currentTarget;
   if (mode !== 'offline' || busy) { result.textContent = 'หยุดการอ่านและรอให้โปรแกรมพร้อมก่อนทดสอบ'; return; }
-  const group=measurementGroups.find(item=>item.id===selectedMeasurementGroup),meter=group?.meters.find(item=>item.id===document.getElementById('power-test-device').value),profile=currentProfile();
-  if (!meter&&!profile) { result.textContent = 'เพิ่ม Power Meter ในชุด หรือเลือกเซ็นเซอร์ที่ตั้งค่าพอร์ตแล้วก่อนทดสอบ'; return; }
+  const group=activeWorkspace(),meter=group?.meters.find(item=>item.id===document.getElementById('power-test-device').value);
+  if (!meter || meter.path.startsWith('UNBOUND:')) return;
   const input = document.getElementById('power-test-address');
   if (!input.reportValidity()) return;
   button.disabled = true; result.textContent = 'กำลังอ่านค่าดิบจากมิเตอร์…';
   try {
     const options={address:Number(input.value),registerType:document.getElementById('power-test-function').value};
-    const data = meter ? check(await api.testPowerMeter(group.id,meter.id,options)) : check(await api.testPowerRegister(profile,{...options,slaveId:3}));
+    const data = check(await api.testPowerMeter(group.id,meter.id,options));
     const raw = data.raw.map(value => `0x${value.toString(16).toUpperCase().padStart(4,'0')}`).join(' ');
     const bytes = [data.raw[0] >> 8, data.raw[0] & 255, data.raw[1] >> 8, data.raw[1] & 255];
     const orders = {ABCD:[0,1,2,3],CDAB:[2,3,0,1],BADC:[1,0,3,2],DCBA:[3,2,1,0]};

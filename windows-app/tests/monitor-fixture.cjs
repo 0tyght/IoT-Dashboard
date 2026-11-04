@@ -9,6 +9,7 @@ async function seedMonitor(page) {
       slaveId: index, baudRate: 9600, parity: 'none', stopBits: 1, sensorModel: MODEL,
       registerType: 'holding', unit: 'mm/s', pollInterval: 1000, timeout: 1500
     }));
+    if(!activeWorkspace()) { measurementGroups=[{id:'TEST',name:'Test workspace',motorIds:profiles.map(item=>item.motorId),meters:[]}]; selectedMeasurementGroup='TEST'; renderGroupOptions(); }
     cache.clear();
     selected = profiles[0].motorId;
     mode = 'live';

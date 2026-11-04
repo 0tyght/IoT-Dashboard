@@ -6,6 +6,12 @@ The motor registry uses a deep navy surface and a violet selected row to anchor 
 
 The supplied white and violet vibration-dashboard reference (`codex-clipboard-1310d809-2def-4225-b2c6-a02d1c04b72f.png`) defines the visual world. Keep acquisition, recording, motor management, timestamps and history. The current monitoring workspace fits three vibration plots and all numerical channels in one viewport, with a quiet white registry and pale-violet selection. The user explicitly excludes the 3D model from this dashboard; it belongs to a separate lazily loaded 3D tab. Use direct Thai product language without slogans.
 
+## Acquisition workflow
+
+A workspace defines the devices that share a run. The command bar shows the selected workspace, reading mode and Start/Stop. The connection view guides the first missing setup step, from creating or selecting a workspace to adding a device and assigning its bus. A selected workspace with ready devices opens directly on its readings. The device registry supplies reusable profiles, and recorded data remains available independently in History and Analysis.
+
+Only configured meters appear in the electrical workspace. Show their model and bus before acquisition, measured or raw values during the run, and read-only diagnostics for a selected meter.
+
 ## Palette and surfaces
 
 - Workspace `#f7f8fb`; white panels and navigation; body text `#414657`, muted text `#6b7180`; thin dividers `#e5e7ef`.

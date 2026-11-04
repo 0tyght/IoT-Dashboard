@@ -10,7 +10,7 @@ function syncSidebarDrawer(focusInside = false) {
   for (const element of document.querySelectorAll('main, .commandbar, .recording-strip, .statusbar, .appbar-end')) element.inert = open;
   if (open) { sidebar.setAttribute('role', 'dialog'); sidebar.setAttribute('aria-modal', 'true'); sidebar.setAttribute('aria-labelledby', 'motor-registry-title'); }
   else { sidebar.removeAttribute('role'); sidebar.removeAttribute('aria-modal'); sidebar.removeAttribute('aria-labelledby'); }
-  if (open && focusInside) $('motor-search').focus();
+  if (open && focusInside) ($('motor-search').closest('label').hidden ? sidebar.querySelector('.sidebar-group-add:not(:disabled)') || $('close-sidebar') : $('motor-search')).focus();
   if (!open && shell.classList.contains('sidebar-collapsed') && sidebar.contains(document.activeElement)) $('toggle-sidebar').focus();
 }
 function closeSidebarDrawer(restoreFocus = false) {

@@ -25,7 +25,7 @@ const {dayKey}=require('../electron/data-store.cjs');
     const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.waitForLoadState('domcontentloaded');await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
     await page.waitForFunction(()=>innerWidth===1366&&innerHeight===768);
-    await page.locator('[data-tab="analysis"]').click();await page.waitForFunction(()=>document.querySelector('.history-range').dataset.loaded==='true'&&document.querySelector('#history-scatter-canvas').dataset.recordCount==='600');
+    await page.locator('[data-tab="analysis"]').click();await page.locator('#analysis-history-motor').selectOption(config.motorId);await page.waitForFunction(()=>document.querySelector('.history-range').dataset.loaded==='true'&&document.querySelector('#history-scatter-canvas').dataset.recordCount==='600');
     assert(await page.locator('#analysis-history').isVisible());assert(await page.locator('#analysis-waveform').isHidden());
     await page.locator(`#analysis-recorded-day option[value="${archivedDate}"]`).waitFor({state:'attached'});
     await page.locator('#analysis-recorded-day').selectOption(archivedDate);

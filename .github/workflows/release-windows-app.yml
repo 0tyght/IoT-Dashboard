@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Manage workspaces from the sidebar context menu. Monitoring and FFT use device readings, recorded data, or imported waveform files. Adds a read-only Schneider Electric PM2230 preset for current, voltage, power, and frequency. Verify Float32 order and communications against the connected meter."
+            --notes "Windows x64 release. Create or select a workspace, add devices, and connect their Modbus bus before starting acquisition. The active workspace defines all devices in the run. The connection map, sensor readings, and electrical view follow that selection. Existing device profiles remain available for assignment from the registry."

@@ -49,7 +49,10 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     rowsByDate.get(date).push(row);
   }
   fs.mkdirSync(path.join(temporary, 'data'));
-  fs.writeFileSync(path.join(temporary, 'motors.json'), JSON.stringify([profile], null, 2));
+  const store=new DataStore(temporary);
+  store.saveProfiles([profile]);
+  store.saveGroups([{id:'G1',name:'ปั๊มน้ำ',motorIds:[profile.motorId],meters:[]}]);
+  store.saveSelectedGroup('G1');
   for (const [date, rows] of rowsByDate) fs.writeFileSync(path.join(temporary, 'data', `readings-${date}.ndjson`), rows.map(row => JSON.stringify(row)).join('\n') + '\n');
 
   let app, page;

@@ -25,6 +25,8 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
   const other = [reading(0, 71, otherRun, randomUUID(), { motorId: 'MTR-02', port: 'COM988', slaveId: 2 }), reading(1, 72, otherRun, randomUUID(), { motorId: 'MTR-02', port: 'COM988', slaveId: 2 })];
   fs.writeFileSync(path.join(temporary, 'motors.json'), JSON.stringify([profile], null, 2));
   const store = new DataStore(temporary);
+  store.saveGroups([{id:'G1',name:'ปั๊มน้ำ',motorIds:[profile.motorId],meters:[]}]);
+  store.saveSelectedGroup('G1');
   for (const row of [legacy, ...older, ...newer, ...other]) await store.append(row);
 
   let app, page;

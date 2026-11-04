@@ -480,3 +480,5 @@ main:has(#history-view:not([hidden])) > .document-heading { display: none; }
   .surface-view-controls button { min-height: 40px; }
   .surface-view-controls button:first-child, .surface-view-controls button:nth-child(2) { min-width: 40px; }
 }
+
+#selected-area:empty, #selected-subtitle:empty { display:none; }

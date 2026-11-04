@@ -63,7 +63,7 @@ app.whenReady().then(() => {
   handle('groups:save', raw => {
     if(fleet.buses.length||busy) throw new Error('หยุดอ่านก่อนแก้ไขชุดการวัด');
     const incoming=normalizeGroups(raw), previous=store.loadGroups(), buses=store.loadBuses(),profiles=store.loadProfiles().map(item=>applyBus(item,buses));
-    for(const group of incoming) { const old=previous.find(item=>item.id===group.id); if(!old||JSON.stringify(old)!==JSON.stringify(group)) resolveGroup(applyGroupBuses(group,buses),profiles); }
+    for(const group of incoming) { const old=previous.find(item=>item.id===group.id); if(!old||JSON.stringify(old)!==JSON.stringify(group)) resolveGroup(applyGroupBuses(group,buses),profiles,{allowDisabled:true}); }
     return {ok:true,groups:store.saveGroups(incoming.map(group=>applyGroupBuses(group,buses)))};
   });
   handle('recording:configure', raw => {
@@ -88,17 +88,25 @@ app.whenReady().then(() => {
     resolveGroup(applyGroupBuses(group,store.loadBuses()),store.loadProfiles().map(item=>applyBus(item,store.loadBuses())),{allowDisabled:true});
     return fleet.testPower({...applyBus(meter,store.loadBuses()),motorId:meter.id,sensorModel:'custom',byteOrder:'ABCD',registerAddress:3017,dataType:'float32',scale:1,unit:'V'},{address:options?.address,slaveId:meter.slaveId,registerType:options?.registerType||meter.registerType,meterConfig:true});
   }));
-  handle('power:test-register', (config, options) => exclusive(() => {
-    const port = String(config?.path || '').toUpperCase(), slaveId = options?.slaveId ?? 3;
-    return fleet.testPower(applyBus(config,store.loadBuses()), options);
+  handle('sensor:connect', (_profiles, groupId) => exclusive(async () => {
+    if (fleet.buses.length) throw new Error('หยุดรอบปัจจุบันก่อนเริ่มอ่านใหม่');
+    if (!groupId) throw new Error('ยังไม่ได้เลือกพื้นที่งาน');
+    const group = store.loadGroups().find(item => item.id === groupId);
+    if (!group) throw new Error('ไม่พบพื้นที่งานที่เลือก');
+    const buses = store.loadBuses();
+    const selection = resolveGroup(applyGroupBuses(group, buses), store.loadProfiles().map(item => applyBus(item, buses)), {allowDisabled:true});
+    activeGroup = group;
+    try {
+      const result = await fleet.connect(selection.motors,selection.meters);
+      recording.connect(group);
+      return { ...result, readings: await Promise.all(result.readings.map(record)), powerReadings:await Promise.all(result.powerReadings.map(recordPower)), recording: recording.snapshot() };
+    } catch (error) {
+      recording.disconnect();
+      await fleet.disconnect();
+      activeGroup=null;
+      throw error;
+    }
   }));
-  handle('sensor:connect', (raw,groupId) => exclusive(async () => {
-    const buses=store.loadBuses();let selection={motors:raw.map(item=>applyBus(item,buses)),meters:[]}; activeGroup=null;
-    if(groupId) { const group=store.loadGroups().find(item=>item.id===groupId); if(!group)throw new Error('ไม่พบชุดการวัด'); selection=resolveGroup(applyGroupBuses(group,buses),store.loadProfiles().map(item=>applyBus(item,buses))); activeGroup=group; }
-    const result = await fleet.connect(selection.motors,selection.meters);
-    recording.connect(activeGroup);
-    return { ...result, readings: await Promise.all(result.readings.map(record)), powerReadings:await Promise.all(result.powerReadings.map(recordPower)), recording: recording.snapshot() };
-  }).catch(async error => { recording.disconnect(); await fleet.disconnect(); activeGroup=null; throw error; }));
   handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; activeGroup=null; return { ok: true, recording: recording.snapshot() }; }));
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
   handle('data:recorded-days', async () => ({ ok: true, days: await store.recordedDays() }));

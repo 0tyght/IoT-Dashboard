@@ -6,7 +6,7 @@ function syncAnalysisHistoryControls() {
   for (const [source,target] of [['history-motor','analysis-history-motor'],['history-run','analysis-history-run']]) {
     const origin=$(source),mirror=$(target);if(!origin||!mirror)continue;
     mirror.replaceChildren(...[...origin.options].map(option=>option.cloneNode(true)));mirror.value=origin.value;
-    if(target==='analysis-history-motor'&&mirror.options[0])mirror.options[0].textContent='เลือกมอเตอร์';
+    if(target==='analysis-history-motor'&&mirror.options[0])mirror.options[0].textContent='เลือกอุปกรณ์';
   }
   if($('analysis-history-open-folder'))$('analysis-history-open-folder').disabled=!hasRunFolder($('history-run')?.value);
   if($('load-range')&&document.querySelector('.history-range')?.dataset.loaded!=='loading')$('load-range').disabled=!$('history-motor')?.value;
@@ -47,7 +47,7 @@ function setupAnalysisWorkspace() {
   range.querySelector('.panel-heading p').textContent='จุดกระจายแสดงความสัมพันธ์ X/Y/Z ของค่ารวม · ไม่ใช่คลื่นดิบหรือสเปกตรัม FFT';
   const controls=range.querySelector('.history-range-controls');
   const dayWrap=node('label','วันที่มีข้อมูล'),daySelect=node('select');daySelect.id='analysis-recorded-day';daySelect.setAttribute('aria-label','เลือกวันที่บันทึกไว้');daySelect.add(new Option('กำลังโหลดรายการ…',''));daySelect.disabled=true;daySelect.onchange=()=>void selectRecordedDay(daySelect.value);dayWrap.append(daySelect);controls.prepend(dayWrap);
-  for(const [id,label,original]of[['analysis-history-run','รอบอ่าน','history-run'],['analysis-history-motor','มอเตอร์','history-motor']]){
+  for(const [id,label,original]of[['analysis-history-run','รอบอ่าน','history-run'],['analysis-history-motor','อุปกรณ์','history-motor']]){
     const wrap=node('label',label),select=node('select');select.id=id;select.setAttribute('aria-label',label);wrap.append(select);controls.prepend(wrap);
     select.onchange=()=>{$(original).value=select.value;$(original).dispatchEvent(new Event('change'));};
   }

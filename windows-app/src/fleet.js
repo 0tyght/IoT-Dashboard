@@ -19,7 +19,7 @@ function fleetStatus(profile, state) {
 function graphWindow(frames, width = 600) { return Measurements.windowFrames(frames, $('fleet-window').value, $('graph-count').value, width); }
 function buildFleet() {
   fleetVisibility.disconnect(); fleetCards.forEach(refs => refs.resizeObserver?.disconnect()); fleetCards.clear(); $('fleet-list').replaceChildren();
-  for (const profile of profiles) {
+  for (const profile of workspaceProfiles()) {
     const card = node('article', null, 'fleet-card fleet-nine'); card.dataset.fleetId = profile.motorId;
     const header = node('header', null, 'fleet-card-header'), identity = node('div', null, 'fleet-identity');
     identity.append(node('h2', profile.name || profile.motorId), node('span', `${profile.motorId} · ${profile.area || 'ไม่ระบุพื้นที่'}`));
@@ -31,7 +31,7 @@ function buildFleet() {
     actions.append(details, edit, toggle, remove); header.append(identity, actions);
     const body = node('div', null, 'fleet-card-body'), readings = node('div', null, 'fleet-readings');
     const connection = node('div', null, 'fleet-connection idle'), connectionText = node('strong', 'หยุดอ่าน');
-    connection.append(node('i', null, 'dot'), connectionText, node('small', `${profile.path} / Slave ${profile.slaveId}`));
+    connection.append(node('i', null, 'dot'), connectionText, node('small', `${portLabel(profile.path)} · ID ${profile.slaveId}`));
     const lastTile = node('div', null, 'fleet-last'), age = node('strong', '—'), lastTime = node('small', 'ยังไม่ได้รับข้อมูล');
     lastTile.append(node('small', 'รับล่าสุด'), age, lastTime);
     const valueGrid = node('div', null, 'fleet-measurements'), values = [];
@@ -67,8 +67,9 @@ function buildFleet() {
   refreshFleet();
 }
 function refreshFleet() {
+  const members=workspaceProfiles();
   const query = $('motor-search').value.trim().toLowerCase(), filter = $('fleet-filter').value; let online = 0, faults = 0, visible = 0;
-  for (const profile of profiles) {
+  for (const profile of workspaceProfiles()) {
     const refs = fleetCards.get(profile.motorId); if (!refs) continue;
     const state = stateFor(profile.motorId), last = state.frames.at(-1), status = fleetStatus(profile, state);
     if (status.kind === 'online') online++; if (status.kind === 'fault') faults++;
@@ -94,7 +95,7 @@ function refreshFleet() {
     const key = `${last?.timestamp}|${$('fleet-window').value}|${$('graph-count').value}|${status.kind}`;
     if (currentTab === 'fleet' && refs.inViewport && !refs.card.hidden && refs.lastKey !== key) { refs.lastKey = key; refs.redraw(); }
   }
-  $('fleet-total').textContent = profiles.length; $('fleet-online').textContent = online; $('fleet-fault').textContent = faults; $('fleet-disabled').textContent = profiles.filter(profile => profile.enabled === false).length;
-  $('fleet-empty').hidden = profiles.length > 0; $('fleet-no-matches').hidden = !profiles.length || visible > 0;
+  $('fleet-total').textContent = members.length; $('fleet-online').textContent = online; $('fleet-fault').textContent = faults; $('fleet-disabled').textContent = members.filter(profile => profile.enabled === false).length;
+  $('fleet-empty').hidden = members.length > 0; $('fleet-no-matches').hidden = !members.length || visible > 0;
   refreshFlowStatus();
 }
