@@ -366,7 +366,7 @@ async function saveMotor(event) {
     }
     flowAddingSensorGroup='';
     $('connection-dialog').close(); renderProfiles(); if (!$('history-motor').value || $('history-motor').value === previous?.motorId) setHistoryMotor(selected); renderSelected(); void restoreSavedMotorHistory(selected); addLog('info', raw.motorId, 'บันทึกการตั้งค่าเซ็นเซอร์'); toast(groupWarning || 'บันทึกแล้ว กดเริ่มอ่านเพื่อทดสอบและเก็บข้อมูล');
-  } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; }
+  } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; $('form-error').scrollIntoView({block:'nearest',behavior:'instant'}); }
   finally { setDialogBusy(false); }
 }
 async function testMotor() {

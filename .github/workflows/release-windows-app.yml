@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Fixes stale custom point history, adds paginated history and midnight-safe per-point daily files, improves cancellation and communication timeout handling, isolates workspace address validation, and warns about workspace meter configuration deletion. Phase-current rows require a confirmed address and float order from the exact meter manual. Test actual wiring, register offsets and byte order before use."
+            --notes "Windows x64 release. Register settings reflow without horizontal scrolling on desktop and tablet-sized windows. Fixes reopening saved multi-register devices and preserves independent polling interval and timeout for shared-bus power meters. Actual device register offsets, wiring and byte order must be verified against the physical hardware."

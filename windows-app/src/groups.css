@@ -43,3 +43,41 @@
 .meter-extra-points .points-table th:nth-child(10),.meter-extra-points .points-table td:nth-child(10){display:none}
 
 .point-history-pagination{display:flex;gap:8px;margin:8px 0}.point-history-pagination button{min-height:32px}
+/* Register settings fit their container; each labelled row keeps all fields visible. */
+#connection-dialog{width:min(1120px,calc(100vw - 38px))}
+#groups-dialog:has(.meter-extra-points[open]){width:min(1080px,calc(100vw - 32px))}
+.points-scroll,.custom-points-editor .points-scroll,.meter-extra-points .points-scroll{container-type:inline-size;overflow-x:clip;max-width:100%}
+.points-table{display:block;width:100%;min-width:0;border-collapse:separate}
+.points-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.points-table tbody{display:grid;gap:10px}
+.points-table tbody tr{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px 7px;padding:10px;border:1px solid #dfe3ef;border-radius:7px;background:#fafbfe}
+.points-table th:nth-child(1),.points-table td:nth-child(1),.points-table th:nth-child(2),.points-table td:nth-child(2){position:static;left:auto;z-index:auto;box-shadow:none;background:transparent}
+.points-table td{display:flex;flex-direction:column;gap:4px;min-width:0;padding:0;border:0;color:#48536b}
+.points-table td::before{content:attr(data-label);font-size:11px;font-weight:600;line-height:1.25;min-height:14px;overflow-wrap:anywhere}
+.points-table td:nth-child(2){grid-column:span 2}
+.points-table td:last-child{grid-column:span 2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
+.points-table td:last-child::before{grid-column:1/-1}
+.points-table input:not([type=checkbox]),.points-table select,.points-table .point-name{width:100%;min-width:0;min-height:32px;padding:5px 4px;font-size:12px}
+.points-table input[type=checkbox]{width:17px;height:17px;min-height:17px;margin:7px 0 0 2px;accent-color:#6252e9}
+.points-table button{width:100%;min-width:0;min-height:32px;padding:4px;font-size:12px}
+.points-table .point-remove{color:#9b4248}
+.points-table tbody tr:focus-within{border-color:#a99ef0;background:#f7f6ff}
+.meter-extra-points .points-table td:nth-child(10){display:none}
+@container (max-width:700px){.points-table tbody tr{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@container (max-width:480px){.points-table tbody tr{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@container (max-width:300px){.points-table tbody tr{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#registers-view .data-table{table-layout:fixed;min-width:0}
+#registers-view .data-table th,#registers-view .data-table td{white-space:normal;overflow-wrap:anywhere;padding:10px 8px}
+#registers-view .table-scroll{overflow-x:clip}
+@media(max-width:900px){#connection-dialog .dialog-content{grid-template-columns:170px minmax(0,1fr)}#connection-dialog .settings-pane{padding:14px}}
+@media(max-width:760px){#connection-dialog .dialog-content{grid-template-columns:1fr}#connection-dialog .device-pane{border-right:0;border-bottom:1px solid #e2e5ef;padding:12px}#connection-dialog .wiring-note{display:none!important}}
+#connection-dialog{overflow:hidden}
+#sensor-form{display:flex;flex-direction:column;max-height:calc(100dvh - 38px)}
+#connection-dialog .dialog-header,#connection-dialog .dialog-footer{flex:none}
+#connection-dialog .dialog-content{min-height:0;flex:1;max-height:none}
+#groups-dialog .dialog-header{position:sticky;top:0;z-index:5;background:#fff}
+#groups-editor > .groups-actions:last-child{position:sticky;bottom:0;z-index:4;margin:12px -20px -16px;padding:12px 20px;background:#fff;border-top:1px solid #e2e5ef;box-shadow:0 -4px 12px #2634510c}
+@media(max-width:600px){#groups-editor > .groups-actions:last-child{margin-inline:-12px;padding-inline:12px}}
+.meter-timing{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:10px;background:#fff;border:1px solid #e2e5ef;border-radius:6px}
+.points-table .point-row-status{grid-column:1/-1;color:#4e5870;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.points-table .point-row-status:empty{display:none}
