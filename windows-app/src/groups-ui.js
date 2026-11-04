@@ -116,14 +116,14 @@ function setupGroupsUI() {
     renderPreset();
     $g('groups-meters').append(box);
   }
-  const focusMeter=box=>{dialog.classList.add('meter-focus');$g('groups-meter-settings').open=true;$g('groups-title').textContent='ตั้งค่า Power Meter';dialog.querySelector('.dialog-header p').textContent='ตั้งค่าอุปกรณ์และจุดวัด · การสื่อสารร่วมแก้ไขที่โหนดบัส';$g('groups-save').textContent='บันทึกมิเตอร์';for(const other of $g('groups-meters').children)other.hidden=other!==box;};
+  const focusMeter=(box,title='ตั้งค่า Power Meter')=>{dialog.classList.add('meter-focus');$g('groups-meter-settings').open=true;$g('groups-title').textContent=title;dialog.querySelector('.dialog-header p').textContent='ตั้งค่าอุปกรณ์และจุดวัด · การสื่อสารร่วมแก้ไขที่โหนดบัส';$g('groups-save').textContent='บันทึกมิเตอร์';for(const other of $g('groups-meters').children)other.hidden=other!==box;};
   openFlowNewMeter = (model = 'pm2230') => {
     if (busy) return;
     if (mode !== 'offline') return stopBeforeChange(() => openFlowNewMeter(model));
     const group=activeWorkspace();
     if (!group) return showWorkspacePicker();
     quick.onclick(); returnToFlowAfterMeter=true;openEditor(group);addMeterEditor({model});
-    const box=$g('groups-meters').lastElementChild;if(group)focusMeter(box); box.scrollIntoView({block:'center'});box.querySelector('.meter-id').focus();
+    const box=$g('groups-meters').lastElementChild;focusMeter(box,'เพิ่ม Power Meter'); box.scrollIntoView({block:'center'});box.querySelector('.meter-id').focus();
   };
   openFlowMeterEditor = (meterId) => {
     if (busy) return;

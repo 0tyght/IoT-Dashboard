@@ -45,6 +45,10 @@ const diagnostic = document.createElement('details');
 diagnostic.className = 'power-diagnostic';
 diagnostic.innerHTML = `<summary>อ่าน Register จากมิเตอร์</summary><p>หยุดรอบอ่านก่อน · อ่าน 2 Register โดยไม่เปลี่ยนค่ามิเตอร์</p><label>Power Meter<select id="power-test-device"></select></label><label>Address ที่ส่งในคำสั่ง<input id="power-test-address" type="number" min="0" max="65534" step="1" value="3019"></label><label>Function<select id="power-test-function"><option value="holding">FC03 · Holding</option><option value="input">FC04 · Input</option></select></label><button id="power-test-button" type="button">อ่านค่าดิบ</button><p id="power-test-result" role="status" aria-live="polite">เทียบค่าที่อ่านกับหน้ามิเตอร์</p>`;
 document.querySelector('.power-setup').prepend(diagnostic);
+function selectedPowerMeter() {
+  const id = document.getElementById('power-test-device').value;
+  return activeWorkspace()?.meters.find(meter => meter.id === id);
+}
 function refreshPowerDiagnostic() {
   const group=activeWorkspace(),meters=group?.meters||[];
   const select=document.getElementById('power-test-device'),previous=select.value;
@@ -64,7 +68,8 @@ function refreshPowerDiagnostic() {
   select.replaceChildren(...meters.map(meter=>new Option(`${meter.name||meter.id} · ${PowerRegisters.label(meter.model)}`,meter.id)));
   if (meters.some(meter=>meter.id===previous)) select.value=previous;
   const syncSelection=()=>{
-    const meter=meters.find(item=>item.id===select.value), key=meter?`${group.id}:${meter.id}:${meter.model}:${meter.offsetAdjust}:${meter.registerType}`:'';
+    const meter=selectedPowerMeter(), key=meter?`${group.id}:${meter.id}:${meter.model}:${meter.offsetAdjust}:${meter.registerType}`:'';
+    updateDeviceSettingsControl();
     document.getElementById('power-test-button').disabled=!meter || meter.path.startsWith('UNBOUND:');
     if(key===powerDiagnosticKey)return;
     powerDiagnosticKey=key;
@@ -78,7 +83,7 @@ function refreshPowerDiagnostic() {
 diagnostic.querySelector('#power-test-button').addEventListener('click', async event => {
   const result = document.getElementById('power-test-result'), button = event.currentTarget;
   if (mode !== 'offline' || busy) { result.textContent = 'หยุดการอ่านและรอให้โปรแกรมพร้อมก่อนทดสอบ'; return; }
-  const group=activeWorkspace(),meter=group?.meters.find(item=>item.id===document.getElementById('power-test-device').value);
+  const group=activeWorkspace(),meter=selectedPowerMeter();
   if (!meter || meter.path.startsWith('UNBOUND:')) return;
   const input = document.getElementById('power-test-address');
   if (!input.reportValidity()) return;

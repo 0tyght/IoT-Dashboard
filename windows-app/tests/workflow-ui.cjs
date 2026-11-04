@@ -12,6 +12,16 @@ const {DataStore}=require('../electron/data-store.cjs');
     assert(await page.locator('#power-view').isVisible(),'meter-only selected group opens its power readings');
     assert.equal(await page.locator('.power-meter-entry strong').textContent(),'มิเตอร์ 4');
     assert((await page.locator('.power-meter-entry span').textContent()).includes('ID 4'));
+    const edit=page.getByRole('button',{name:'ตั้งค่ามิเตอร์',exact:true});
+    await edit.click();
+    const meter=page.locator('.groups-meter:visible');
+    assert.equal(await meter.locator('.meter-id').inputValue(),'PM4');
+    await meter.locator('.meter-model').selectOption('pm2230');
+    assert.equal(await meter.locator('.meter-slave').inputValue(),'4');
+    await page.locator('#groups-save').click();
+    await page.locator('#groups-dialog').waitFor({state:'hidden'});
+    assert.equal(store.loadGroups()[0].meters[0].model,'pm2230');
+
     await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('power:test-meter');ipcMain.handle('power:test-meter',(_event,groupId,meterId,options)=>{globalThis.testMeterArgs={groupId,meterId,options};return {ok:true,path:'COM8',slaveId:4,address:options.address,raw:[0x42c8,0]};});});
     await page.locator('.power-diagnostic summary').click();await page.locator('#power-test-button').click();await page.locator('#power-test-result').filter({hasText:'Slave 4'}).waitFor();
     assert.deepEqual(await app.evaluate(()=>globalThis.testMeterArgs),{groupId:'G1',meterId:'PM4',options:{address:3019,registerType:'holding'}});

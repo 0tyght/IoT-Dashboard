@@ -188,3 +188,6 @@ dialog.settings-drawer :is(.preset-note, .test-result:not(.success, .error)) { b
     to { opacity: 1; transform: translateX(0); }
   }
 }
+
+.device-model-field { display: grid; align-content: start; min-width: 0; gap: 3px; }
+.device-model-field button { justify-self: start; padding-inline: 0; color: var(--blue-dark); font-size: 12px; white-space: normal; text-align: left; }

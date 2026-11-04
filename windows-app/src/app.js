@@ -37,6 +37,17 @@ function renderLogs() {
   }
 }
 function setBusy(value) { busy = value; updateControls(); }
+function meterForSettings() {
+  return currentTab === 'power' || !currentProfile() ? selectedPowerMeter() : undefined;
+}
+function updateDeviceSettingsControl(locked = busy || recordActionBusy) {
+  const meter = meterForSettings(), profile = currentTab === 'power' ? undefined : currentProfile(), button = $('edit-motor');
+  const label = meter ? 'ตั้งค่ามิเตอร์' : 'ตั้งค่าอุปกรณ์';
+  if (button.textContent !== label) controlLabel(button, label, 'settings');
+  button.hidden = !meter && !profile;
+  button.disabled = locked || button.hidden || dataError;
+  button.title = meter ? `ตั้งค่า ${meter.name || meter.id}` : profile ? `ตั้งค่า ${profile.name || profile.motorId}` : '';
+}
 function updateControls() {
   const locked = busy || recordActionBusy, running = mode !== 'offline';
   const readiness=workspaceReadiness();
@@ -45,8 +56,7 @@ function updateControls() {
   $('disconnect').disabled = locked || !running;
   for (const id of ['new-motor', 'fleet-empty-add']) $(id).disabled = locked || dataError;
   $('import-profiles').disabled = locked || running || dataError;
-  $('edit-motor').hidden = !currentProfile();
-  $('edit-motor').disabled = locked || !currentProfile() || dataError;
+  updateDeviceSettingsControl(locked);
   $('new-motor').hidden = !activeWorkspace();
   document.querySelector('.command-group .separator').hidden = !activeWorkspace();
   updateGroupsControls(locked || running);
@@ -60,6 +70,7 @@ function updateControls() {
 }
 function setTab(tab) {
   currentTab = tab;
+  updateDeviceSettingsControl();
   $('graph-tools').hidden = !((tab === 'monitor' && currentProfile()) || (tab === 'fleet' && fleetViewMode === 'list'));
   if (tab === 'fleet') renderFlow();
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
@@ -354,10 +365,14 @@ async function openEditor(profile, preferredPath = null) {
   editorBaseline = JSON.stringify(configFromForm());
   $('connection-dialog').showModal(); await scanPorts();
 }
-function closeEditor() {
+function closeEditor(afterClose) {
   if (form.elements.motorId.disabled) return;
-  if (JSON.stringify(configFromForm()) === editorBaseline) $('connection-dialog').close();
-  else confirmAction('ละทิ้งการแก้ไข?', 'ข้อมูลที่แก้ในหน้าต่างนี้ยังไม่ได้บันทึก', async () => $('connection-dialog').close());
+  const finish = () => {
+    $('connection-dialog').close();
+    afterClose?.();
+  };
+  if (JSON.stringify(configFromForm()) === editorBaseline) finish();
+  else confirmAction('ละทิ้งการแก้ไข?', 'ข้อมูลที่แก้ในหน้าต่างนี้ยังไม่ได้บันทึก', finish);
 }
 function setDialogBusy(value) { form.querySelectorAll('input,select,textarea,button').forEach(element => { element.disabled = value; }); }
 async function saveMotor(event) {
@@ -500,9 +515,14 @@ $('fleet-empty-add').onclick = () => openFlowAddDevice();
 $('fleet-window').onchange = updateGraphWindow;
 $('fleet-filter').onchange = refreshFleet;
 $('fleet-reset-filters').onclick = () => { $('motor-search').value = ''; $('fleet-filter').value = 'all'; renderMotorList(); };
-$('edit-motor').onclick = () => openEditor(currentProfile());
+$('edit-motor').onclick = () => {
+  const meter = meterForSettings();
+  if (meter) openFlowMeterEditor(meter.id);
+  else if (currentTab !== 'power' && currentProfile()) openEditor(currentProfile());
+};
 $('welcome-setup').onclick = () => currentProfile() ? openEditor(currentProfile()) : activeWorkspace()?setTab('fleet'):showWorkspacePicker();
-$('close-connection').onclick = closeEditor;
+$('close-connection').onclick = () => closeEditor();
+$('add-pm2230').onclick = () => closeEditor(() => openFlowNewMeter('pm2230'));
 $('refresh-ports').onclick = scanPorts;
 form.onsubmit = saveMotor;
 form.oninput = resetTest;

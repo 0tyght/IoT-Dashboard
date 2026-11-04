@@ -110,7 +110,7 @@ function openFlowAddDevice(){
   const body=node('div',null,'flow-dialog-body flow-device-choices');body.append(node('p','เลือกแบบตั้งต้นตามอุปกรณ์ หรือกำหนด Register เอง แล้วเชื่อมอุปกรณ์เข้ากับบัสในแผนผัง'));
   const choose=(title,description,action)=>{const button=node('button',null,'flow-choice');button.type='button';button.append(node('strong',title),node('span',description));button.onclick=action;body.append(button);};
   choose('VemSee SN-3001-WZ3A-N01','เซ็นเซอร์ความสั่น 3 แกน · ใช้ Register จากคู่มือ',async()=>{dialog.close();flowAddingSensorGroup=selectedMeasurementGroup;await openEditor(undefined,'__UNBOUND__');});
-  choose('Schneider PM2230','Power Meter · กระแส แรงดัน กำลังไฟฟ้า และความถี่ไฟฟ้า',()=>{dialog.close();openFlowNewMeter('pm2230');});
+  choose('Schneider Electric PM2230','Power Meter · กระแส แรงดัน กำลังไฟฟ้า และความถี่ไฟฟ้า',()=>{dialog.close();openFlowNewMeter('pm2230');});
   choose('Schneider PM2200','Power Meter · ผังแรงดันและกระแสไม่สมดุลเดิม',()=>{dialog.close();openFlowNewMeter('pm2200');});
   choose('กำหนดอุปกรณ์เอง','อุปกรณ์ Modbus รุ่นอื่น · เพิ่มจุดวัดและ Register เอง',async()=>{dialog.close();flowAddingSensorGroup=selectedMeasurementGroup;await openEditor(undefined,'__UNBOUND__');form.elements.sensorModel.value='custom';$('points-enabled').checked=true;if(!$('points-body').children.length)addPointRow({});presetVisibility();editorBaseline=JSON.stringify(configFromForm());});
   dialog.append(body);dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();
