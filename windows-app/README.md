@@ -43,9 +43,9 @@ The x64 installer and portable executable are created in `release/`. Git tags ma
 
 ## First use
 
-1. Connect sensor power and RS485 A/B according to its manual.
-2. Add a motor; select COM port, sensor profile, Slave ID and the actual serial settings.
-3. Test the motor, then save the profile. Use a different Slave ID for every sensor sharing one physical bus.
+1. Connect each device's power and RS485 A/B according to its manual.
+2. Create a workspace for the devices to read together. In the connection diagram, **เพิ่มอุปกรณ์** opens one menu for saved devices and new VemSee, Schneider PM2230/PM2200, or custom-register devices. Selecting a saved sensor or meter adds it to the current workspace. A meter copied from another workspace keeps its register/serial setup; its related sensor is cleared when that sensor is absent from the destination workspace.
+3. Open each device node to configure its COM port, Slave ID, register map and actual serial settings, then test the connection. Devices on one RS485 bus need distinct Slave IDs. The saved-device list shows both sensors and meters; meter configurations remain scoped to their workspace, while sensor profiles are reusable across workspaces. Sensor-only backup/import buttons say so explicitly.
 4. Press **เริ่มอ่านและบันทึก** once. Every enabled motor is verified, then the application acquires and saves incoming readings automatically. Pre-start verification readings are labelled and not backfilled into the recording.
 5. Press **หยุดอ่านและบันทึก** to finish and wait for pending writes. To use another workflow, choose **โหมด** while stopped: monitor-only or a future recording schedule, with an optional duration (0 means until stopped). More contains recording-only stop and immediate recording start while monitoring continues.
 6. The requested polling period is configurable per motor from 250 ms to one hour in connection settings. It targets start-to-start request timing; shared bus work and response time can make actual reception slower. Overview and details show the measured receive period separately.

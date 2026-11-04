@@ -45,11 +45,6 @@ function renderFlow(){
     button.id='flow-workspace-action';
     button.onclick=group?openFlowAddDevice:newWorkspace?createWorkspace:showWorkspacePicker;
     empty.append(node('h2',heading),node('p',detail),button);
-    if (group && profiles.some(profile=>!group.motorIds.includes(profile.motorId))) {
-      const reuse=node('button','เลือกจากทะเบียน');
-      reuse.onclick=()=>{showWorkspacePicker();$('groups-edit').click();};
-      empty.append(reuse);
-    }
     panel.append(empty); return;
   }
   const head=node('div',null,'flow-header'),title=node('div');
@@ -104,11 +99,62 @@ function openFlowBus(bus){
 }
 
 function openFlowAddDevice(){
-  if(busy)return;if(mode!=='offline')return stopBeforeChange(openFlowAddDevice);
-  if(!activeWorkspace())return measurementGroups.length?showWorkspacePicker():createWorkspace();
-  const dialog=node('dialog',null,'flow-dialog');const header=node('div',null,'dialog-header');header.append(node('h2','เพิ่มอุปกรณ์'));const close=node('button','ปิด');close.onclick=()=>dialog.close();header.append(close);dialog.append(header);
-  const body=node('div',null,'flow-dialog-body flow-device-choices');body.append(node('p','เลือกแบบตั้งต้นตามอุปกรณ์ หรือกำหนด Register เอง แล้วเชื่อมอุปกรณ์เข้ากับบัสในแผนผัง'));
-  const choose=(title,description,action)=>{const button=node('button',null,'flow-choice');button.type='button';button.append(node('strong',title),node('span',description));button.onclick=action;body.append(button);};
+  if (busy) return;
+  if (mode !== 'offline') return stopBeforeChange(openFlowAddDevice);
+  const group = activeWorkspace();
+  if (!group) return measurementGroups.length ? showWorkspacePicker() : createWorkspace();
+
+  const dialog = node('dialog', null, 'flow-dialog');
+  const header = node('div', null, 'dialog-header');
+  header.append(node('h2', 'เพิ่มอุปกรณ์ในพื้นที่งาน'));
+  const close = node('button', 'ปิด');
+  close.onclick = () => dialog.close();
+  header.append(close);
+  dialog.append(header);
+
+  const body = node('div', null, 'flow-dialog-body flow-device-choices');
+  const error = node('p', null, 'message error');
+  error.setAttribute('role', 'alert');
+  error.hidden = true;
+  body.append(error, node('p', 'เลือกการตั้งค่าที่บันทึกไว้ หรือเพิ่มอุปกรณ์ใหม่ตามรุ่นเพื่อใช้ผัง Register ที่ตรงกัน'));
+  const choose = (title, description, action) => {
+    const button = node('button', null, 'flow-choice');
+    button.type = 'button';
+    button.append(node('strong', title), node('span', description));
+    button.onclick = action;
+    body.append(button);
+  };
+  const reuse = async (device, sourceGroup) => {
+    try {
+      const ownerInWorkspace = group.motorIds.some(id => id.toUpperCase() === device.motorId?.toUpperCase());
+      const copiedMeter = sourceGroup && !ownerInWorkspace ? {...device, motorId: ''} : device;
+      const proposed = measurementGroups.map(item => item.id !== group.id ? item : sourceGroup
+        ? {...item, meters: [...item.meters, copiedMeter]}
+        : {...item, motorIds: [...item.motorIds, device.motorId]});
+      measurementGroups = check(await api.saveGroups(proposed)).groups;
+      if (sourceGroup) selectedMeterId = device.id;
+      else { selected = device.motorId; selectedMeterId = ''; }
+      renderGroupOptions();
+      renderProfiles();
+      renderSelected();
+      updateControls();
+      dialog.close();
+      toast(`เพิ่ม ${device.name || device.motorId || device.id} ใน ${group.name} แล้ว${sourceGroup && device.motorId && !ownerInWorkspace ? ' · เลือกอุปกรณ์ที่เกี่ยวข้องใหม่ในโหนดมิเตอร์' : ''}`);
+    } catch (reason) {
+      error.textContent = `เพิ่มอุปกรณ์ไม่ได้: ${reason.message}`;
+      error.hidden = false;
+    }
+  };
+  const sensors = profiles.filter(profile => !group.motorIds.some(id => id.toUpperCase() === profile.motorId.toUpperCase()));
+  const meters = measurementGroups.filter(item => item.id !== group.id).flatMap(item =>
+    item.meters.filter(meter => !group.meters.some(existing => existing.id.toUpperCase() === meter.id.toUpperCase()))
+      .map(meter => ({meter, group: item})));
+  if (sensors.length || meters.length) {
+    body.append(node('h3', 'ใช้การตั้งค่าที่บันทึกไว้'));
+    for (const profile of sensors) choose(profile.name || profile.motorId, `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee' : 'กำหนด Register เอง'} · ${portLabel(profile.path)}`, () => reuse(profile));
+    for (const item of meters) choose(item.meter.name || item.meter.id, `${item.meter.id} · ${PowerRegisters.label(item.meter.model)} · จาก ${item.group.name}`, () => reuse(item.meter, item.group));
+  }
+  body.append(node('h3', 'ตั้งค่าอุปกรณ์ใหม่'));
   choose('VemSee SN-3001-WZ3A-N01','เซ็นเซอร์ความสั่น 3 แกน · ใช้ Register จากคู่มือ',async()=>{dialog.close();flowAddingSensorGroup=selectedMeasurementGroup;await openEditor(undefined,'__UNBOUND__');});
   choose('Schneider Electric PM2230','Power Meter · กระแส แรงดัน กำลังไฟฟ้า และความถี่ไฟฟ้า',()=>{dialog.close();openFlowNewMeter('pm2230');});
   choose('Schneider PM2200','Power Meter · ผังแรงดันและกระแสไม่สมดุลเดิม',()=>{dialog.close();openFlowNewMeter('pm2200');});

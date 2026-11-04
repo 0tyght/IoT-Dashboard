@@ -26,7 +26,7 @@ function setupControls() {
     'load-history': ['โหลดข้อมูล', 'refresh'], 'export-csv': ['ส่งออก CSV', 'download']
   };
   for (const [id, [label, icon]] of Object.entries(labels)) controlLabel(document.getElementById(id), label, icon);
-  for (const [key,description] of Object.entries({fleet:'แผนผัง ชุดอุปกรณ์ และการเชื่อมต่ออุปกรณ์',monitor:'ค่าที่อ่านจากอุปกรณ์ที่เลือก',history:'ค้นหาและส่งออกข้อมูลที่บันทึก',analysis:'วิเคราะห์ข้อมูลย้อนหลังหรือคลื่นดิบ',model:'โมเดล 3D',registers:'ค่าดิบจาก Register',motors:'จัดการเซ็นเซอร์ในทะเบียน',events:'เหตุการณ์ระหว่างทำงาน'})){const tab=document.querySelector(`[data-tab="${key}"]`);if(tab)tab.title=description;}
+  for (const [key,description] of Object.entries({fleet:'แผนผัง ชุดอุปกรณ์ และการเชื่อมต่ออุปกรณ์',monitor:'ค่าที่อ่านจากอุปกรณ์ที่เลือก',history:'ค้นหาและส่งออกข้อมูลที่บันทึก',analysis:'วิเคราะห์ข้อมูลย้อนหลังหรือคลื่นดิบ',model:'โมเดล 3D',registers:'ค่าดิบจาก Register',motors:'รายการเซ็นเซอร์และมิเตอร์ที่บันทึกไว้',events:'เหตุการณ์ระหว่างทำงาน'})){const tab=document.querySelector(`[data-tab="${key}"]`);if(tab)tab.title=description;}
   const navLabels = {
     fleet:'เชื่อมต่อ', monitor:'ค่าที่อ่าน', history:'ประวัติ', analysis:'วิเคราะห์',
     model:'โมเดล 3D', registers:'Register', motors:'ทะเบียน', events:'เหตุการณ์'

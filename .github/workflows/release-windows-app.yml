@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Modbus RTU requests on each COM port share a queue and observe the required silent interval between frames. Multiple sensors and meters continue to use individual Slave IDs and receive timestamps."
+            --notes "Windows x64 release. Add Device now offers saved sensors and power meters alongside new device presets in one menu. The saved-device list shows both kinds; selecting a saved meter for another workspace carries its register settings and clears an unavailable sensor association. Modbus RTU requests on each COM port continue to share a queue."

@@ -189,7 +189,20 @@ function renderProfiles() {
     group.append(edit, enabled, remove); actions.append(group);
     row.append(title, node('td', profile.area || '—'), node('td', profile.sensorModel === MODEL ? 'VemSee 3-axis' : 'Custom register'), node('td', `${portLabel(profile.path)} · ID ${profile.slaveId}`, 'mono'), node('td', `${profile.baudRate} · 8${profile.parity[0].toUpperCase()}${profile.stopBits}`, 'mono'), actions); body.append(row);
   }
-  if (!profiles.length) emptyRow(body, 6, 'ยังไม่มีเซ็นเซอร์ กดเพิ่มเซ็นเซอร์เพื่อตั้งค่าการเชื่อมต่อ');
+  for (const group of measurementGroups) for (const meter of group.meters) {
+    const row = node('tr'), title = node('td'), actions = node('td');
+    title.append(node('strong', meter.id), node('small', meter.name || '—'));
+    const edit = node('button', 'ตั้งค่า');
+    edit.onclick = async () => {
+      if (selectedMeasurementGroup !== group.id && !await chooseMeasurementGroup(group.id)) return;
+      setTab('fleet');
+      openFlowMeterEditor(meter.id);
+    };
+    actions.append(edit);
+    row.append(title, node('td', group.name), node('td', `Power Meter · ${PowerRegisters.label(meter.model)}`), node('td', `${portLabel(meter.path)} · ID ${meter.slaveId}`, 'mono'), node('td', `${meter.baudRate} · 8${meter.parity[0].toUpperCase()}${meter.stopBits}`, 'mono'), actions);
+    body.append(row);
+  }
+  if (!body.children.length) emptyRow(body, 6, 'ยังไม่มีอุปกรณ์ สร้างพื้นที่งานแล้วเพิ่มอุปกรณ์จากหน้าแผนผัง');
   renderHistoryMotors();
   renderMotorList(); buildFleet(); renderFlow(); if(currentTab==='monitor')$('graph-tools').hidden=!currentProfile()||Boolean(selectedPowerMeter()); updateControls();
 }
@@ -411,7 +424,7 @@ async function saveMotor(event) {
   const duplicate = profiles.find(profile => profile.motorId.toUpperCase() === raw.motorId.toUpperCase() && profile.motorId !== editing);
   if (duplicate) {
     const workspaces = measurementGroups.filter(group => group.motorIds.some(id => id.toUpperCase() === duplicate.motorId.toUpperCase()));
-    $('form-error').textContent = `รหัส ${raw.motorId} มีอยู่ในทะเบียนอุปกรณ์แล้ว${workspaces.length ? ` ในพื้นที่งาน ${workspaces.map(group => group.name).join(', ')}` : ' แต่ยังไม่ถูกเพิ่มในพื้นที่งานนี้'} · เปิดทะเบียนอุปกรณ์เพื่อใช้รายการเดิม หรือเปลี่ยนรหัสอุปกรณ์ใหม่`;
+    $('form-error').textContent = `รหัส ${raw.motorId} มีอยู่ในรายการอุปกรณ์แล้ว${workspaces.length ? ` ในพื้นที่งาน ${workspaces.map(group => group.name).join(', ')}` : ' แต่ยังไม่ถูกเพิ่มในพื้นที่งานนี้'} · ใช้ปุ่มเพิ่มอุปกรณ์ในหน้าแผนผังเพื่อเลือกรายการเดิม หรือเปลี่ยนรหัสอุปกรณ์ใหม่`;
     $('form-error').hidden = false;
     $('form-error').scrollIntoView({block:'nearest',behavior:'instant'});
     return;
