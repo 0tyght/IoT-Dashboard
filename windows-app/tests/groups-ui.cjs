@@ -42,7 +42,27 @@ const {_electron:electron}=require('playwright');
   await page.locator('#list-mode').click();assert(await page.locator('#fleet-list').isVisible());await page.locator('#flow-mode').click();
   await page.screenshot({path:path.join(project,'.artifacts','device-flow.png'),animations:'disabled'});
   await page.locator('#connect-all').click();await page.locator('#disconnect').waitFor();assert.equal(await app.evaluate(()=>globalThis.groupUITestSelected),saved[0].id);
-  await page.locator('[data-tab="power"]').click();await page.locator('.power-live').filter({hasText:'มิเตอร์ 1'}).waitFor();assert((await page.locator('.power-live').textContent()).includes('0x42C8 0x0000'));assert((await page.locator('.power-live').textContent()).includes('รอยืนยัน'));
+  assert.equal(await page.locator('[data-tab="power"]').count(),0);
+  const chooseReading=async(kind,id)=>{
+    const picker=page.locator('#reading-device');
+    if(await picker.isVisible()) await picker.selectOption(`${kind}:${id}`);
+    else await page.locator(kind==='meter'?`[data-meter-id="${id}"]`:`[data-motor-id="${id}"]`).filter({visible:true}).first().click();
+  };
+  await chooseReading('meter','PM1');
+  await page.locator('.power-live').filter({hasText:'0x42C8 0x0000'}).waitFor();
+  assert((await page.locator('.power-live').textContent()).includes('รอยืนยัน'));
+  assert(await page.locator('#monitor-content').isHidden());
+  await page.screenshot({path:path.join(project,'.artifacts','unified-meter-readings.png'),animations:'disabled'});
+  await chooseReading('meter','PM2');
+  assert(await page.locator('.power-live').isHidden(),'meter without readings does not display another meter data');
+  await chooseReading('sensor','M1');
+  assert(await page.locator('#power-view').isHidden());
+  assert(await page.locator('#monitor-content').isVisible());
+  await chooseReading('meter','PM1');
+  assert(await page.locator('#monitor-view').isVisible());
+  await page.locator('[data-tab="registers"]').click();
+  assert((await page.locator('#register-body').textContent()).includes('42C8H'),'Register follows the selected meter');
+
   await page.locator('#disconnect').click();await page.locator('#connect-all').waitFor();await page.locator('#groups-quick').click();
   await page.locator('#groups-edit').click();await page.locator('#groups-name').fill('ชุดแก้ไข');await page.locator('#groups-meter-settings > summary').click();await page.locator('.meter-remove').last().click();await page.locator('#groups-save').click();await page.locator('#groups-quick').filter({hasText:'ชุดแก้ไข'}).waitFor();
   saved=JSON.parse(fs.readFileSync(path.join(root,'measurement-groups.json'),'utf8'));assert.equal(saved[0].meters.length,1);

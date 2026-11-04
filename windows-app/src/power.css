@@ -3,8 +3,6 @@
 .power-layout { display:grid; grid-template-columns:minmax(0,1fr) 250px; gap:12px; align-items:start; }
 .power-main { min-width:0; display:grid; gap:12px; }
 .power-panel { min-width:0; background:#fff; border:1px solid #dfe4ef; border-radius:9px; padding:16px; }
-.power-live-meter + .power-live-meter { border-top:1px solid #dfe4ef; margin-top:10px; padding-top:10px; }
-.power-live-meter > strong { font-size:13px; }
 .power-live-meter > p { margin:3px 0 8px; }
 .power-live-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
 .power-live-values > div { display:grid; grid-template-columns:1fr auto; gap:3px 5px; padding:6px; background:#f4f5fc; font-size:11px; }
@@ -17,7 +15,7 @@
 #power-history-status,#power-history-rows { color:#536078; font-size:11px; }
 #power-history-rows { max-height:240px; overflow:auto; }
 #power-history-rows p { padding:6px; margin:0; border-top:1px solid #e5e8f0; overflow-wrap:anywhere; }
-.power-panel h3 { margin:0 0 4px; font-size:15px; color:#2d3953; }
+.power-panel h2 { margin:0 0 5px; font-size:18px; color:#28344c; }
 .power-diagnostic { padding-bottom:10px; border-bottom:1px solid #dedbf0; }
 .power-diagnostic summary { color:#4f3dd2; cursor:pointer; font-size:12px; font-weight:600; }
 .power-diagnostic p { margin:5px 0 8px; overflow-wrap:anywhere; }
@@ -25,16 +23,16 @@
 .power-diagnostic :is(input,select) { display:block; width:100%; min-height:32px; margin-top:3px; }
 .power-diagnostic button { width:100%; }
 .power-diagnostic #power-test-result { font-size:11px; white-space:pre-wrap; }
-.power-measurements h2 { margin: 0 0 5px; font-size: 18px; }
+
 .power-measurements .power-preview { display:block; width:fit-content; margin:0 0 12px; }
-.power-meter-entry { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:3px 10px; padding:10px 0; border-top:1px solid #e2e5ef; }
-.power-meter-entry span { font-size:12px; color:#505a73; overflow-wrap:anywhere; }
-.power-meter-entry button { grid-column:2; grid-row:1 / span 2; }
 .power-setup { background:#f7f6fe; border-color:#dedbf0; }
 .power-setup p { color:#536078; font-size:12px; line-height:1.55; }
-.power-setup .power-history:first-child, .power-setup .power-diagnostic[hidden] + .power-history { margin-top:0; }
-.power-meter-entry strong, .power-live-values span, .power-live-values small { overflow-wrap:anywhere; }
 @media (max-width:1000px) {
   .power-layout { grid-template-columns:minmax(0,1fr); }
   .power-live-values { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+#power-view { height:100%; overflow:auto; padding-bottom:6px; }
+.power-live-values :is(span,small) { overflow-wrap:anywhere; }
+#power-history { margin-top:14px; padding:14px; border:1px solid #dfe4ef; border-radius:9px; background:#fff; }
+#power-open-history { margin-top:9px; }

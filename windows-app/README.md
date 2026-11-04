@@ -189,9 +189,9 @@ Primary references: [LabDeck vibration analysis](https://labdeck.com/vibrations-
 
 A **พื้นที่งาน** is the set of devices for one acquisition run. Create or select it in **การเชื่อมต่อ**, add a device or choose an existing one from the registry, then connect each enabled device to a Modbus bus. The command bar shows the current workspace. Starting a run requires a selected workspace with at least one device enabled for reading and all included active devices assigned to a bus. Imported and previously registered devices can be added from **ตั้งค่าพื้นที่งาน**.
 
-**การเชื่อมต่อ** is for device and bus configuration. **ค่าที่อ่าน** and **ค่าไฟฟ้า** show device readings. **ประวัติข้อมูล** and **วิเคราะห์ข้อมูล** open recorded runs independently of the current configuration.
+**การเชื่อมต่อ** is for device and bus configuration. **ค่าที่อ่าน** shows the device selected in the workspace list, including both sensors and meters. **ประวัติข้อมูล** and **วิเคราะห์ข้อมูล** open recorded runs independently of the current configuration.
 
-The **ค่าไฟฟ้า** dashboard reads Schneider EasyLogic PM2230 and previously configured PM2200 meters. In **การเชื่อมต่อ**, add the meter node, connect it to a Modbus bus and set its Slave ID. New PM2230 profiles default to ID 3, FC03 and unconfirmed Float32 order. Devices sharing a COM port are polled in sequence and retain their individual receive timestamps.
+The **ค่าที่อ่าน** view displays readings from Schneider EasyLogic PM2230 and previously configured PM2200 meters. In **การเชื่อมต่อ**, add the meter node, connect it to a Modbus bus and set its Slave ID. New PM2230 profiles default to ID 3, FC03 and unconfirmed Float32 order. Devices sharing a COM port are polled in sequence and retain their individual receive timestamps.
 
 The PM2230 preset includes 31 read-only Float32 values covering phase currents, voltage, unbalance, power and line frequency. In the [Schneider PM2230 register map and example](https://www.se.com/es/es/faqs/FA379514/), register 3000 (current A) is transmitted as RTU address 2999, and register 3110 (frequency) as 3109. Existing PM2200 configurations use their saved voltage/unbalance map. Confirm the Float32 order with a non-zero front-panel reading before enabling conversion.
 
@@ -199,7 +199,7 @@ Right-click a workspace in the sidebar or press its **⋯** button to edit or de
 
 During active recording, Power Meter records are stored separately in `power-YYYY-MM-DD.ndjson` and CSV, with copies under the same run folder. They contain group, meter, optional motor, port, slave, receive timestamp, raw words, configured decoding and quality. The **ประวัติ Power Meter ที่บันทึก** panel shows recorded days, run filters and the latest 200 records. Vibration journals remain separate and retain their existing schema. Power records use the same run ID as vibration records, but readings are sequential and are not synchronized samples.
 
-Use **ค่าไฟฟ้า → อ่าน Register จากมิเตอร์** while acquisition is stopped. Choose the meter and enter the RTU address. The reader uses its bus settings and Slave ID, and displays two raw words with four candidate Float32 interpretations. A non-zero front-panel comparison is needed to verify the decoding.
+Select the meter in **ค่าที่อ่าน**, then open **อ่าน Register จากมิเตอร์** while acquisition is stopped and enter the RTU address. The reader uses its bus settings and Slave ID, and displays two raw words with four candidate Float32 interpretations. A non-zero front-panel comparison is needed to verify the decoding.
 
 In History or Analysis, the **วันที่มีข้อมูล** selector lists daily NDJSON journals already stored in this computer's data directory, newest first. Selecting a day loads that day's records; choose a motor and, optionally, a run to inspect the table or charts. A run spanning midnight can appear under more than one day; choose a wider date/time range to inspect across days. CSV files are exports, not the journal used by this selector, and importing an external CSV is not supported.
 

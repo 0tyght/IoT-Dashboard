@@ -10,7 +10,7 @@ The three interface references supplied on November 4, 2026 set the navigation, 
 
 A workspace defines the devices that share a run. The command bar shows the selected workspace, reading mode and Start/Stop. The connection view guides the first missing setup step, from creating or selecting a workspace to adding a device and assigning its bus. A selected workspace with ready devices opens directly on its readings. The device registry supplies reusable profiles, and recorded data remains available independently in History and Analysis.
 
-Only configured meters appear in the electrical workspace. Show their model and bus before acquisition, measured or raw values during the run, and read-only diagnostics for a selected meter.
+The readings view follows the selected device. Sensors display charts and their channel context. Meters display electrical measurements and a read-only Register action. The Register page follows the same selection and recorded meter data opens under History.
 
 ## Palette and surfaces
 

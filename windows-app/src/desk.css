@@ -39,7 +39,6 @@
 }
 .app-nav [data-tab="fleet"] { --nav-icon: url("icons/topology-star-3.svg"); }
 .app-nav [data-tab="monitor"] { --nav-icon: url("icons/activity-heartbeat.svg"); }
-.app-nav [data-tab="power"] { --nav-icon: url("icons/bolt.svg"); }
 .app-nav [data-tab="history"] { --nav-icon: url("icons/history.svg"); }
 .app-nav [data-tab="analysis"] { --nav-icon: url("icons/chart-dots-3.svg"); }
 .app-nav [data-tab="model"] { --nav-icon: url("icons/box.svg"); }
@@ -191,3 +190,8 @@ dialog.settings-drawer :is(.preset-note, .test-result:not(.success, .error)) { b
 
 .device-model-field { display: grid; align-content: start; min-width: 0; gap: 3px; }
 .device-model-field button { justify-self: start; padding-inline: 0; color: var(--blue-dark); font-size: 12px; white-space: normal; text-align: left; }
+
+.reading-heading-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }
+#reading-device { display:none; width:clamp(126px,23vw,205px); min-height:30px; font-size:12px; }
+.shell.sidebar-collapsed #reading-device { display:block; }
+.shell #motor-sidebar .sidebar-meter[aria-pressed="true"] { background:#efecff; color:#4937a9; border-color:#ded7fa; }

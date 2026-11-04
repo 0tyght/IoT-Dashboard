@@ -52,7 +52,7 @@ function updateWorkbenchLayout() {
   workbenchTab = currentTab; workbenchNarrow = narrow;
   syncSidebarDrawer();
   document.querySelectorAll('#graph-shortcuts button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.window === $('fleet-window').value)));
-  $('toggle-context').hidden = !monitor;
+  $('toggle-context').hidden = !monitor || Boolean(selectedPowerMeter());
 }
 function updateWorkbenchValues(reading, threeAxis) {
   const box = $('compact-frequency'); box.closest('section').hidden = !threeAxis;
@@ -69,9 +69,9 @@ function updateWorkbenchValues(reading, threeAxis) {
 }
 function setupWorkbench() {
   $('motor-sidebar').querySelector('h2').id = 'motor-registry-title';
-  const closeSidebar = node('button', null, 'icon-button sidebar-close'); closeSidebar.id = 'close-sidebar'; closeSidebar.type = 'button'; closeSidebar.setAttribute('aria-label', 'ปิดทะเบียนมอเตอร์'); closeSidebar.append(controlIcon('close'));
+  const closeSidebar = node('button', null, 'icon-button sidebar-close'); closeSidebar.id = 'close-sidebar'; closeSidebar.type = 'button'; closeSidebar.setAttribute('aria-label', 'ปิดรายการอุปกรณ์'); closeSidebar.append(controlIcon('close'));
   $('motor-sidebar').querySelector('.side-heading').append(closeSidebar);
-  const backdrop = node('button', null, 'sidebar-backdrop'); backdrop.id = 'sidebar-backdrop'; backdrop.type = 'button'; backdrop.hidden = true; backdrop.tabIndex = -1; backdrop.setAttribute('aria-label', 'ปิดทะเบียนมอเตอร์');
+  const backdrop = node('button', null, 'sidebar-backdrop'); backdrop.id = 'sidebar-backdrop'; backdrop.type = 'button'; backdrop.hidden = true; backdrop.tabIndex = -1; backdrop.setAttribute('aria-label', 'ปิดรายการอุปกรณ์');
   document.querySelector('.workspace').insertBefore(backdrop, document.querySelector('main'));
   backdrop.onclick = () => closeSidebarDrawer(true); closeSidebar.onclick = () => closeSidebarDrawer(true);
   const shortcuts = node('div', null, 'graph-shortcuts'); shortcuts.id = 'graph-shortcuts'; shortcuts.setAttribute('aria-label', 'ช่วงเวลาที่ใช้บ่อย');

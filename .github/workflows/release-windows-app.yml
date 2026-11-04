@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Adds a direct Schneider Electric PM2230 setup entry from the device form. Electrical view and meter-only workspaces open the selected meter settings from the command bar."
+            --notes "Windows x64 release. Sensor and Power Meter readings use one view and one device selection. Device settings and Register follow the selected device. Saved meter records are available in History."

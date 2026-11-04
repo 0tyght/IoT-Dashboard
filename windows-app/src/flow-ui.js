@@ -8,7 +8,7 @@ function setupFlowUI(){
   for(const item of [$('fleet-empty'),$('fleet-list'),$('fleet-no-matches'),view.querySelector(':scope > .footnote')]) legacy.append(item);
   view.append(legacy);
   const switcher=node('div',null,'flow-switch');switcher.setAttribute('aria-label','มุมมองภาพรวม');
-  const flow=node('button','แผนผัง'),list=node('button','ค่าเซ็นเซอร์');flow.type=list.type='button';flow.id='flow-mode';list.id='list-mode';
+  const flow=node('button','แผนผัง'),list=node('button','กราฟหลายเซ็นเซอร์');flow.type=list.type='button';flow.id='flow-mode';list.id='list-mode';
   flow.onclick=()=>setFleetMode('flow');list.onclick=()=>setFleetMode('list');switcher.append(flow,list);toolbar.querySelector('.inline-controls').prepend(switcher);
   const panel=node('section',null,'flow-panel');panel.id='flow-panel';toolbar.after(panel);
   setFleetMode('flow');

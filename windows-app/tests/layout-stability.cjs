@@ -30,18 +30,6 @@ const { _electron: electron } = require('playwright');
         assert.equal(await page.locator('.tabs [role="tab"][aria-selected="true"]').count(), 1);
         assert.equal(await page.locator('.tabs [role="tab"][tabindex="0"]').count(), 1);
         assert(await page.locator(`#${tab}-view`).isVisible(), `${width}: ${tab} page opens`);
-        if (tab === 'power') {
-          assert(await page.locator('.power-preview').isVisible(), 'electrical preview is labelled');
-          assert.equal(await page.locator('.power-preview').textContent(), 'พื้นที่งานนี้ยังไม่มี Power Meter');
-          assert(await page.locator('.power-diagnostic').isHidden());
-          assert(await page.locator('.power-live').isHidden());
-          assert.equal(await page.locator('[data-power-point="generator"]').count(), 0, 'the one meter is not presented as generator output');
-          if (width === 1366) {
-            const vertical = await page.locator('main').evaluate(element => element.scrollHeight - element.clientHeight);
-            assert(vertical <= 2, `power preview fits a 1366x768 viewport (overflow ${vertical}px)`);
-            await page.screenshot({path:path.join(artifacts, 'power-preview.png'),animations:'disabled'});
-          }
-        }
         const layout = await page.locator('main').evaluate(main => ({ horizontal: main.scrollWidth - main.clientWidth, width: main.getBoundingClientRect().width, pageHorizontal: document.documentElement.scrollWidth - innerWidth }));
         assert(layout.horizontal <= 1 && layout.pageHorizontal <= 1, `${width}: ${tab} page does not overflow horizontally`);
         if (width < 1180) {

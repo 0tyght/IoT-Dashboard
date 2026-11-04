@@ -14,8 +14,12 @@ const {DataStore}=require('../electron/data-store.cjs');const {randomUUID}=requi
     const page=await app.firstWindow();await page.waitForLoadState('domcontentloaded');
     await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
     await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('power:test-meter');ipcMain.handle('power:test-meter',(_event,groupId,meterId,options)=>({ok:true,path:'COM8',slaveId:3,...options,raw:[0x42c8,0]}));});
-    await page.locator('[data-tab="power"]').click();await page.locator('.power-diagnostic summary').click();
-    await page.locator('.power-history summary').click();await page.locator('#power-history-status').filter({hasText:'1 รายการ'}).waitFor();assert((await page.locator('#power-history-rows').textContent()).includes('ชุดบันทึก'));assert((await page.locator('#power-history-rows').textContent()).includes('0x42C8'));
+    const picker=page.locator('#reading-device');
+    if(await picker.isVisible()) await picker.selectOption('meter:PM1');
+    else await page.locator('#motor-sidebar [data-meter-id="PM1"]').click();
+    assert(await page.locator('#monitor-view').isVisible());
+    await page.locator('.power-diagnostic summary').click();
+
     await page.locator('#power-test-button').click();
     await page.locator('#power-test-result').filter({hasText:'ABCD: 100'}).waitFor();
     assert((await page.locator('#power-test-result').textContent()).includes('ยังไม่ยืนยัน'));
@@ -23,6 +27,8 @@ const {DataStore}=require('../electron/data-store.cjs');const {randomUUID}=requi
     assert(await page.locator('.power-live').isHidden(),'candidate must not be displayed as confirmed measurement');
     await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('power:test-meter');ipcMain.handle('power:test-meter',()=>({ok:false,message:'fixture timeout'}));});
     await page.locator('#power-test-button').click();await page.locator('#power-test-result').filter({hasText:'fixture timeout'}).waitFor();
+    await page.locator('#power-open-history').click();await page.locator('#power-history-status').filter({hasText:'1 รายการ'}).waitFor();assert((await page.locator('#power-history-rows').textContent()).includes('ชุดบันทึก'));assert((await page.locator('#power-history-rows').textContent()).includes('0x42C8'));
+    assert(await page.locator('#history-view').isVisible());
     console.log('PASS: read-only power test reports raw words, unconfirmed float candidates and errors');
   }finally{if(app)await app.close();assert.equal(path.dirname(temporary),base);assert(path.basename(temporary).startsWith('power-ui-'));fs.rmSync(temporary,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});
