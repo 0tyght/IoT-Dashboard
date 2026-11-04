@@ -12,19 +12,20 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
   assert.throws(() => normalizeFleet([config, { ...second, slaveId: 1 }]), /Slave ID ซ้ำ/);
   assert.throws(() => normalizeFleet([config, { ...second, baudRate: 19200 }]), /เดียวกัน/);
   assert.throws(() => normalizeFleet([config, { ...second, motorId: 'mtr-01' }]), /รหัสมอเตอร์ซ้ำ/);
-  let active = 0, maxConcurrent = 0, opens = 0, failSlave = 0, rejectFrequency = false, frequencyReads = 0;
+  let active = 0, maxConcurrent = 0, minFrameGap = Infinity, opens = 0, failSlave = 0, rejectFrequency = false, frequencyReads = 0;
   class FakeClient {
     async connectRTUBuffered() { this.isOpen = true; opens++; }
     setID(id) { this.id = id; }
     setTimeout() {}
     async readHoldingRegisters(address, count) {
+      if (this.lastFinishedAt) minFrameGap = Math.min(minFrameGap, Date.now() - this.lastFinishedAt);
       active++; maxConcurrent = Math.max(active, maxConcurrent);
       try {
         await new Promise(resolve => setTimeout(resolve, 2));
         if (this.id === failSlave) throw new Error('Timed out');
         if (address === 0x21) { frequencyReads++; if (rejectFrequency) throw Object.assign(new Error('Illegal address'), { modbusCode: 2 }); return { data: [0x4248, 0, 0x4270, 0, 0x447a, 0] }; }
         return { data: address === 0 ? [350, 12, 23, 34, 40000, 10, 20] : Array(count).fill(12) };
-      } finally { active--; }
+      } finally { active--; this.lastFinishedAt = Date.now(); }
     }
     readInputRegisters(address, count) { return this.readHoldingRegisters(address, count); }
     close(callback) { this.isOpen = false; callback(); }
@@ -42,6 +43,7 @@ const second = { ...config, motorId: 'MTR-02', slaveId: 2 };
   assert(readings.some(reading => reading.pollIntervalMs === 250 && reading.actualIntervalMs >= 240), 'measure actual receive period separately from configured request period');
   assert(statuses.some(status => status.motorId === 'MTR-02' && status.state === 'read-error'));
   assert.equal(maxConcurrent, 1, 'shared serial bus must never issue concurrent reads');
+  assert(minFrameGap >= 4, 'successive RTU requests leave the required silent interval at 9600 baud');
   await service.disconnect(); const stoppedCount = readings.length;
   const meterCheck = await service.testPower(config, {slaveId:3,address:3019,registerType:'holding'});
   assert.deepEqual(meterCheck.raw, [12,12]); assert.equal(meterCheck.slaveId,3); assert.equal(meterCheck.address,3019);

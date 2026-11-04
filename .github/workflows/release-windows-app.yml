@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Device ID conflicts now identify the existing registry or workspace entry. New Power Meters receive an unused default ID, including when other meters are hidden in the editor."
+            --notes "Windows x64 release. Modbus RTU requests on each COM port share a queue and observe the required silent interval between frames. Multiple sensors and meters continue to use individual Slave IDs and receive timestamps."

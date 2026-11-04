@@ -5,6 +5,35 @@ const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, decodeVemseeFreq
 const { decodePowerMeter } = require('./power-meter-codec.cjs');
 const { preset: powerPreset } = require('../src/power-registers.js');
 const frequencyUnsupported = new WeakMap();
+const pacedReads = new WeakMap();
+
+function paceReads(client, baudRate) {
+  // RTU frames need at least 3.5 character times of silence between requests.
+  const frameGapMs = baudRate > 19200 ? 2 : Math.ceil(3.5 * 12 * 1000 / baudRate);
+  let lastFinished = 0;
+  let tail = Promise.resolve();
+  pacedReads.set(client, (type, address, count, cancelled) => {
+    const task = tail.then(async () => {
+      const waitMs = frameGapMs - (Date.now() - lastFinished);
+      if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
+      checkCancelled(cancelled);
+      try {
+        return await (type === 'input' ? client.readInputRegisters(address, count) : client.readHoldingRegisters(address, count));
+      } finally {
+        lastFinished = Date.now();
+      }
+    });
+    tail = task.catch(() => {});
+    return task;
+  });
+}
+
+function readRegisters(client, type, address, count, cancelled) {
+  const paced = pacedReads.get(client);
+  if (paced) return paced(type, address, count, cancelled);
+  checkCancelled(cancelled);
+  return type === 'input' ? client.readInputRegisters(address, count) : client.readHoldingRegisters(address, count);
+}
 
 function normalizeFleet(raw, {allowSharedConnections=false}={}) {
   if (!Array.isArray(raw) || !raw.length || raw.length > 64) throw new Error('เลือกมอเตอร์ 1–64 ตัว');
@@ -36,9 +65,7 @@ async function readSnapshot(client, config, cancelled=()=>false) {
   client.setTimeout(config.timeout);
   const read = async (address, count) => {
     checkCancelled(cancelled);
-    const reply = config.registerType === 'input'
-      ? await client.readInputRegisters(address, count)
-      : await client.readHoldingRegisters(address, count);
+    const reply = await readRegisters(client, config.registerType, address, count, cancelled);
     if (!Array.isArray(reply.data) || reply.data.length !== count || reply.data.some(value => !Number.isInteger(value) || value < 0 || value > 65535)) throw new Error('ข้อมูล Register ตอบกลับไม่ครบหรือไม่ถูกต้อง');
     return reply.data;
   };
@@ -69,7 +96,7 @@ async function readSnapshot(client, config, cancelled=()=>false) {
       if (!point.enabled) { points.push({...point,status:'disabled',raw:null,value:null,timestamp:null}); continue; }
       if(communicationError){points.push({...point,status:'read-error',raw:null,value:null,timestamp:new Date().toISOString(),message:`ข้ามหลังสื่อสารไม่สำเร็จ: ${communicationError}`});continue;}
       try {
-        const response=point.registerType==='input'?await client.readInputRegisters(point.registerAddress,registerCount(point.dataType)):await client.readHoldingRegisters(point.registerAddress,registerCount(point.dataType));
+        const response=await readRegisters(client,point.registerType,point.registerAddress,registerCount(point.dataType),cancelled);
         const raw=response.data;if(!Array.isArray(raw)||raw.length!==registerCount(point.dataType)||raw.some(word=>!Number.isInteger(word)||word<0||word>65535))throw new Error('ข้อมูล Register ตอบกลับไม่ครบหรือไม่ถูกต้อง');
         const value=decodeRegisters(raw,point)+point.offset;if(!Number.isFinite(value))throw new Error('ค่าหลังแปลงไม่ใช่ตัวเลข');
         points.push({...point,status:'ok',raw,value,timestamp:new Date().toISOString()});
@@ -85,7 +112,7 @@ async function readPowerSnapshot(client, meter, cancelled=()=>false) {
   client.setID(meter.slaveId); client.setTimeout(meter.timeout);
   const read = async (address,count) => {
     checkCancelled(cancelled);
-    const response = meter.registerType === 'input' ? await client.readInputRegisters(address,count) : await client.readHoldingRegisters(address,count);
+    const response = await readRegisters(client,meter.registerType,address,count,cancelled);
     if (!Array.isArray(response.data) || response.data.length!==count || response.data.some(value=>!Number.isInteger(value)||value<0||value>65535)) throw new Error('ข้อมูล Power Meter ตอบกลับไม่ครบ');
     return response.data;
   };
@@ -114,6 +141,7 @@ class FleetService {
     const client = this.clientFactory();
     try {
       await client.connectRTUBuffered(config.path, { baudRate: config.baudRate, parity: config.parity, dataBits: 8, stopBits: config.stopBits });
+      paceReads(client, config.baudRate);
       return client;
     } catch (error) { await closeClient(client); throw error; }
   }
