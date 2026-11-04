@@ -10,7 +10,6 @@ const fleetVisibility = new IntersectionObserver(entries => {
 }, { root: document.querySelector('main'), rootMargin: '160px' });
 function fleetStatus(profile, state) {
   if (profile.enabled === false) return { text: 'พักอ่าน', kind: 'idle' };
-  if (mode === 'demo') return { text: 'จำลอง', kind: 'demo' };
   if (mode !== 'live') return { text: 'หยุดอ่าน', kind: 'idle' };
   if (state.status === 'partial') return { text: 'บางจุดอ่านไม่สำเร็จ', kind: 'fault' };
   if (state.status === 'fault') return { text: 'ขัดข้อง', kind: 'fault' };

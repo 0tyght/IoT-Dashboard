@@ -142,13 +142,11 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
 
     const sourcesStore = fixture([reading(1, 7), reading(2, 8, { source: 'SIMULATION' })]);
     const sourceGroups = await sourcesStore.chartRange(range);
-    assert.equal(sourceGroups.series.length, 2, 'simulation is a separate explicit-history series from real acquisition');
+    assert.equal(sourceGroups.series.length, 1, 'legacy simulation is excluded from the real-data workspace');
     assert.equal(sourceGroups.total, 1);
-    assert.equal(sourceGroups.rows[0].source, 'SIMULATION');
-    const realSeries = sourceGroups.series.find(series => series.key !== sourceGroups.seriesKey);
-    const selectedReal = await sourcesStore.chartRange({ ...range, seriesKey: realSeries.key });
-    assert.equal(selectedReal.rows[0].value, 7);
-    assert.equal(selectedReal.rows[0].source, 'RS485 / Modbus RTU');
+    assert.equal(sourceGroups.rows[0].value, 7);
+    assert.equal(sourceGroups.rows[0].source, 'RS485 / Modbus RTU');
+    assert.equal((await sourcesStore.history({date:dayKey(new Date(timestamp(1)))})).total, 1);
 
     // Catalog is derived before filtering the selected motor, including deleted IDs.
     const catalogStore = fixture([reading(1, 1), reading(2, 2, { motorId: 'MTR-02' }), reading(3, 3, { motorId: 'DELETED-01' })]);

@@ -13,17 +13,6 @@ self.onmessage = ({ data: request }) => {
       waveform = null;
       waveform = SpectralAnalysis.parseCSV(request.text, request.options);
       result = metadata();
-    } else if (request.type === 'demo') {
-      const sampleRateHz = 2048, sampleCount = 8192, channels = { X: [], Y: [], Z: [] };
-      for (let i = 0; i < sampleCount; i++) {
-        const t = i / sampleRateHz;
-        channels.X.push(Math.sin(2 * Math.PI * 50 * t) + .4 * Math.sin(2 * Math.PI * 120 * t));
-        channels.Y.push(.7 * Math.sin(2 * Math.PI * 80 * t));
-        const envelope = .12 + .88 * Math.exp(-(((t - 2) / .65) ** 2));
-        channels.Z.push(.5 * envelope * Math.sin(2 * Math.PI * (30 * t + 20 * t * t)));
-      }
-      waveform = { channels, sampleRateHz, sampleCount, durationSeconds: sampleCount / sampleRateHz, timeSpanSeconds: (sampleCount - 1) / sampleRateHz, unit: 'm/s²', source: 'test-signal', timingSource: 'generated' };
-      result = metadata();
     } else if (request.type === 'trend') {
       waveform = null;
       waveform = TrendAnalysis.prepare(request.rows, request.options);

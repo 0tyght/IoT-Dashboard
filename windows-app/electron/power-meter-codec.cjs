@@ -1,33 +1,27 @@
 'use strict';
 
-// Offsets are supplied by the user. The meaning of 3019 as a wire offset and
-// the 32-bit word order still require validation against the actual meter.
 const { decodeRegisters } = require('./sensor-codec.cjs');
-const REGISTERS = Object.freeze([
-  { key:'currentUnbalanceWorst', label:'Current unbalance worst', address:3017, unit:'%' },
-  { key:'voltageAB', label:'Voltage A-B', address:3019, unit:'V' },
-  { key:'voltageBC', label:'Voltage B-C', address:3021, unit:'V' },
-  { key:'voltageCA', label:'Voltage C-A', address:3023, unit:'V' },
-  { key:'voltageLLAvg', label:'Voltage L-L average', address:3025, unit:'V' },
-  { key:'voltageAN', label:'Voltage A-N', address:3027, unit:'V' },
-  { key:'voltageBN', label:'Voltage B-N', address:3029, unit:'V' },
-  { key:'voltageCN', label:'Voltage C-N', address:3031, unit:'V' },
-  { key:'voltageLNAvg', label:'Voltage L-N average', address:3035, unit:'V' }
-]);
+const { preset } = require('../src/power-registers.js');
+const REGISTERS = preset('pm2200').fields;
 const ORDERS = new Set(['ABCD','CDAB','BADC','DCBA']);
-function decodePowerMeter(blocks, byteOrder = 'unconfirmed') {
-  const first = blocks?.first, last = blocks?.last;
-  if (!Array.isArray(first) || first.length !== 16 || !Array.isArray(last) || last.length !== 2 || [...first, ...last].some(word => !Number.isInteger(word) || word < 0 || word > 65535)) throw new Error('ข้อมูล Power Meter ไม่ครบหรือไม่ถูกต้อง');
+
+function decodePowerMeter(blocks, byteOrder = 'unconfirmed', model = 'pm2200') {
+  const { fields, blocks: ranges } = preset(model);
+  const entries = Object.entries(ranges);
+  for (const [key, [,count]] of entries) {
+    const words = blocks?.[key];
+    if (!Array.isArray(words) || words.length !== count || words.some(word => !Number.isInteger(word) || word < 0 || word > 65535)) {
+      throw new Error('ข้อมูล Power Meter ไม่ครบหรือไม่ถูกต้อง');
+    }
+  }
   if (byteOrder !== 'unconfirmed' && !ORDERS.has(byteOrder)) throw new Error('ลำดับข้อมูล Float ไม่ถูกต้อง');
   const values = {}, raw = {};
-  for (const field of REGISTERS) {
-    const pair = field.address === 3035 ? last.slice() : first.slice(field.address - 3017, field.address - 3017 + 2);
-    raw[field.key] = pair;
-    if (byteOrder === 'unconfirmed') values[field.key] = null;
-    else {
-      try { values[field.key] = decodeRegisters(pair, {dataType:'float32', byteOrder, scale:1}); }
-      catch { values[field.key] = null; }
-    }
+  for (const { key, address } of fields) {
+    const [block, [start]] = entries.find(([, [offset,count]]) => address >= offset && address + 1 < offset + count);
+    const pair = blocks[block].slice(address - start, address - start + 2);
+    raw[key] = pair;
+    try { values[key] = byteOrder === 'unconfirmed' ? null : decodeRegisters(pair, {dataType:'float32', byteOrder, scale:1}); }
+    catch { values[key] = null; }
   }
   return { values, raw, byteOrder, quality:byteOrder === 'unconfirmed' ? 'unconfirmed' : 'decoded' };
 }

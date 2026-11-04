@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Register settings reflow without horizontal scrolling on desktop and tablet-sized windows. Fixes reopening saved multi-register devices and preserves independent polling interval and timeout for shared-bus power meters. Actual device register offsets, wiring and byte order must be verified against the physical hardware."
+            --notes "Windows x64 release. Manage workspaces from the sidebar context menu. Monitoring and FFT use device readings, recorded data, or imported waveform files. Adds a read-only Schneider Electric PM2230 preset for current, voltage, power, and frequency. Verify Float32 order and communications against the connected meter."

@@ -89,7 +89,7 @@ async function visitSnapshot(files, visitor) {
         let record;
         try { record = JSON.parse(line); if (!record || !Number.isFinite(Date.parse(record.timestamp)) || !Number.isFinite(record.value)) throw new Error('Invalid record'); }
         catch { skipped++; continue; }
-        visitor(record);
+        if (record.source !== 'SIMULATION') visitor(record);
       }
     } finally { lines.close(); stream.destroy(); }
   }
@@ -250,6 +250,7 @@ class DataStore {
           if (!line.trim()) continue;
           let record;
           try { record = JSON.parse(line); if (!record || !Number.isFinite(Date.parse(record.timestamp)) || !Number.isFinite(record.value)) throw new Error('Invalid record'); } catch { skipped += 1; continue; }
+          if (record.source === 'SIMULATION') continue;
           if (typeof record.motorId === 'string' && record.motorId) motorIds.add(record.motorId);
           if (motorId && record.motorId !== motorId) continue;
           const id = recordedRunId(record);

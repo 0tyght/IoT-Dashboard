@@ -14,6 +14,7 @@ function syncSidebarDrawer(focusInside = false) {
   if (!open && shell.classList.contains('sidebar-collapsed') && sidebar.contains(document.activeElement)) $('toggle-sidebar').focus();
 }
 function closeSidebarDrawer(restoreFocus = false) {
+  document.getElementById('group-context-menu')?.hidePopover();
   if (innerWidth >= 1180) return;
   document.querySelector('.shell').classList.add('sidebar-collapsed'); syncSidebarDrawer();
   if (restoreFocus) $('toggle-sidebar').focus();
@@ -99,7 +100,7 @@ function setupWorkbench() {
   });
   document.addEventListener('keydown', event => {
     if (document.querySelector('.shell').classList.contains('sidebar-drawer-open')) {
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeSidebarDrawer(true); return; }
+      if (event.key === 'Escape' && !document.querySelector('#group-context-menu:popover-open')) { event.preventDefault(); event.stopPropagation(); closeSidebarDrawer(true); return; }
       if (event.key === 'Tab') {
         const items = [...$('motor-sidebar').querySelectorAll('button, input, select, summary, [tabindex="0"]')].filter(element => !element.disabled && element.getClientRects().length);
         const first = items[0], last = items.at(-1), active = document.activeElement;

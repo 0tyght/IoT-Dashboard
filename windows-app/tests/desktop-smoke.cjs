@@ -1,4 +1,5 @@
 'use strict';
+const { seedMonitor } = require('./monitor-fixture.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -89,9 +90,10 @@ const { _electron: electron } = require('playwright');
     assert((await page.locator('[data-fleet-id="MTR-01"] h2').textContent()).includes('pump 01'));
     assert(JSON.parse(fs.readFileSync(path.join(temporary, 'motors.json'), 'utf8'))[0].nameplate.includes('DE'));
 
-    await page.locator('#session-actions summary').click(); await page.locator('#demo-mode').click();
+    assert.equal(await page.locator('#demo-mode').count(), 0);
+    await seedMonitor(page);
     await page.locator('#monitor-view').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('#detail-plots .measurement-plot:visible').count(), 3, 'simulation opens directly on the three full-width monitor graphs');
+    assert.equal(await page.locator('#detail-plots .measurement-plot:visible').count(), 3, 'monitor opens directly on the three full-width monitor graphs');
     await page.waitForFunction(() => document.querySelectorAll('#detail-plots svg polyline').length === 9);
     await page.locator('[data-tab="fleet"]').click();
     await page.locator('#fleet-view').waitFor({ state: 'visible' });
@@ -119,7 +121,7 @@ const { _electron: electron } = require('playwright');
       const profile = profiles[0];
       cache.clear();
       for (let index = 0; index < 300; index++) {
-        const frame = demoFrame(profile, 0, index * .1); frame.timestamp = new Date(Date.now() - (300 - index) * 1000).toISOString(); addReading(frame);
+        const frame = window.fixtureFrame(profile, 0, index * .1); frame.timestamp = new Date(Date.now() - (300 - index) * 1000).toISOString(); addReading(frame);
       }
     });
     assert(parseInt((await page.locator('.graph-coverage').first().textContent()).replaceAll(',', ''), 10) > 120, 'graph holds more than 120 readings');
@@ -130,7 +132,7 @@ const { _electron: electron } = require('playwright');
     await page.locator('#new-motor').click();
     await page.locator('#confirm-dialog').waitFor({ state: 'visible' });
     await page.locator('#cancel-confirm').click();
-    assert((await page.locator('#mode-indicator').textContent()).includes('ข้อมูลจำลอง'));
+    assert((await page.locator('#mode-indicator').textContent()).includes('กำลังอ่าน'));
     await page.locator('#toast').waitFor({ state: 'hidden' });
     for (const [width, height] of [[960, 680], [1366, 768], [1920, 1080]]) {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size), [width, height]);
@@ -487,7 +489,7 @@ const { _electron: electron } = require('playwright');
     assert(await page.locator('.history-range .chart-legend').isHidden(), 'custom history does not show nonexistent XYZ axes');
     await page.waitForFunction(() => !document.getElementById('new-motor').disabled);
     const savedFixtureCount = [...rowsByDate.keys()].reduce((total, date) => total + fs.readFileSync(path.join(temporary, 'data', `readings-${date}.ndjson`), 'utf8').trim().split('\n').length, 0);
-    assert.equal(savedFixtureCount, historicalRows.length, 'simulation must not write readings');
+    assert.equal(savedFixtureCount, historicalRows.length, 'renderer fixtures must not write readings');
     assert.deepEqual(errors, []);
     console.log('PASS: profile CRUD, filters, keyboard tabs, responsive registry, axis emphasis, single-viewport plots at 7 desktop/tablet viewport sizes, fault recovery, sensor reassignment and history');
   } finally { await app.close(); fs.rmSync(temporary, { recursive: true, force: true }); }

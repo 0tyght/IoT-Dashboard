@@ -70,7 +70,6 @@ function historyIdentityCell(value, startedAt, label) {
   return cell;
 }
 function storageLabel(last, savedHistory = false) {
-  if (mode === 'demo') return 'ข้อมูลจำลอง';
   if (!last) return 'ยังไม่มีข้อมูล';
   if (savedHistory) return 'ข้อมูลจากไฟล์ประวัติ';
   if (last.recordingState === 'before-start') return 'ค่าทดสอบก่อนเริ่มบันทึก';
@@ -84,16 +83,16 @@ function renderRecording(state) {
   const modeName = settings.startMode === 'scheduled' ? 'ตั้งเวลาบันทึก' : settings.startMode === 'monitor-only' ? 'ดูอย่างเดียว' : 'อ่านและบันทึก';
   controlLabel($('record-settings'), `โหมด: ${modeName}`, 'settings');
   $('recording-strip').hidden = mode === 'offline' && !recordingState.count && !recordingState.lastError;
-  $('recording-status').textContent = mode === 'demo' ? 'ข้อมูลจำลอง · ไม่บันทึก' : recordingState.lastError ? 'บันทึกไม่สำเร็จ' : !live ? 'จบรอบการทำงาน' : recordingState.active ? 'กำลังอ่านและบันทึก' : recordingState.scheduleMissed ? 'เลยเวลาที่ตั้งไว้ · ยังไม่บันทึก' : recordingState.waiting ? 'กำลังอ่าน · รอเวลาบันทึก' : recordingState.stopReason === 'duration' ? 'ครบเวลาบันทึก · กำลังอ่านต่อ' : 'กำลังอ่าน · ไม่บันทึก';
-  $('recording-status').className = mode === 'demo' ? '' : recordingState.lastError ? 'storage-fault' : recordingState.active ? 'recording-active' : '';
+  $('recording-status').textContent = recordingState.lastError ? 'บันทึกไม่สำเร็จ' : !live ? 'จบรอบการทำงาน' : recordingState.active ? 'กำลังอ่านและบันทึก' : recordingState.scheduleMissed ? 'เลยเวลาที่ตั้งไว้ · ยังไม่บันทึก' : recordingState.waiting ? 'กำลังอ่าน · รอเวลาบันทึก' : recordingState.stopReason === 'duration' ? 'ครบเวลาบันทึก · กำลังอ่านต่อ' : 'กำลังอ่าน · ไม่บันทึก';
+  $('recording-status').className = recordingState.lastError ? 'storage-fault' : recordingState.active ? 'recording-active' : '';
   const runLabel = $('recording-run');
   if (runLabel) {
-    runLabel.hidden = !recordingState.runId || mode === 'demo';
+    runLabel.hidden = !recordingState.runId;
     runLabel.textContent = recordingState.runId ? `${recordingState.groupName?`${recordingState.groupName} · `:''}${recordingState.runName?`${recordingState.runName} · `:''}รอบ ${runDateLabel(recordingState.runStartedAt)} · ${shortIdentity(recordingState.runId)}` : '';
     runLabel.title = recordingState.runId ? `รอบอ่าน ${recordingState.runId}\nเริ่ม ${runDateLabel(recordingState.runStartedAt)} (UTC+07:00)${recordingState.recordingId ? `\nรอบบันทึก ${recordingState.recordingId}\nเริ่มบันทึก ${runDateLabel(recordingState.recordingStartedAt)}` : '\nยังไม่เริ่มบันทึกในรอบนี้'}` : '';
     runLabel.dataset.runId = recordingState.runId || '';
   }
-  $('recording-detail').textContent = mode === 'demo' ? 'ใช้ทดสอบหน้าจอเท่านั้น' : recordingState.lastError ? `${recordingState.lastError} · ${live ? 'อ่านข้อมูลต่อ' : 'หยุดแล้ว'} · ตรวจโฟลเดอร์และพื้นที่ดิสก์` : recordingState.active ? `${recordingState.count.toLocaleString()} แถว${recordingState.lastSavedAt ? ` · บันทึกล่าสุด ${timestamp(recordingState.lastSavedAt)}` : ' · รอค่ารอบแรก'}${recordingState.endsAt ? ` · สิ้นสุด ${time(recordingState.endsAt)}` : ''}` : recordingState.waiting ? `เริ่ม ${timestamp(settings.startAt)}` : !live ? `${recordingState.count.toLocaleString()} แถว${recordingState.lastSavedAt ? ` · บันทึกล่าสุด ${timestamp(recordingState.lastSavedAt)}` : ''}` : recordingState.scheduleMissed ? 'เพิ่มเติม → เริ่มบันทึกทันที หรือหยุดเพื่อตั้งเวลาใหม่' : 'เริ่มบันทึกได้จากเมนูเพิ่มเติม';
+  $('recording-detail').textContent = recordingState.lastError ? `${recordingState.lastError} · ${live ? 'อ่านข้อมูลต่อ' : 'หยุดแล้ว'} · ตรวจโฟลเดอร์และพื้นที่ดิสก์` : recordingState.active ? `${recordingState.count.toLocaleString()} แถว${recordingState.lastSavedAt ? ` · บันทึกล่าสุด ${timestamp(recordingState.lastSavedAt)}` : ' · รอค่ารอบแรก'}${recordingState.endsAt ? ` · สิ้นสุด ${time(recordingState.endsAt)}` : ''}` : recordingState.waiting ? `เริ่ม ${timestamp(settings.startAt)}` : !live ? `${recordingState.count.toLocaleString()} แถว${recordingState.lastSavedAt ? ` · บันทึกล่าสุด ${timestamp(recordingState.lastSavedAt)}` : ''}` : recordingState.scheduleMissed ? 'เพิ่มเติม → เริ่มบันทึกทันที หรือหยุดเพื่อตั้งเวลาใหม่' : 'เริ่มบันทึกได้จากเมนูเพิ่มเติม';
   $('record-start').hidden = !live || recordingState.active;
   $('record-stop').hidden = !live || (!recordingState.active && !recordingState.waiting);
   $('record-start').disabled = busy || recordActionBusy || !live || recordingState.active;
@@ -107,7 +106,7 @@ function updateSessionButtons() {
   $('connect-all').hidden = running; $('disconnect').hidden = !running;
   $('disconnect').disabled = busy || recordActionBusy || !running;
   controlLabel($('connect-all'), busy ? 'กำลังตรวจเซ็นเซอร์…' : settings.startMode === 'monitor-only' ? 'เริ่มดูข้อมูล' : settings.startMode === 'scheduled' ? 'เริ่มอ่านและรอบันทึก' : 'เริ่มอ่านและบันทึก', 'play');
-  controlLabel($('disconnect'), busy ? 'กำลังหยุด…' : mode === 'demo' ? 'จบการทดลอง' : recordingState.active ? 'หยุดอ่านและบันทึก' : 'หยุดการทำงาน', 'stop');
+  controlLabel($('disconnect'), busy ? 'กำลังหยุด…' : recordingState.active ? 'หยุดอ่านและบันทึก' : 'หยุดการทำงาน', 'stop');
 }
 function recordingModeFields() {
   const value = $('record-start-mode').value, scheduled = value === 'scheduled';

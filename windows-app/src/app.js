@@ -4,7 +4,7 @@ const $ = id => document.getElementById(id);
 const form = $('sensor-form');
 const MODEL = 'vemsee-sn3001-wz3a-n01';
 let profiles = [], ports = [], selected = '', editing = null, mode = 'offline', busy = false, frozen = false;
-let demoTimer, chartFrames = [], historyGeneration = 0;
+let chartFrames = [], historyGeneration = 0;
 let successful = 0, failures = 0, logs = [], dataError = false;
 let editorBaseline = '';
 let currentTab = 'monitor';
@@ -44,13 +44,12 @@ function updateControls() {
   $('disconnect').disabled = locked || !running;
   for (const id of ['new-motor', 'fleet-empty-add']) $(id).disabled = locked || dataError;
   $('import-profiles').disabled = locked || running || dataError;
-  $('edit-motor').disabled = locked || !currentProfile() || dataError || isTemporaryMotor(selected);
-  $('demo-mode').disabled = locked || running;
+  $('edit-motor').disabled = locked || !currentProfile() || dataError;
   updateGroupsControls(locked || running);
   $('export-profiles').disabled = locked || !profiles.length;
-  document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = locked || dataError || isTemporaryMotor(button.dataset.edit || button.dataset.delete); });
-  $('mode-indicator').className = `mode-indicator ${mode === 'live' ? 'live' : mode === 'demo' ? 'demo-mode' : ''}`;
-  $('mode-indicator').textContent = mode === 'live' ? 'กำลังอ่าน' : mode === 'demo' ? 'ข้อมูลจำลอง' : 'หยุดอ่าน';
+  document.querySelectorAll('[data-edit], [data-delete]').forEach(button => { button.disabled = locked || dataError; });
+  $('mode-indicator').className = `mode-indicator ${mode === 'live' ? 'live' : ''}`;
+  $('mode-indicator').textContent = mode === 'live' ? 'กำลังอ่าน' : 'หยุดอ่าน';
   $('connect-all').setAttribute('aria-busy', String(locked));
   $('disconnect').setAttribute('aria-busy', String(locked));
   renderRecording();
@@ -90,7 +89,7 @@ function renderMotorList() {
 function refreshMotorStates() {
   document.querySelectorAll('.motor-item').forEach(button => {
     const state = stateFor(button.dataset.motorId), last = state.frames.at(-1);
-    button.querySelector('.dot').className = `dot ${mode === 'demo' ? 'demo' : state.status === 'online' ? 'online' : ['fault', 'stale', 'partial'].includes(state.status) ? 'fault' : 'offline'}`;
+    button.querySelector('.dot').className = `dot ${state.status === 'online' ? 'online' : ['fault', 'stale', 'partial'].includes(state.status) ? 'fault' : 'offline'}`;
     button.querySelector('.item-value').textContent = last ? digits(last.value) : '—';
   });
 }
@@ -176,8 +175,8 @@ function renderSelected() {
   $('empty-state-description').textContent = state?.restoring ? 'กำลังโหลดข้อมูลล่าสุดจากไฟล์ในเครื่อง' : state?.restoreError ? `เปิดประวัติไม่ได้: ${state.restoreError} · ยังเริ่มอ่านข้อมูลใหม่ได้` : profiles.length ? 'กดปุ่มเริ่มเพื่อตรวจการเชื่อมต่อและรับข้อมูลตามโหมดที่เลือก' : 'เพิ่มอุปกรณ์ ตั้งพอร์ต แล้วเริ่มอ่านและบันทึก';
   controlLabel($('welcome-setup'), profile ? 'ตั้งค่าอุปกรณ์' : 'เพิ่มอุปกรณ์', profile ? 'settings' : 'plus');
   if (profile) {
-    $('connection-name').textContent = mode === 'demo' ? 'DEMO' : profile.path;
-    $('connection-detail').textContent = mode === 'demo' ? 'ค่าจำลอง · ไม่เขียนไฟล์' : `${profile.baudRate} baud · Slave ${profile.slaveId} · ${profile.parity.toUpperCase()}`;
+    $('connection-name').textContent = profile.path;
+    $('connection-detail').textContent = `${profile.baudRate} baud · Slave ${profile.slaveId} · ${profile.parity.toUpperCase()}`;
     $('nameplate-display').textContent = profile.nameplate || 'ยังไม่มีข้อมูลฉลากเครื่อง · เพิ่มได้ในหน้าตั้งค่ามอเตอร์';
   }
   {
@@ -202,7 +201,7 @@ function renderSelected() {
     $('selected-subtitle').textContent = 'ค่าการสั่นสามแกนและสถานะการรับข้อมูลของเซ็นเซอร์แต่ละตัว';
   }
   if (currentTab === 'model') {
-    $('selected-title').textContent = 'โมเดลชุดทดลอง 3D'; $('selected-area').textContent = 'REFERENCE ASSET';
+    $('selected-title').textContent = 'โมเดลชุดเครื่อง 3D'; $('selected-area').textContent = 'REFERENCE ASSET';
     $('selected-subtitle').textContent = 'โมเดล V4 อ้างอิง · ยังไม่ผูกกับมอเตอร์และจุดวัดจริง';
   }
   $('selection-state').hidden = ['fleet', 'model'].includes(currentTab);
@@ -210,11 +209,11 @@ function renderSelected() {
 }
 function refreshSelectionState() {
   const profile = currentProfile(), state = profile ? stateFor(profile.motorId) : null;
-  const label = mode === 'demo' ? 'ข้อมูลจำลอง' : profile?.enabled === false ? 'พักการอ่านเซ็นเซอร์นี้' : mode === 'offline' && state?.restored ? 'ข้อมูลย้อนหลัง · หยุดอ่าน' : mode === 'offline' ? 'หยุดการอ่าน' : state?.status === 'online' ? '● รับข้อมูลแล้ว' : state?.status === 'partial' ? 'บางจุดวัดอ่านไม่สำเร็จ' : state?.status === 'stale' ? 'ข้อมูลเก่า · กำลังลองใหม่' : state?.status === 'fault' ? 'อ่านไม่สำเร็จ · กำลังลองใหม่' : 'กำลังรอข้อมูล';
+  const label = profile?.enabled === false ? 'พักการอ่านเซ็นเซอร์นี้' : mode === 'offline' && state?.restored ? 'ข้อมูลย้อนหลัง · หยุดอ่าน' : mode === 'offline' ? 'หยุดการอ่าน' : state?.status === 'online' ? '● รับข้อมูลแล้ว' : state?.status === 'partial' ? 'บางจุดวัดอ่านไม่สำเร็จ' : state?.status === 'stale' ? 'ข้อมูลเก่า · กำลังลองใหม่' : state?.status === 'fault' ? 'อ่านไม่สำเร็จ · กำลังลองใหม่' : 'กำลังรอข้อมูล';
   $('selection-state').textContent = label;
   $('selection-state').className = `selection-state ${mode === 'live' ? state?.status === 'online' ? 'online' : ['fault','stale','partial'].includes(state?.status) ? 'fault' : '' : ''}`;
   $('selection-state').title = state?.message || '';
-  $('status-text').replaceChildren(node('i', null, `dot ${mode === 'live' ? 'online' : mode === 'demo' ? 'demo' : 'offline'}`), document.createTextNode(mode === 'live' ? `กำลังอ่าน ${profiles.filter(item => item.enabled !== false).length} เซ็นเซอร์` : mode === 'demo' ? 'โหมดทดลองหน้าจอ' : 'หยุดการอ่าน · พร้อมตั้งค่า'));
+  $('status-text').replaceChildren(node('i', null, `dot ${mode === 'live' ? 'online' : 'offline'}`), document.createTextNode(mode === 'live' ? `กำลังอ่าน ${profiles.filter(item => item.enabled !== false).length} เซ็นเซอร์` : 'หยุดการอ่าน · พร้อมตั้งค่า'));
   $('status-count').textContent = `รับสำเร็จ ${successful} · ผิดพลาด ${failures}`;
   $('status-bus').textContent = profile ? `${profile.path} · ${profile.baudRate} / 8${profile.parity[0].toUpperCase()}${profile.stopBits} · FC${profile.registerType === 'input' ? '04' : '03'}` : 'Modbus RTU · 8 data bits';
   refreshMotorStates();
@@ -267,7 +266,7 @@ function drawChart() {
   detailPlot.draw(frames, point?{...profile,unit:point.unit}:profile, { reduced: Boolean(state.reduced), gapStarts: state.gapStarts || [] });
   if(point){const chart=detailPlot.plots.find(item=>item.kind==='velocity');if(chart){chart.title.textContent=`${point.name} · ${point.unit||'ไม่มีหน่วย'}`;chart.svg.setAttribute('aria-label',`กราฟ ${point.name} ${point.unit||''}`);}}
   const restored = stateFor(selected).restored && mode === 'offline';
-  $('chart-live').textContent = frozen ? 'PAUSED' : restored ? 'SAVED' : mode === 'demo' ? 'DEMO' : mode === 'live' ? 'LIVE' : 'STOPPED';
+  $('chart-live').textContent = frozen ? 'PAUSED' : restored ? 'SAVED' : mode === 'live' ? 'LIVE' : 'STOPPED';
   $('chart-live').dataset.state = frozen ? 'paused' : restored ? 'saved' : mode;
 }
 function addReading(reading) {
@@ -404,9 +403,8 @@ function deleteMotor(profile) {
     renderProfiles(); renderSelected(); if (selected) void restoreSavedMotorHistory(selected); addLog('info', profile.motorId, 'ลบจากรายชื่อมอเตอร์แล้ว');
   });
 }
-function isTemporaryMotor(id) { return mode === 'demo' && !beforeDemo?.some(profile => profile.motorId === id); }
 function stopBeforeChange(task) {
-  confirmAction('หยุดอ่านข้อมูลเพื่อแก้ไข?', 'การแก้ไขทะเบียนเซ็นเซอร์ต้องหยุดอ่านก่อน ข้อมูลที่บันทึกแล้วจะยังอยู่', async () => { await stopAndRestore(); await task(); });
+  confirmAction('หยุดอ่านข้อมูลเพื่อแก้ไข?', 'การแก้ไขทะเบียนเซ็นเซอร์ต้องหยุดอ่านก่อน ข้อมูลที่บันทึกแล้วจะยังอยู่', async () => { await stop(); await task(); });
 }
 function toggleMotor(profile) {
   if (busy || !profile) return;
@@ -438,37 +436,9 @@ async function stop() {
   setBusy(true);
   try {
     if (mode === 'live') { const result = check(await api.disconnect()); if (result.recording) renderRecording(result.recording); }
-    clearInterval(demoTimer); mode = 'offline'; clearPowerReadings(); frozen = false; controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
+    mode = 'offline'; clearPowerReadings(); frozen = false; controlLabel($('pause-stream'), 'พักกราฟ', 'pause');
     cache.forEach(state => { state.status = 'offline'; }); renderSelected(); addLog('info', '', 'หยุดการอ่านและปิดรอบบันทึกแล้ว');
   } finally { setBusy(false); }
-}
-function demoFrame(profile, index, phase) {
-  const channels = { temperature: 35.2 + index + Math.sin(phase / 5) * .4, velocityX: 2.1 + index * .3 + Math.sin(phase) * .35, velocityY: 3.4 + index * .4 + Math.sin(phase + 1) * .5, velocityZ: 1.5 + index * .2 + Math.sin(phase + 2) * .25, displacementX: 32 + Math.sin(phase) * 3, displacementY: 41 + Math.sin(phase + 1) * 4, displacementZ: 22 + Math.sin(phase + 2) * 2, accelerationX: 1.2 + Math.sin(phase) * .2, accelerationY: 1.6 + Math.sin(phase + 1) * .2, accelerationZ: .9 + Math.sin(phase + 2) * .15 };
-  channels.frequencyX = 49.8 + Math.sin(phase) * .2; channels.frequencyY = 50.1 + Math.sin(phase + 1) * .3; channels.frequencyZ = 49.9 + Math.sin(phase + 2) * .2;
-  Object.keys(channels).forEach(key => { channels[key] = key.startsWith('frequency') ? Math.fround(channels[key]) : Math.round(channels[key] * 10) / 10; });
-  const axes = ['X', 'Y', 'Z']; const primaryAxis = axes.reduce((a, b) => channels[`velocity${a}`] > channels[`velocity${b}`] ? a : b);
-  const encoded = value => Math.round(value * 10) & 65535;
-  const floatWords = value => { const view = new DataView(new ArrayBuffer(4)); view.setFloat32(0, value); return [view.getUint16(0), view.getUint16(2)]; };
-  return { motorId: profile.motorId, value: channels[`velocity${primaryAxis}`], channels: profile.sensorModel === MODEL ? channels : null, rawRegisters: profile.sensorModel === MODEL ? { primary: [channels.temperature, channels.velocityX, channels.velocityY, channels.velocityZ, channels.displacementX, channels.displacementY, channels.displacementZ].map(encoded), acceleration: [channels.accelerationX, channels.accelerationY, channels.accelerationZ].map(encoded), frequency: ['frequencyX', 'frequencyY', 'frequencyZ'].flatMap(key => floatWords(channels[key])) } : [encoded(channels.velocityY)], primaryAxis: profile.sensorModel === MODEL ? primaryAxis : null, unit: profile.sensorModel === MODEL ? 'mm/s' : profile.unit, timestamp: new Date().toISOString(), source: 'SIMULATION', frequencyStatus: profile.sensorModel === MODEL ? 'ok' : undefined, frequencyByteOrder: 'ABCD', port: 'DEMO', slaveId: profile.slaveId, elapsedMs: 18 + index, recorded: false };
-}
-let beforeDemo = null;
-function startDemo() {
-  if (mode !== 'offline' || busy) return;
-  beforeDemo = profiles;
-  if (!profiles.length) profiles = [1, 2, 3].map(index => ({ motorId: `DEMO-0${index}`, name: ['Cooling water pump', 'Conveyor drive', 'Exhaust fan'][index - 1], area: ['Utility', 'Line A', 'Line B'][index - 1], path: 'DEMO', slaveId: index, baudRate: 9600, parity: 'none', stopBits: 1, sensorModel: MODEL, registerType: 'holding', unit: 'mm/s', pollInterval: 1000, timeout: 1500 }));
-  cache.clear(); selected = profiles[0].motorId; successful = 0; failures = 0; mode = 'demo'; frozen = false; message();
-  let phase = 0;
-  profiles.forEach((profile, index) => {
-    for (let sample = 0; sample < 40; sample++) {
-      const frame = demoFrame(profile, index, sample * .18); frame.timestamp = new Date(Date.now() - (40 - sample) * 1000).toISOString(); addReading(frame);
-    }
-  });
-  demoTimer = setInterval(() => { phase += .18; profiles.forEach((profile, index) => addReading(demoFrame(profile, index, 40 * .18 + phase))); }, 1000);
-  renderProfiles(); renderSelected(); setTab('monitor'); addLog('info', '', 'เปิดโหมดจำลอง ข้อมูลไม่ถูกเขียนลงไฟล์ประวัติ');
-}
-async function stopAndRestore() {
-  const wasDemo = mode === 'demo'; await stop();
-  if (wasDemo && beforeDemo) { profiles = beforeDemo; beforeDemo = null; selected = profiles[0]?.motorId || ''; cache.clear(); renderProfiles(); renderSelected(); }
 }
 function historyFilter() { return { date: $('history-date').value, endDate: $('history-end-date').value || $('history-date').value, motorId: $('history-motor').value, runId: $('history-run')?.value || '' }; }
 async function loadHistory() {
@@ -522,8 +492,7 @@ $('test-sensor').onclick = testMotor;
 $('cancel-confirm').onclick = () => $('confirm-dialog').close();
 $('motor-search').oninput = () => { renderMotorList(); refreshFleet(); };
 $('connect-all').onclick = () => action(startLive);
-$('disconnect').onclick = () => action(stopAndRestore);
-$('demo-mode').onclick = startDemo;
+$('disconnect').onclick = () => action(stop);
 $('pause-stream').onclick = () => { frozen = !frozen; controlLabel($('pause-stream'), frozen ? 'แสดงกราฟต่อ' : 'พักกราฟ', frozen ? 'play' : 'pause'); $('pause-stream').setAttribute('aria-pressed', String(frozen)); if (!frozen) renderSelected(); else { $('chart-live').textContent = 'PAUSED'; $('chart-description').textContent = 'พักเฉพาะกราฟ · ค่าล่าสุดและการบันทึกยังอัปเดตตามปกติ'; } };
 
 

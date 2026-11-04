@@ -38,7 +38,6 @@ function ensureAssetView() {
 }
 function frequencySummary(reading) {
   if (!reading) return 'รอข้อมูลความถี่ X/Y/Z จากเซ็นเซอร์';
-  if (reading.source === 'SIMULATION') return 'ความถี่จำลอง · ใช้ทดสอบหน้าจอ';
   if (reading.frequencyStatus === 'ok') return `ความถี่การสั่นจากเซ็นเซอร์ · Float ${reading.frequencyByteOrder} · ไม่ใช่ความถี่ไฟฟ้าหรือรอบมอเตอร์`;
   if (reading.frequencyStatus === 'unconfirmed') return 'อ่านค่าดิบความถี่แล้ว แต่ยังไม่แปลงเป็น Hz · ยืนยันรูปแบบ Float ในตั้งค่ามอเตอร์ แล้วเริ่มอ่านใหม่ · ดูค่าดิบได้ที่ตาราง Register';
   return reading.frequencyMessage || 'ไม่มี Hz ในข้อมูลรุ่นเดิม · ต้องอ่าน Register ความถี่เพิ่ม';

@@ -78,7 +78,6 @@ function updatePlotReadout(refs, frame) {
   if (!frame) { refs.inspector.open = false; refs.inspector.dataset.pinned = 'false'; }
   if (refs.inspector.open && refs.inspector.dataset.pinned === 'true') return;
   refs.inspectorBody.replaceChildren(node('p', frame ? timestamp(frame.timestamp) : 'ยังไม่มีข้อมูล', 'conversion-time'));
-  if (frame?.source === 'SIMULATION') refs.inspectorBody.append(node('p', 'ข้อมูลและค่าดิบจำลอง · ไม่ใช่ค่าจากเซ็นเซอร์', 'conversion-note'));
   for (const conversion of conversions) {
     const item = node('div', null, 'conversion-item');
     item.append(node('strong', `${conversion.label} · ${conversion.address}`), node('p', `Raw ${conversion.raw} · ${conversion.rawHex}`, 'mono'), node('p', `${conversion.formula} → ${conversion.result}`, 'conversion-formula'));

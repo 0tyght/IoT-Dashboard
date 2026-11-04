@@ -1,7 +1,7 @@
 'use strict';
 let measurementGroups=[], selectedMeasurementGroup='', editGroupId='';
 const selectedGroupId=()=>selectedMeasurementGroup;
-function updateGroupsControls(locked) { for(const id of ['groups-open','groups-quick']){const trigger=document.getElementById(id);if(trigger)trigger.disabled=locked;} document.querySelectorAll('#sidebar-groups button').forEach(button=>{button.disabled=locked;}); }
+function updateGroupsControls(locked) { for(const id of ['groups-open','groups-quick']){const trigger=document.getElementById(id);if(trigger)trigger.disabled=locked;} document.querySelectorAll('#sidebar-groups button').forEach(button=>{button.disabled=locked;}); if(locked)document.getElementById('group-context-menu')?.hidePopover(); }
 function renderGroupOptions() {
   const select=document.getElementById('groups-select');if(!select)return;
   const old=selectedMeasurementGroup;
@@ -17,7 +17,7 @@ function renderGroupOptions() {
 }
 let returnToFlowAfterMeter=false;
 let openFlowMeterEditor = () => {};
-let openFlowNewMeter = () => {};
+let openFlowNewMeter = (model = 'pm2230') => {};
 function setupGroupsUI() {
   api.onPower(reading=>{if(mode==='live'&&(!reading.runId||!recordingState.runId||reading.runId===recordingState.runId))renderPowerReading(reading);});
   const trigger=node('button','พื้นที่งาน');trigger.id='groups-open';trigger.type='button';document.querySelector('#session-actions .session-options').prepend(trigger);
@@ -49,7 +49,7 @@ function setupGroupsUI() {
   }
   function addMeterEditor(meter={}) {
     const box=node('div',null,'groups-meter'); box.dataset.meterId=meter.id||'';
-    box.innerHTML=`<p class="meter-type">ชนิดมิเตอร์: Schneider PM2200 · อ่านแรงดันและ Current unbalance ตามตารางที่ได้รับ</p><label>รหัสมิเตอร์<input class="meter-id" maxlength="24" placeholder="PM-01"></label><label>ชื่อ<input class="meter-name" maxlength="80" placeholder="ไฟเข้ามอเตอร์"></label><label>จุดวัด<select class="meter-point"><option value="motor-input">ไฟเข้ามอเตอร์</option><option value="generator-output">ไฟออกเจเนอเรเตอร์</option><option value="other">จุดวัดอื่น</option></select></label><label>ตั้งค่าการสื่อสาร<select class="meter-port"></select></label><div class="meter-independent" hidden><label>COM Port<input class="meter-path" placeholder="COM3"></label><label>Baud rate<select class="meter-baud"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>4800</option><option>2400</option><option>1200</option></select></label><label>Parity<select class="meter-parity"><option value="none">None</option><option value="even">Even</option><option value="odd">Odd</option></select></label><label>Stop bits<select class="meter-stop"><option value="1">1</option><option value="2">2</option></select></label><label>ช่วงอ่าน (ms)<input class="meter-interval" type="number" min="250" max="3600000" value="2000"></label><label>Timeout (ms)<input class="meter-timeout" type="number" min="200" max="30000" value="1500"></label></div><label>Slave ID<input class="meter-slave" type="number" min="1" max="247" value="3"></label><label>Function<select class="meter-function"><option value="holding">FC03</option><option value="input">FC04</option></select></label><label>ลำดับ Float ที่ยืนยันแล้ว<select class="meter-order"><option value="unconfirmed">ยังไม่ยืนยัน · บันทึก Raw</option><option>ABCD</option><option>CDAB</option><option>BADC</option><option>DCBA</option></select></label><p class="meter-register-note">Register ที่อ่าน: 3017, 3019–3031 และ 3035 · Float32 สอง Register ต่อค่า · ตรวจเทียบคู่มือและเครื่องจริง</p><label>ปรับ Address จากตาราง<select class="meter-offset"><option value="0">0 · ตามตาราง</option><option value="1">+1</option><option value="-1">−1</option></select></label><button type="button" class="meter-remove">ลบมิเตอร์จากชุด</button>`;
+    box.innerHTML=`<label>รุ่นมิเตอร์<select class="meter-model"><option value="pm2230">Schneider Electric PM2230</option><option value="pm2200">Schneider PM2200 · ผังเดิม</option></select></label><label>รหัสมิเตอร์<input class="meter-id" maxlength="24" placeholder="PM-01"></label><label>ชื่อ<input class="meter-name" maxlength="80" placeholder="ไฟเข้ามอเตอร์"></label><label>จุดวัด<select class="meter-point"><option value="motor-input">ไฟเข้ามอเตอร์</option><option value="generator-output">ไฟออกเจเนอเรเตอร์</option><option value="other">จุดวัดอื่น</option></select></label><label>ตั้งค่าการสื่อสาร<select class="meter-port"></select></label><div class="meter-independent" hidden><label>COM Port<input class="meter-path" placeholder="COM3"></label><label>Baud rate<select class="meter-baud"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>4800</option><option>2400</option><option>1200</option></select></label><label>Parity<select class="meter-parity"><option value="none">None</option><option value="even">Even</option><option value="odd">Odd</option></select></label><label>Stop bits<select class="meter-stop"><option value="1">1</option><option value="2">2</option></select></label><label>ช่วงอ่าน (ms)<input class="meter-interval" type="number" min="250" max="3600000" value="2000"></label><label>Timeout (ms)<input class="meter-timeout" type="number" min="200" max="30000" value="1500"></label></div><label>Slave ID<input class="meter-slave" type="number" min="1" max="247" value="3"></label><label>Function<select class="meter-function"><option value="holding">FC03</option><option value="input">FC04</option></select></label><label>ลำดับ Float ที่ยืนยันแล้ว<select class="meter-order"><option value="unconfirmed">ยังไม่ยืนยัน · บันทึก Raw</option><option>ABCD</option><option>CDAB</option><option>BADC</option><option>DCBA</option></select></label><details class="meter-register-note"><summary>Register ตามรุ่น</summary><p class="meter-map-source footnote"></p><div class="meter-preset-tables"></div></details><label>ปรับ Address ที่ส่ง<select class="meter-offset"><option value="0">0 · ใช้ผังตามรุ่น</option><option value="1">+1</option><option value="-1">−1</option></select></label><button type="button" class="meter-remove">ลบมิเตอร์จากชุด</button>`;
     box.querySelector('.meter-id').value=meter.id||'';box.querySelector('.meter-name').value=meter.name||'';box.querySelector('.meter-slave').value=meter.slaveId??3;
     const ownerLabel=node('label','อุปกรณ์วัดที่เกี่ยวข้อง (ไม่บังคับ)'),owner=node('select');owner.className='meter-owner';owner.add(new Option('ไม่ระบุ',''));profiles.forEach(profile=>owner.add(new Option(`${profile.motorId} · ${profile.name||''}`,profile.motorId)));owner.value=meter.motorId||'';ownerLabel.append(owner);box.querySelector('.meter-point').parentElement.after(ownerLabel);
     const port=box.querySelector('.meter-port');port.add(new Option('ยังไม่เชื่อมบัส','unbound'));flowSavedBuses().forEach(bus=>port.add(new Option(`บัส ${bus.path} · ${bus.baudRate}/${bus.parity}/${bus.stopBits}`,`bus:${bus.path}`)));port.add(new Option('กำหนด COM Port และการสื่อสารเอง (เดิม)','independent'));profiles.filter(profile=>!String(profile.path).toUpperCase().startsWith('UNBOUND:')).forEach(profile=>port.add(new Option(`${profile.path} · ${profile.baudRate}/${profile.parity}/${profile.stopBits} · ${profile.motorId}`,profile.motorId)));
@@ -59,14 +59,48 @@ function setupGroupsUI() {
     const pointBody=extra.querySelector('tbody'),result=extra.querySelector('.meter-point-result');
     const testPoint=async row=>{const button=row.querySelector('.point-test'),status=row.querySelector('.point-row-status');button.disabled=true;try{const point=pointFromRow(row),serial=meterSerial(box);if(!point.enabled)throw new Error('เปิดอ่านจุดวัดก่อนทดสอบ');if(!serial.path||serial.path.startsWith('UNBOUND:'))throw new Error('เชื่อมอุปกรณ์กับบัสก่อนทดสอบ');result.textContent='กำลังอ่าน…';const config={...serial,motorId:box.querySelector('.meter-id').value.trim(),slaveId:Number(box.querySelector('.meter-slave').value),sensorModel:'custom',registerAddress:0,dataType:'uint16',byteOrder:'ABCD',scale:1,unit:'',points:[point]};const read=check(await api.testConnection(config)).points?.[0];result.textContent=read?.status==='ok'?`${read.name}: Raw ${read.raw.join(' / ')} → ${read.value} ${read.unit}`:`อ่านไม่สำเร็จ: ${read?.message||'ไม่ได้รับข้อมูล'}`;}catch(error){result.textContent=`ทดสอบไม่สำเร็จ: ${error.message}`;}finally{status.textContent=result.textContent;button.disabled=false;}};
     extra.querySelector('.meter-point-add').onclick=()=>addPointRow({},pointBody,testPoint);extra.querySelector('.meter-add-currents').onclick=()=>{for(const phase of ['A','B','C']){if([...pointBody.querySelectorAll('.point-id')].some(input=>input.value.toUpperCase()===`CURRENT_${phase}`))continue;const row=addPointRow({id:`CURRENT_${phase}`,name:`กระแส ${phase}`,registerAddress:'',dataType:'float32',byteOrder:'ABCD',scale:1,offset:0,unit:'A'},pointBody,testPoint);const order=row.querySelector('.point-order');order.prepend(new Option('เลือกลำดับ',''));order.value='';}};(meter.points||[]).forEach(point=>addPointRow(point,pointBody,testPoint));box.querySelector('.meter-register-note').after(extra);
-    box.querySelector('.meter-point').value=meter.point||'motor-input';box.querySelector('.meter-function').value=meter.registerType||'holding';box.querySelector('.meter-order').value=meter.byteOrder||'unconfirmed';box.querySelector('.meter-offset').value=String(meter.offsetAdjust??0);box.querySelector('.meter-remove').onclick=()=>box.remove();$g('groups-meters').append(box);
+    box.querySelector('.meter-point').value=meter.point||'motor-input';box.querySelector('.meter-function').value=meter.registerType||'holding';box.querySelector('.meter-order').value=meter.byteOrder||'unconfirmed';box.querySelector('.meter-offset').value=String(meter.offsetAdjust??0);box.querySelector('.meter-remove').onclick=()=>box.remove();
+    const model=box.querySelector('.meter-model'), offset=box.querySelector('.meter-offset');
+    model.value=meter.model || (meter.id ? 'pm2200' : 'pm2230');
+    const renderPreset = () => {
+      box.querySelector('.meter-map-source').textContent=model.value==='pm2230'
+        ? 'Schneider FA379514 · Address RTU = เลข Register ในคู่มือ − 1 · Float32 ใช้ 2 Register ต่อค่า'
+        : 'ผัง PM2200 ที่ตั้งไว้เดิม · Float32 ใช้ 2 Register ต่อค่า';
+      const fields=PowerRegisters.preset(model.value).fields;
+      const sections=[
+        ['กระแส',fields.filter(field=>field.key.startsWith('current'))],
+        ['แรงดัน',fields.filter(field=>field.key.startsWith('voltage'))],
+        ['กำลังและความถี่',fields.filter(field=>field.key.includes('Power') || field.key==='frequency')]
+      ];
+      const tables=sections.filter(([,rows])=>rows.length).map(([title,rows])=>{
+        const table=node('table',null,'meter-preset-table');
+        table.innerHTML='<caption></caption><thead><tr><th scope="col">ค่าที่อ่าน</th><th scope="col">RTU</th><th scope="col">หน่วย</th></tr></thead><tbody></tbody>';
+        table.caption.textContent=title;
+        table.tBodies[0].append(...rows.map(field=>{
+          const row=node('tr');
+          row.append(node('td',field.label),node('td',String(field.address+Number(offset.value)),'mono'),node('td',field.unit));
+          return row;
+        }));
+        return table;
+      });
+      box.querySelector('.meter-preset-tables').replaceChildren(...tables);
+    };
+    model.onchange=()=>{
+      box.querySelector('.meter-order').value='unconfirmed';
+      box.querySelector('.meter-function').value='holding';
+      offset.value='0';
+      renderPreset();
+    };
+    offset.onchange=renderPreset;
+    renderPreset();
+    $g('groups-meters').append(box);
   }
   const focusMeter=box=>{dialog.classList.add('meter-focus');$g('groups-title').textContent='ตั้งค่า Power Meter';dialog.querySelector('.dialog-header p').textContent='ตั้งค่าอุปกรณ์และจุดวัด · การสื่อสารร่วมแก้ไขที่โหนดบัส';$g('groups-save').textContent='บันทึกมิเตอร์';for(const other of $g('groups-meters').children)other.hidden=other!==box;};
-  openFlowNewMeter = () => {
+  openFlowNewMeter = (model = 'pm2230') => {
     if (busy) return;
-    if (mode !== 'offline') return stopBeforeChange(() => openFlowNewMeter());
+    if (mode !== 'offline') return stopBeforeChange(() => openFlowNewMeter(model));
     const group=measurementGroups.find(item=>item.id===selectedMeasurementGroup);
-    trigger.onclick(); returnToFlowAfterMeter=true;openEditor(group || null); if(!group){const existing=new Set(measurementGroups.map(item=>item.name));let candidate='พื้นที่งานใหม่',number=2;while(existing.has(candidate))candidate=`พื้นที่งานใหม่ ${number++}`;$g('groups-name').value=candidate;} addMeterEditor();
+    trigger.onclick(); returnToFlowAfterMeter=true;openEditor(group || null); if(!group){const existing=new Set(measurementGroups.map(item=>item.name));let candidate='พื้นที่งานใหม่',number=2;while(existing.has(candidate))candidate=`พื้นที่งานใหม่ ${number++}`;$g('groups-name').value=candidate;} addMeterEditor({model});
     const box=$g('groups-meters').lastElementChild;if(group)focusMeter(box); box.scrollIntoView({block:'center'});box.querySelector('.meter-id').focus();
   };
   openFlowMeterEditor = (meterId) => {
@@ -80,14 +114,39 @@ function setupGroupsUI() {
   };
   $g('groups-new').onclick=()=>openEditor(null);
   $g('groups-edit').onclick=()=>{const group=measurementGroups.find(item=>item.id===selectedMeasurementGroup);if(group)openEditor(group);else toast('เลือกพื้นที่งานที่ต้องการแก้ไข');};
-  $g('groups-delete').onclick=()=>{const group=measurementGroups.find(item=>item.id===selectedMeasurementGroup);if(!group){toast('เลือกพื้นที่งานที่ต้องการลบ');return;} dialog.close();confirmAction(`ลบพื้นที่งาน ${group.name}?`,group.meters.length?`การตั้งค่า Power Meter ในพื้นที่งานนี้จะถูกลบ ${group.meters.length} รายการ (${group.meters.map(m=>m.name||m.id).join(', ')}) รวมทั้ง Register เพิ่มเติม ข้อมูลที่บันทึกและอุปกรณ์ทั่วไปยังอยู่`:'ลบพื้นที่งานนี้ ข้อมูลที่บันทึกและอุปกรณ์ทั่วไปยังอยู่',async()=>{measurementGroups=check(await api.saveGroups(measurementGroups.filter(item=>item.id!==group.id))).groups;selectedMeasurementGroup='';try{check(await api.selectGroup(''));}catch(error){toast(`ลบชุดแล้ว แต่บันทึกตัวเลือกไม่ได้: ${error.message}`);}renderGroupOptions();renderMotorList();renderFlow();updateControls();});};
+  const deleteGroup = group => {
+    if (!group || busy || mode !== 'offline') return;
+    if (dialog.open) dialog.close();
+    const detail = group.meters.length
+      ? `การตั้งค่า Power Meter และ Register เพิ่มเติมในพื้นที่งานนี้จะถูกลบ ${group.meters.length} รายการ ข้อมูลที่บันทึกและอุปกรณ์ทั่วไปยังอยู่`
+      : 'ข้อมูลที่บันทึกและอุปกรณ์ทั่วไปยังอยู่';
+    confirmAction(`ลบพื้นที่งาน ${group.name}?`, detail, async () => {
+      measurementGroups = check(await api.saveGroups(measurementGroups.filter(item => item.id !== group.id))).groups;
+      if (selectedMeasurementGroup === group.id) {
+        selectedMeasurementGroup = '';
+        try { check(await api.selectGroup('')); }
+        catch (error) { toast(`ลบพื้นที่งานแล้ว แต่บันทึกตัวเลือกไม่ได้: ${error.message}`); }
+      }
+      renderGroupOptions(); renderMotorList(); renderFlow(); renderSelected(); updateControls();
+    });
+  };
+  $g('groups-delete').onclick = () => {
+    const group = measurementGroups.find(item => item.id === selectedMeasurementGroup);
+    if (group) deleteGroup(group); else toast('เลือกพื้นที่งานที่ต้องการลบ');
+  };
+  setupGroupContextMenu((group, action) => {
+    if (innerWidth < 1180) closeSidebarDrawer();
+    if (action === 'delete') return deleteGroup(group);
+    trigger.onclick();
+    openEditor(group);
+  });
   $g('groups-add-meter').onclick=()=>addMeterEditor();$g('groups-cancel').onclick=()=>{if(dialog.classList.contains('meter-focus'))dialog.close();else $g('groups-editor').hidden=true;};
   $g('groups-save').onclick=async()=>{
     $g('groups-error').hidden=true;
     try{
       const name=$g('groups-name').value.trim();if(!name)throw new Error('ระบุชื่อพื้นที่งาน');
       const motorIds=[...$g('groups-motors').querySelectorAll('input:checked')].map(input=>input.value);
-      const meters=[...$g('groups-meters').children].map(box=>{const serial=meterSerial(box);if(!serial.path)throw new Error('ระบุ COM Port ให้ Power Meter');return {id:box.querySelector('.meter-id').value.trim(),name:box.querySelector('.meter-name').value.trim(),point:box.querySelector('.meter-point').value,motorId:box.querySelector('.meter-owner').value,path:serial.path,baudRate:serial.baudRate,parity:serial.parity,stopBits:serial.stopBits,timeout:serial.timeout,pollInterval:serial.pollInterval,slaveId:Number(box.querySelector('.meter-slave').value),registerType:box.querySelector('.meter-function').value,byteOrder:box.querySelector('.meter-order').value,offsetAdjust:Number(box.querySelector('.meter-offset').value),points:[...box.querySelectorAll('.meter-extra-points tbody tr')].map(pointFromRow)};});
+      const meters=[...$g('groups-meters').children].map(box=>{const serial=meterSerial(box);if(!serial.path)throw new Error('ระบุ COM Port ให้ Power Meter');return {model:box.querySelector('.meter-model').value,id:box.querySelector('.meter-id').value.trim(),name:box.querySelector('.meter-name').value.trim(),point:box.querySelector('.meter-point').value,motorId:box.querySelector('.meter-owner').value,path:serial.path,baudRate:serial.baudRate,parity:serial.parity,stopBits:serial.stopBits,timeout:serial.timeout,pollInterval:serial.pollInterval,slaveId:Number(box.querySelector('.meter-slave').value),registerType:box.querySelector('.meter-function').value,byteOrder:box.querySelector('.meter-order').value,offsetAdjust:Number(box.querySelector('.meter-offset').value),points:[...box.querySelectorAll('.meter-extra-points tbody tr')].map(pointFromRow)};});
       const id=editGroupId||`G${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
       const proposed=[...measurementGroups.filter(group=>group.id!==id),{id,name,motorIds,meters}];
       measurementGroups=check(await api.saveGroups(proposed)).groups;selectedMeasurementGroup=id;let selectionWarning='';try{check(await api.selectGroup(id));}catch(error){selectionWarning=`บันทึกพื้นที่งานแล้ว แต่จำตัวเลือกไม่ได้: ${error.message}`;}selected=profiles.find(profile=>motorIds.includes(profile.motorId))?.motorId||'';renderGroupOptions();renderMotorList();renderFlow();renderSelected();$g('groups-editor').hidden=true;updateControls();const showFlow=returnToFlowAfterMeter||(!editGroupId&&!motorIds.length&&!meters.length);returnToFlowAfterMeter=false;if(showFlow||dialog.classList.contains('meter-focus'))dialog.close();if(showFlow)setTab('fleet');toast(selectionWarning||'บันทึกแล้ว');
@@ -102,7 +161,65 @@ async function chooseMeasurementGroup(next){
   renderGroupOptions();renderMotorList();renderFlow();renderSelected();updateControls();
 }
 function renderGroupSidebar(){
- const list=document.getElementById('sidebar-groups');if(!list)return;list.replaceChildren();const all=node('button','อุปกรณ์เดิม (ไม่รวม Power Meter)','sidebar-group');all.type='button';all.setAttribute('aria-pressed',String(!selectedMeasurementGroup));all.onclick=()=>{void chooseMeasurementGroup('').then(()=>setTab('fleet'));};list.append(all);
- for(const group of measurementGroups){const button=node('button',null,'sidebar-group');button.type='button';button.setAttribute('aria-pressed',String(group.id===selectedMeasurementGroup));button.append(node('span',group.name),node('small',String(group.motorIds.length+group.meters.length)));button.onclick=()=>{void chooseMeasurementGroup(group.id).then(()=>setTab('fleet'));};list.append(button);}
+ const list=document.getElementById('sidebar-groups');if(!list)return;document.getElementById('group-context-menu')?.hidePopover();list.replaceChildren();const all=node('button','อุปกรณ์เดิม (ไม่รวม Power Meter)','sidebar-group');all.type='button';all.setAttribute('aria-pressed',String(!selectedMeasurementGroup));all.onclick=()=>{void chooseMeasurementGroup('').then(()=>setTab('fleet'));};list.append(all);
+ for(const group of measurementGroups){const button=node('button',null,'sidebar-group');button.type='button';button.setAttribute('aria-pressed',String(group.id===selectedMeasurementGroup));button.append(node('span',group.name),node('small',String(group.motorIds.length+group.meters.length)));button.onclick=()=>{void chooseMeasurementGroup(group.id).then(()=>setTab('fleet'));};
+   const row=node('div',null,'sidebar-group-row'), options=node('button','⋯','sidebar-group-options');
+   options.type='button'; options.setAttribute('aria-label',`จัดการพื้นที่งาน ${group.name}`);
+   options.setAttribute('aria-controls','group-context-menu'); options.setAttribute('aria-expanded','false');
+   options.dataset.groupOptions=group.id;
+   button.addEventListener('contextmenu', event=>openGroupContextMenu(event, group.id, options));
+   options.addEventListener('contextmenu', event=>openGroupContextMenu(event, group.id, options));
+   options.onclick=event=>openGroupContextMenu(event, group.id, options);
+   row.append(button,options);list.append(row);}
  const add=node('button','＋ สร้างพื้นที่งาน','sidebar-group-add');add.type='button';add.onclick=()=>{document.getElementById('groups-quick').click();document.getElementById('groups-new').click();};list.append(add);const count=document.getElementById('motor-count');if(count)count.textContent=measurementGroups.length;
+}
+
+let groupMenuTrigger;
+function setupGroupContextMenu(onAction) {
+  const menu=node('div',null,'group-context-menu');
+  menu.id='group-context-menu';
+  menu.popover='auto';
+  menu.setAttribute('role','group');
+  const title=node('strong');
+  title.id='group-context-title';
+  menu.setAttribute('aria-labelledby',title.id);
+  menu.append(title);
+  for (const [action,label] of [['edit','ตั้งค่าพื้นที่งาน'],['delete','ลบพื้นที่งาน…']]) {
+    const button=node('button',label,action==='delete'?'group-context-delete':'');
+    button.type='button';
+    button.onclick=()=>{
+      const group=measurementGroups.find(item=>item.id===menu.dataset.groupId);
+      menu.hidePopover();
+      if(group && !busy && mode==='offline') onAction(group,action);
+    };
+    menu.append(button);
+  }
+  menu.addEventListener('toggle',()=>{
+    if (!menu.matches(':popover-open')) groupMenuTrigger?.setAttribute('aria-expanded','false');
+  });
+  document.getElementById('motor-sidebar').append(menu);
+  window.addEventListener('resize',()=>menu.hidePopover());
+}
+
+function openGroupContextMenu(event, groupId, trigger) {
+  event.preventDefault();
+  const menu=document.getElementById('group-context-menu');
+  if(!menu || busy || mode!=='offline' || trigger.disabled) return;
+  if(menu.matches(':popover-open')) {
+    menu.hidePopover();
+    if(event.type==='click' && groupMenuTrigger===trigger) return;
+  }
+  const group=measurementGroups.find(item=>item.id===groupId);
+  if(!group) return;
+  groupMenuTrigger?.setAttribute('aria-expanded','false');
+  groupMenuTrigger=trigger;
+  trigger.setAttribute('aria-expanded','true');
+  menu.dataset.groupId=groupId;
+  menu.querySelector('strong').textContent=group.name;
+  const anchor=trigger.getBoundingClientRect();
+  const atPointer=event.type==='contextmenu' && (event.clientX || event.clientY);
+  menu.showPopover({source:trigger});
+  menu.style.left=`${Math.max(8,Math.min(atPointer?event.clientX:anchor.right-menu.offsetWidth,innerWidth-menu.offsetWidth-8))}px`;
+  menu.style.top=`${Math.max(8,Math.min(atPointer?event.clientY:anchor.bottom+4,innerHeight-menu.offsetHeight-8))}px`;
+  menu.querySelector('button').focus({preventScroll:true});
 }

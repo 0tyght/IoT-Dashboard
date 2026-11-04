@@ -3,6 +3,7 @@
 const ModbusRTU = require('modbus-serial');
 const { normalizeConfig, decodeRegisters, decodeVemseeSnapshot, decodeVemseeFrequency, registerCount } = require('./sensor-codec.cjs');
 const { decodePowerMeter } = require('./power-meter-codec.cjs');
+const { preset: powerPreset } = require('../src/power-registers.js');
 const frequencyUnsupported = new WeakMap();
 
 function normalizeFleet(raw, {allowSharedConnections=false}={}) {
@@ -89,7 +90,14 @@ async function readPowerSnapshot(client, meter, cancelled=()=>false) {
     return response.data;
   };
   let result;
-  try{const first=await read(3017+meter.offsetAdjust,16),last=await read(3035+meter.offsetAdjust,2);result=decodePowerMeter({first,last},meter.byteOrder);}
+  try {
+    const blocks = {};
+    // Requests on a shared RTU bus must complete in order.
+    for (const [key, [address,count]] of Object.entries(powerPreset(meter.model).blocks)) {
+      blocks[key] = await read(address + meter.offsetAdjust, count);
+    }
+    result = decodePowerMeter(blocks, meter.byteOrder, meter.model);
+  }
   catch(error){if(error.code==='CANCELLED'||error.code==='ETIMEDOUT'||error.errno==='ETIMEDOUT'||!meter.points?.length)throw error;result={values:{},raw:{},byteOrder:meter.byteOrder,quality:'read-error',presetError:String(error.message||error)};}
   if(meter.points?.length){const extra=await readSnapshot(client,{...meter,sensorModel:'custom'},cancelled);result.points=extra.points;if(result.presetError&&!extra.points.some(point=>point.status==='ok'))throw new Error(`อ่านมิเตอร์และจุดวัดเพิ่มเติมไม่สำเร็จ: ${result.presetError}`);}
   return result;
@@ -155,15 +163,15 @@ class FleetService {
         this.buses.push(bus);
         try { bus.client = await this.open(entries[0]); }
         catch(error) {
-          for(const config of entries){const key=config.deviceType==='power'?`power:${config.id}`:config.motorId;bus.nextDue.set(key,Date.now()+config.pollInterval);if(config.deviceType==='power')initialPower.push({state:'read-error',meterId:config.id,path:config.path,slaveId:config.slaveId,message:error.message});else initialFailures.push({motorId:config.motorId,path:config.path,message:error.message});}
+          for(const config of entries){const key=config.deviceType==='power'?`power:${config.id}`:config.motorId;bus.nextDue.set(key,Date.now()+config.pollInterval);if(config.deviceType==='power')initialPower.push({state:'read-error',meterId:config.id,model:config.model,name:config.name,point:config.point,path:config.path,slaveId:config.slaveId,message:error.message});else initialFailures.push({motorId:config.motorId,path:config.path,message:error.message});}
           continue;
         }
         for (const config of entries) {
           const started = Date.now();
           if (config.deviceType === 'power') {
             const key=`power:${config.id}`;
-            try { const snapshot=await readPowerSnapshot(bus.client,config); initialPower.push({state:'receiving',meterId:config.id,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date().toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs:null,...snapshot}); bus.lastReceived.set(key,Date.now()); }
-            catch(error) { initialPower.push({state:'read-error',meterId:config.id,path:config.path,slaveId:config.slaveId,message:error.message}); }
+            try { const snapshot=await readPowerSnapshot(bus.client,config); initialPower.push({state:'receiving',meterId:config.id,model:config.model,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date().toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs:null,...snapshot}); bus.lastReceived.set(key,Date.now()); }
+            catch(error) { initialPower.push({state:'read-error',meterId:config.id,model:config.model,name:config.name,point:config.point,path:config.path,slaveId:config.slaveId,message:error.message}); }
             bus.nextDue.set(key,Date.now()+config.pollInterval); continue;
           }
           this.onStatus({ state: 'testing', motorId: config.motorId, path: config.path });
@@ -206,7 +214,7 @@ class FleetService {
         if (config.deviceType === 'power') {
           const snapshot=await readPowerSnapshot(bus.client,config,()=>generation!==this.generation); if(generation!==this.generation)return;
           const received=Date.now(),actualIntervalMs=bus.lastReceived.has(key)?received-bus.lastReceived.get(key):null; bus.lastReceived.set(key,received);
-          this.onPower({state:'receiving',meterId:config.id,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date(received).toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs,...snapshot});
+          this.onPower({state:'receiving',meterId:config.id,model:config.model,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date(received).toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs,...snapshot});
         } else {
         const snapshot = await readSnapshot(bus.client, config,()=>generation!==this.generation);
         if (generation !== this.generation) return;
@@ -219,7 +227,7 @@ class FleetService {
         }
       } catch (error) {
         if (generation !== this.generation) return;
-        if(config.deviceType==='power')this.onPower({state:'read-error',meterId:config.id,path:config.path,slaveId:config.slaveId,message:error.message});
+        if(config.deviceType==='power')this.onPower({state:'read-error',meterId:config.id,model:config.model,name:config.name,point:config.point,path:config.path,slaveId:config.slaveId,message:error.message});
         else this.onStatus({ state: 'read-error', motorId: config.motorId, path: config.path, message: error.message });
       }
       // Start-to-start requested period; slow devices/shared buses may run longer.

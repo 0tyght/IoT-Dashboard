@@ -43,7 +43,7 @@ function renderFlow(){
     const sourceGroup=node('div',null,'flow-device-group');
     for(const {item,type} of bus.items){
       const deviceWrap=node('div',null,'flow-device-wrap');const button=node('button',null,`flow-node ${type}`);button.type='button';button.draggable=!item.missing;button.ondragstart=event=>{event.dataTransfer.setData('text/plain',JSON.stringify({type,id:type==='sensor'?item.motorId:item.id}));event.dataTransfer.effectAllowed='move';};button.dataset.nodeType=type;button.dataset.nodeId=type==='sensor'?item.motorId:item.id;button.dataset.nodePort=bus.key;
-      const header=node('span',type==='sensor'?(item.sensorModel===MODEL?'เซ็นเซอร์ · VemSee':'อุปกรณ์ · กำหนดเอง'):'POWER METER · PM2200','flow-node-kind'),name=node('strong',type==='sensor'?(item.name||item.motorId):(item.name||item.id));
+      const header=node('span',type==='sensor'?(item.sensorModel===MODEL?'เซ็นเซอร์ · VemSee':'อุปกรณ์ · กำหนดเอง'):`POWER METER · ${PowerRegisters.label(item.model)}`,'flow-node-kind'),name=node('strong',type==='sensor'?(item.name||item.motorId):(item.name||item.id));
       const unbound=bus.key.startsWith('UNBOUND:');const info=node('span',item.missing?'ไม่พบในทะเบียน':`${type==='sensor'?item.motorId:item.id} · ${unbound?'ยังไม่เชื่อมบัส':bus.path} / ID ${item.slaveId}`,'flow-node-info');
       const status=node('span','','flow-status');button.append(header,name,info,status);
       if(type==='meter'){button.append(node('span',item.point==='motor-input'?'ไฟเข้ามอเตอร์':item.point==='generator-output'?'ไฟออกเจเนอเรเตอร์':'จุดวัดอื่น','flow-node-info'));button.append(node('span',item.byteOrder==='unconfirmed'?'รอยืนยัน Float / Address':'Address ต้องเทียบกับมิเตอร์','flow-warn'));}
@@ -68,7 +68,6 @@ function refreshFlowStatus(){
     if(ref.item.missing){text='ไม่พบในทะเบียน';kind='fault';}
     else if(String(ref.item.path||'').toUpperCase().startsWith('UNBOUND:')){text='ยังไม่เชื่อมบัส';kind='idle';}
     else if(ref.type==='sensor'){const status=fleetStatus(ref.item,stateFor(ref.item.motorId));text=status.text;kind=status.kind;}
-    else if(mode==='demo'){text='ไม่ได้จำลองมิเตอร์';}
     else if(mode==='live'){const reading=powerStates.get(ref.item.id);if(!reading)text='รอข้อมูล';else if(reading.state==='receiving'){if(reading.presetError||reading.points?.some(point=>point.status==='read-error')){text='บางจุดอ่านไม่สำเร็จ';kind='fault';}else{text='รับข้อมูล';kind='online';}}else{text='ขัดข้อง';kind='fault';}}
     ref.status.textContent=text;ref.status.dataset.status=kind;
   }
@@ -84,7 +83,8 @@ function openFlowAddDevice(){
   const body=node('div',null,'flow-dialog-body flow-device-choices');body.append(node('p','เลือกแบบตั้งต้นตามอุปกรณ์ หรือกำหนด Register เอง แล้วเชื่อมอุปกรณ์เข้ากับบัสในแผนผัง'));
   const choose=(title,description,action)=>{const button=node('button',null,'flow-choice');button.type='button';button.append(node('strong',title),node('span',description));button.onclick=action;body.append(button);};
   choose('VemSee SN-3001-WZ3A-N01','เซ็นเซอร์ความสั่น 3 แกน · ใช้ Register จากคู่มือ',async()=>{dialog.close();flowAddingSensorGroup=selectedMeasurementGroup;await openEditor(undefined,'__UNBOUND__');});
-  choose('Schneider PM2200','Power Meter · ตรวจสอบ Address และลำดับ Float กับเครื่องจริง',()=>{dialog.close();openFlowNewMeter();});
+  choose('Schneider PM2230','Power Meter · กระแส แรงดัน กำลังไฟฟ้า และความถี่ไฟฟ้า',()=>{dialog.close();openFlowNewMeter('pm2230');});
+  choose('Schneider PM2200','Power Meter · ผังแรงดันและกระแสไม่สมดุลเดิม',()=>{dialog.close();openFlowNewMeter('pm2200');});
   choose('กำหนดอุปกรณ์เอง','อุปกรณ์ Modbus รุ่นอื่น · เพิ่มจุดวัดและ Register เอง',async()=>{dialog.close();flowAddingSensorGroup=selectedMeasurementGroup;await openEditor(undefined,'__UNBOUND__');form.elements.sensorModel.value='custom';$('points-enabled').checked=true;if(!$('points-body').children.length)addPointRow({});presetVisibility();editorBaseline=JSON.stringify(configFromForm());});
   dialog.append(body);dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();
 }

@@ -1,11 +1,9 @@
 'use strict';
-// Preview only: no meter configuration, Modbus reads or persisted measurements.
 const powerTab = document.createElement('button');
 powerTab.dataset.tab = 'power';
 powerTab.textContent = 'ค่าไฟฟ้า';
 const mainTabs=document.querySelector('.tabs'), analysisTab=mainTabs.querySelector('[data-tab="analysis"]');mainTabs.insertBefore(powerTab,analysisTab);mainTabs.insertBefore(mainTabs.querySelector('[data-tab="history"]'),analysisTab);
 const powerStates=new Map();
-const powerFields=[['currentUnbalanceWorst','กระแสไม่สมดุลสูงสุด','%'],['voltageAB','แรงดัน A–B','V'],['voltageBC','แรงดัน B–C','V'],['voltageCA','แรงดัน C–A','V'],['voltageLLAvg','แรงดันเฉลี่ย L–L','V'],['voltageAN','แรงดัน A–N','V'],['voltageBN','แรงดัน B–N','V'],['voltageCN','แรงดัน C–N','V'],['voltageLNAvg','แรงดันเฉลี่ย L–N','V']];
 const powerLive=document.createElement('section');powerLive.className='power-panel power-live';powerLive.hidden=true;document.querySelector('.power-main').prepend(powerLive);
 const powerHistory=document.createElement('details');powerHistory.className='power-panel power-history';
 powerHistory.innerHTML=`<summary>ประวัติ Power Meter ที่บันทึก</summary><div class="power-history-controls"><label>วันที่<select id="power-history-day"><option value="">ยังไม่มีข้อมูล</option></select></label><label>รอบอ่าน<select id="power-history-run"><option value="">ทุกรอบ</option></select></label></div><p id="power-history-status" role="status">เลือกวันที่ที่บันทึก</p><div id="power-history-rows"></div>`;
@@ -29,13 +27,13 @@ function renderPowerReading(reading) {
   const header=document.createElement('h3');header.textContent='Power Meter ในรอบนี้';powerLive.append(header);
   for(const entry of powerStates.values()) {
     const box=document.createElement('div');box.className='power-live-meter';
-    const title=document.createElement('strong');const point={'motor-input':'ไฟเข้ามอเตอร์','generator-output':'ไฟออกเจเนอเรเตอร์',other:'จุดวัดอื่น'}[entry.point]||'ไม่ระบุจุดวัด';title.textContent=`${entry.name||entry.meterId} · ${point}${entry.motorId?` · ${entry.motorId}`:''} · ${entry.path} / Slave ${entry.slaveId}`;box.append(title);
+    const title=document.createElement('strong');const point={'motor-input':'ไฟเข้ามอเตอร์','generator-output':'ไฟออกเจเนอเรเตอร์',other:'จุดวัดอื่น'}[entry.point]||'ไม่ระบุจุดวัด';title.textContent=`${entry.name||entry.meterId} · ${PowerRegisters.label(entry.model)} · ${point}${entry.motorId?` · ${entry.motorId}`:''} · ${entry.path} / Slave ${entry.slaveId}`;box.append(title);
     const status=document.createElement('p');status.className='footnote';
     if(entry.state!=='receiving'){status.textContent=`อ่านไม่สำเร็จ · ${entry.message||'ตรวจการเชื่อมต่อ'}`;box.append(status);powerLive.append(box);continue;}
     const time=new Date(entry.timestamp).toLocaleString('th-TH',{hour12:false});
-    status.textContent=`${time} · ${entry.presetError?`อ่าน Register แบบตั้งต้นไม่สำเร็จ: ${entry.presetError} · `:''}Address ตามตาราง ${entry.offsetAdjust >= 0?'+':''}${entry.offsetAdjust ?? 0} · ต้องยืนยันกับมิเตอร์ · ${entry.quality==='unconfirmed'?'Raw · รอยืนยัน Float':'ลำดับ Float ที่ผู้ใช้ตั้งไว้ · ต้องเทียบกับมิเตอร์'} · ${entry.actualIntervalMs==null?'รอรอบถัดไป':`รอบรับ ${entry.actualIntervalMs} ms`} · ${entry.storageError?`บันทึกไม่สำเร็จ: ${entry.storageError}`:entry.recorded?'บันทึกแล้ว':'ไม่ได้บันทึก'}`;box.append(status);
+    status.textContent=`${time} · ${entry.presetError?`อ่าน Register แบบตั้งต้นไม่สำเร็จ: ${entry.presetError} · `:''}ปรับ Address ${entry.offsetAdjust >= 0?'+':''}${entry.offsetAdjust ?? 0} · ต้องยืนยันกับมิเตอร์ · ${entry.quality==='unconfirmed'?'Raw · รอยืนยัน Float':'ลำดับ Float ที่ผู้ใช้ตั้งไว้ · ต้องเทียบกับมิเตอร์'} · ${entry.actualIntervalMs==null?'รอรอบถัดไป':`รอบรับ ${entry.actualIntervalMs} ms`} · ${entry.storageError?`บันทึกไม่สำเร็จ: ${entry.storageError}`:entry.recorded?'บันทึกแล้ว':'ไม่ได้บันทึก'}`;box.append(status);
     const list=document.createElement('div');list.className='power-live-values';
-    for(const [key,label,unit] of powerFields){const row=document.createElement('div'),value=entry.values?.[key],words=entry.raw?.[key];const name=document.createElement('span');name.textContent=label;const out=document.createElement('strong');out.textContent=Number.isFinite(value)?`${Number(value.toPrecision(6))} ${unit}`:entry.presetError?'อ่านไม่สำเร็จ':'รอยืนยัน';row.append(name,out);if(words){const raw=document.createElement('small');raw.textContent=`Raw ${words.map(word=>'0x'+word.toString(16).toUpperCase().padStart(4,'0')).join(' ')}`;row.append(raw);}list.append(row);}
+    for(const {key,label,unit,address} of PowerRegisters.preset(entry.model).fields){const row=document.createElement('div'),value=entry.values?.[key],words=entry.raw?.[key];const name=document.createElement('span');name.textContent=label;name.title=`Address RTU ${address+(entry.offsetAdjust||0)}`;const out=document.createElement('strong');out.textContent=Number.isFinite(value)?`${Number(value.toPrecision(6))} ${unit}`:entry.presetError?'อ่านไม่สำเร็จ':entry.quality==='unconfirmed'?'รอยืนยัน Float':'ไม่มีค่าที่ใช้ได้';row.append(name,out);if(words){const raw=document.createElement('small');raw.textContent=`Raw ${words.map(word=>'0x'+word.toString(16).toUpperCase().padStart(4,'0')).join(' ')}`;row.append(raw);}list.append(row);}
     for(const point of entry.points||[]){const row=document.createElement('div'),name=document.createElement('span'),out=document.createElement('strong'),detail=document.createElement('small');name.textContent=point.name;out.textContent=point.status==='disabled'?'พักอ่าน':point.status==='ok'?`${point.value} ${point.unit}`:'อ่านไม่สำเร็จ';detail.textContent=point.status==='ok'?`Raw ${point.raw.join(' / ')} · × ${point.scale} + ${point.offset}`:(point.message||'');row.append(name,out,detail);list.append(row);}
     box.append(list);powerLive.append(box);
   }
@@ -45,7 +43,7 @@ function clearPowerReadings(){powerStates.clear();powerLive.replaceChildren();po
 let powerDiagnosticKey='';
 const diagnostic = document.createElement('details');
 diagnostic.className = 'power-diagnostic';
-diagnostic.innerHTML = `<summary>ทดสอบอ่าน Register</summary><p>หยุดการอ่านก่อนทดสอบ · อ่าน 2 Register โดยไม่เปลี่ยนค่ามิเตอร์</p><label>Power Meter<select id="power-test-device"></select></label><label>Address ที่ส่งในคำสั่ง<input id="power-test-address" type="number" min="0" max="65534" step="1" value="3019"></label><label>Function<select id="power-test-function"><option value="holding">FC03 · Holding</option><option value="input">FC04 · Input</option></select></label><button id="power-test-button" type="button">ทดสอบอ่านค่าดิบ</button><p id="power-test-result" role="status" aria-live="polite">3019 เป็นเลขจากตาราง ยังต้องเทียบค่ากับหน้ามิเตอร์</p>`;
+diagnostic.innerHTML = `<summary>อ่าน Register จากมิเตอร์</summary><p>หยุดรอบอ่านก่อน · อ่าน 2 Register โดยไม่เปลี่ยนค่ามิเตอร์</p><label>Power Meter<select id="power-test-device"></select></label><label>Address ที่ส่งในคำสั่ง<input id="power-test-address" type="number" min="0" max="65534" step="1" value="3019"></label><label>Function<select id="power-test-function"><option value="holding">FC03 · Holding</option><option value="input">FC04 · Input</option></select></label><button id="power-test-button" type="button">อ่านค่าดิบ</button><p id="power-test-result" role="status" aria-live="polite">เทียบค่าที่อ่านกับหน้ามิเตอร์</p>`;
 document.querySelector('.power-setup').append(diagnostic);
 function refreshPowerDiagnostic(){
   const group=measurementGroups.find(item=>item.id===selectedMeasurementGroup),meters=group?.meters||[],select=document.getElementById('power-test-device'),previous=select.value;
@@ -55,7 +53,7 @@ function refreshPowerDiagnostic(){
   info.querySelector('strong').textContent=first?({'motor-input':'ไฟเข้ามอเตอร์','generator-output':'ไฟออกเจเนอเรเตอร์',other:'จุดวัดอื่น'}[first.point]||'จุดวัดอื่น'):'ยังไม่ได้เลือก Power Meter';
   info.querySelector('span').textContent=first?`${first.name||first.id} · ${meters.length} มิเตอร์ในชุด`: 'เลือกชุดที่มีมิเตอร์เพื่อดูอุปกรณ์';
   document.getElementById('power-selected-point').textContent=first?(first.name||first.id):'ยังไม่มีมิเตอร์ที่เลือก';
-  const syncSelection=()=>{const meter=meters.find(item=>item.id===select.value),key=meter?`${group.id}:${meter.id}:${meter.offsetAdjust}:${meter.registerType}`:'legacy';if(key!==powerDiagnosticKey){powerDiagnosticKey=key;document.getElementById('power-test-address').value=String(3019+(meter?.offsetAdjust||0));document.getElementById('power-test-function').value=meter?.registerType||'holding';}};
+  const syncSelection=()=>{const meter=meters.find(item=>item.id===select.value),key=meter?`${group.id}:${meter.id}:${meter.model}:${meter.offsetAdjust}:${meter.registerType}`:'legacy';if(key!==powerDiagnosticKey){powerDiagnosticKey=key;document.getElementById('power-test-address').value=String(3019+(meter?.offsetAdjust||0));document.getElementById('power-test-function').value=meter?.registerType||'holding';}};
   select.onchange=()=>{syncSelection();const current=meters.find(item=>item.id===select.value);if(current)document.getElementById('power-selected-point').textContent=current.name||current.id;};syncSelection();
 }
 

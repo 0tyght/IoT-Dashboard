@@ -1,4 +1,5 @@
 'use strict';
+const { seedMonitor } = require('./monitor-fixture.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,7 +13,8 @@ const { _electron: electron } = require('playwright');
     app = await electron.launch({ ...(process.env.ELECTRON_EXECUTABLE ? { executablePath: process.env.ELECTRON_EXECUTABLE, args: [] } : { args: ['.'], cwd: project }), env: { ...process.env, VECTRA_TEST_DATA: temporary, TEMP: base, TMP: base } });
     page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.stack || error.message));
     await page.waitForLoadState('domcontentloaded'); await page.locator('#app-version').filter({ hasText: `v${require('../package.json').version}` }).waitFor();
-    await page.locator('#session-actions summary').click(); await page.locator('#demo-mode').click();
+    assert.equal(await page.locator('#demo-mode').count(), 0);
+    await seedMonitor(page);
     const tabs = await page.locator('[data-tab]').evaluateAll(buttons => buttons.map(button => button.dataset.tab));
     const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     for (const [width, height] of [[768, 1024], [960, 680], [1366, 768], [1920, 1080]]) {
