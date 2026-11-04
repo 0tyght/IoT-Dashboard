@@ -1,0 +1,190 @@
+/* Navigation, the device list and the active work surface use separate columns. */
+.shell { --rail-width: 78px; --rail-ink: #525a70; }
+.app-nav.tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 3px 10px;
+  min-width: 0;
+  background: #fff;
+  border-color: var(--line);
+  scrollbar-width: thin;
+}
+.app-nav .rail-brand { display: none; }
+.app-nav button {
+  position: relative;
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--rail-ink);
+  font-size: 12px;
+}
+.app-nav .nav-label { font-weight: 500; white-space: nowrap; }
+.app-nav button:hover:not(:disabled) { background: #f5f6fa; border-color: transparent; color: #333c53; }
+.app-nav button.active,
+.app-nav button.active:hover:not(:disabled) { background: #efecff; color: #4937bd; border-color: #ded7fa; }
+.app-nav button.active .nav-label { font-weight: 650; }
+.app-nav button:focus-visible { outline-offset: -2px; }
+.nav-symbol {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: currentColor;
+  mask: var(--nav-icon) center / contain no-repeat;
+}
+.app-nav [data-tab="fleet"] { --nav-icon: url("icons/topology-star-3.svg"); }
+.app-nav [data-tab="monitor"] { --nav-icon: url("icons/activity-heartbeat.svg"); }
+.app-nav [data-tab="power"] { --nav-icon: url("icons/bolt.svg"); }
+.app-nav [data-tab="history"] { --nav-icon: url("icons/history.svg"); }
+.app-nav [data-tab="analysis"] { --nav-icon: url("icons/chart-dots-3.svg"); }
+.app-nav [data-tab="model"] { --nav-icon: url("icons/box.svg"); }
+.app-nav [data-tab="registers"] { --nav-icon: url("icons/table.svg"); }
+.app-nav [data-tab="motors"] { --nav-icon: url("icons/devices.svg"); }
+.app-nav [data-tab="events"] { --nav-icon: url("icons/list-details.svg"); }
+.app-nav #event-count { background: #eeeff6; color: #4f5973; font-variant-numeric: tabular-nums; }
+.app-nav button.active #event-count { background: #dfd7fb; color: #4937bd; }
+
+@media (width >= 1180px) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  }
+  .shell > :is(.appbar, .commandbar, .recording-strip, .workspace, .statusbar) { grid-column: 2; min-width: 0; }
+  .shell > .appbar { grid-row: 1; }
+  .shell > .commandbar { grid-row: 2; }
+  .shell > .recording-strip { grid-row: 3; }
+  .shell > .workspace { grid-row: 4; }
+  .shell > .statusbar { grid-row: 5; }
+  .appbar .brand-mark { display: none; }
+  .app-nav.tabs {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 6px;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    overflow: hidden auto;
+  }
+  .app-nav .rail-brand { display: grid; place-items: center; flex: 0 0 46px; margin-bottom: 5px; }
+  .app-nav .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; font-size: 21px; }
+  .app-nav button { flex-direction: column; min-height: 48px; gap: 3px; padding: 4px 1px; font-size: 12px; }
+  .app-nav #event-count { position: absolute; inset: 3px 5px auto auto; max-width: 26px; overflow: hidden; }
+}
+@media (width < 1180px) {
+  .app-nav.tabs { padding-block: 2px; overflow: auto hidden; }
+  .app-nav button { min-height: 30px; }
+}
+
+.shell #motor-sidebar { background: #fff; color: #344054; border-color: #e2e5ed; }
+.shell #motor-sidebar .side-heading { padding: 14px 12px 8px; }
+.shell #motor-sidebar .side-heading h2 { color: #27344a; }
+.shell #motor-sidebar .count { color: #5142a0; background: #efecfc; }
+.shell #motor-sidebar .empty-ports { color: #546079; }
+.shell #motor-sidebar .sidebar-close { color: #536079; border-color: transparent; background: transparent; }
+.shell #motor-sidebar .sidebar-device-label { color: #505a70; font-size: 12px; font-weight: 650; }
+.shell #motor-sidebar :is(.sidebar-group, .sidebar-group-add, .sidebar-meter) { color: #344054; min-height: 34px; }
+.shell #motor-sidebar :is(.sidebar-group, .sidebar-group-add, .sidebar-meter):hover:not(:disabled) { background: #f3f2fa; color: #4537a2; }
+.shell #motor-sidebar .sidebar-group[aria-pressed="true"],
+.shell #motor-sidebar .motor-item.selected { background: #efecff; color: #4937a9; border-color: #ded7fa; }
+.shell #motor-sidebar :is(.sidebar-group, .sidebar-meter) small { color: #546079; }
+.shell #motor-sidebar .sidebar-group-options { color: #515b72; }
+.shell #motor-sidebar .sidebar-group[aria-pressed="true"]:disabled { opacity: 1; }
+.shell #motor-sidebar .search { background: #f5f6f9; border-color: #e1e4ed; }
+.shell #motor-sidebar .search input { color: #344054; }
+.shell #motor-sidebar .sidebar-bottom { background: #fff; border-color: #e2e5ed; }
+.shell #motor-sidebar .sidebar-bottom :is(p, p span, .legend) { color: #525d73; }
+.shell #motor-sidebar .sidebar-meter { border-color: #e6e8f0; }
+.appbar strong, .document-heading h1 { color: #27344a; }
+.workspace > main { background: #f4f5f8; }
+.workspace > main :is(.data-table, .history-range) { font-variant-numeric: tabular-nums; }
+.workspace .data-table th { background: #f4f5f9; color: #424e66; }
+.workspace .data-table tbody tr:hover { background: #f7f6ff; }
+.commandbar #groups-quick { color: #4535aa; border-color: #ded8f4; background: #f3f0ff; }
+.shell:has(#disconnect:not([hidden])) #groups-quick:disabled { opacity: 1; }
+
+/* Native modal sheets keep focus and expose the actions while the form scrolls. */
+#connection-dialog.settings-drawer:modal,
+#recording-dialog.settings-drawer:modal,
+#groups-dialog.meter-focus:modal {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(var(--drawer-width, 960px), calc(100vw - 28px));
+  max-width: none;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: -12px 0 42px #25213626;
+  overflow: hidden;
+}
+#connection-dialog.settings-drawer { --drawer-width: 1016px; }
+#recording-dialog.settings-drawer { --drawer-width: 540px; }
+#groups-dialog.meter-focus { --drawer-width: 740px; }
+#groups-dialog.meter-focus:has(.meter-extra-points[open]) { --drawer-width: 1016px; }
+dialog.settings-drawer::backdrop,
+#groups-dialog.meter-focus::backdrop { background: #23304b54; }
+dialog.settings-drawer > form,
+#connection-dialog.settings-drawer > #sensor-form {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  max-height: none;
+  min-width: 0;
+}
+#groups-dialog.meter-focus:modal { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+dialog.settings-drawer :is(.dialog-content, .recording-form-content),
+#groups-dialog.meter-focus .groups-body { min-height: 0; max-height: none; overflow: auto; }
+dialog.settings-drawer .dialog-header,
+#groups-dialog.meter-focus .dialog-header { padding: 16px 20px; background: #fff; }
+dialog.settings-drawer .dialog-header h2,
+#groups-dialog.meter-focus .dialog-header h2 { color: #26334a; font-size: 20px; }
+dialog.settings-drawer .dialog-footer { padding: 12px 20px; background: #fff; }
+#connection-dialog.settings-drawer .dialog-content {
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+#connection-dialog.settings-drawer :is(.device-pane, .settings-pane) {
+  min-height: 0;
+  overflow: auto;
+}
+dialog.settings-drawer .settings-pane { background: #fff; }
+dialog.settings-drawer .device-pane { background: #f5f6fa; border-color: #e2e5ed; }
+dialog.settings-drawer :is(.device-heading h3, legend, label) { color: #46516b; }
+dialog.settings-drawer :is(.preset-note, .test-result:not(.success, .error)) { background: #f6f6fb; border-color: #e3e4ef; }
+#groups-dialog.meter-focus #groups-editor > .groups-actions:last-child {
+  position: sticky;
+  bottom: -16px;
+  z-index: 4;
+  justify-content: flex-end;
+  margin: 14px -20px -16px;
+  padding: 12px 20px;
+  background: #fff;
+  border-top: 1px solid #e3e6ef;
+}
+@media (width <= 760px) {
+  #connection-dialog.settings-drawer .dialog-content { grid-template-rows: auto auto; overflow: auto; }
+  #connection-dialog.settings-drawer :is(.device-pane, .settings-pane) { overflow: visible; }
+}
+@media (760px < width < 900px) {
+  #connection-dialog .dialog-content { grid-template-columns: 172px minmax(0, 1fr); }
+  #connection-dialog :is(.device-pane, .settings-pane) { padding-inline: 12px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog.settings-drawer:modal, #groups-dialog.meter-focus:modal {
+    animation: settings-enter 170ms ease-out;
+  }
+  @keyframes settings-enter {
+    from { opacity: .86; transform: translateX(14px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+}

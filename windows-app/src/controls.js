@@ -27,6 +27,17 @@ function setupControls() {
   };
   for (const [id, [label, icon]] of Object.entries(labels)) controlLabel(document.getElementById(id), label, icon);
   for (const [key,description] of Object.entries({fleet:'แผนผัง ชุดอุปกรณ์ และการเชื่อมต่ออุปกรณ์',monitor:'ค่าการสั่นและกราฟของเซ็นเซอร์ที่เลือก',power:'ค่าจาก Power Meter และประวัติไฟฟ้า',history:'ค้นหาและส่งออกข้อมูลที่บันทึก',analysis:'วิเคราะห์ข้อมูลย้อนหลังหรือคลื่นดิบ',model:'โมเดล 3D',registers:'ค่าดิบจาก Register',motors:'จัดการเซ็นเซอร์ในทะเบียน',events:'เหตุการณ์ระหว่างทำงาน'})){const tab=document.querySelector(`[data-tab="${key}"]`);if(tab)tab.title=description;}
+  const navLabels = {
+    fleet:'เชื่อมต่อ', monitor:'ค่าที่อ่าน', power:'ค่าไฟฟ้า', history:'ประวัติ', analysis:'วิเคราะห์',
+    model:'โมเดล 3D', registers:'Register', motors:'ทะเบียน', events:'เหตุการณ์'
+  };
+  for (const tab of document.querySelectorAll('.app-nav [data-tab]')) {
+    const label = document.createElement('b'), icon = document.createElement('i');
+    tab.setAttribute('aria-label', tab.firstChild.textContent.trim());
+    label.className = 'nav-label'; label.textContent = navLabels[tab.dataset.tab];
+    icon.className = 'nav-symbol'; icon.setAttribute('aria-hidden','true');
+    tab.firstChild.remove(); tab.prepend(icon,label);
+  }
   const sessionMenu = document.getElementById('session-actions');
   document.addEventListener('pointerdown', event => { if (!sessionMenu.contains(event.target)) sessionMenu.open = false; });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && sessionMenu.open) { sessionMenu.open = false; sessionMenu.querySelector('summary').focus(); } });

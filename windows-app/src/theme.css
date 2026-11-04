@@ -93,7 +93,7 @@ main { padding: 18px 24px 28px; }
 .breadcrumb span { color: #6c5cb5; }
 .document-heading { margin-bottom: 14px; }
 .document-heading h1 { color: #535765; font-size: 23px; margin: 4px 0; }
-.document-heading p { color: #6a7182; font-size: 12px; line-height: 1.6; }
+.document-heading p { color: #5c6578; font-size: 12px; line-height: 1.6; }
 .selection-state { color: #6b6681; background: #f6f4fc; border-color: #e2dcf3; font-size: 12px; }
 .selection-state.online { color: #267451; background: #f1f8f4; border-color: #d5e9dd; }
 .selection-state.fault { color: #a73d47; background: #fdf1f2; border-color: #f0d7db; }

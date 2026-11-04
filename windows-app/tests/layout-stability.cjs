@@ -20,6 +20,11 @@ const { _electron: electron } = require('playwright');
     for (const [width, height] of [[768, 1024], [960, 680], [1366, 768], [1920, 1080]]) {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size), [width, height]);
       await page.waitForFunction(size => innerWidth === size[0] && innerHeight === size[1], [width, height]);
+      await settle();
+      assert.equal(await page.locator('.app-nav').getAttribute('aria-orientation'), width < 1180 ? 'horizontal' : 'vertical');
+      const rail=await page.locator('.app-nav').boundingBox(), main=await page.locator('main').boundingBox();
+      if (width < 1180) assert(rail.y+rail.height<=main.y+1, 'narrow navigation occupies a separate row');
+      else assert(rail.x+rail.width<=main.x+1, 'wide navigation occupies a separate column');
       for (const tab of tabs) {
         await page.locator(`[data-tab="${tab}"]`).click(); await settle();
         assert.equal(await page.locator('.tabs [role="tab"][aria-selected="true"]').count(), 1);
@@ -46,6 +51,7 @@ const { _electron: electron } = require('playwright');
           assert.equal(await page.locator('#toggle-sidebar').getAttribute('aria-expanded'), 'true');
           assert.equal(await page.locator('#motor-sidebar').getAttribute('aria-modal'), 'true');
           assert(await page.locator('main').evaluate(element => element.inert), 'background is unavailable while the drawer is modal');
+          assert(await page.locator('.app-nav').evaluate(element => element.inert), 'navigation is unavailable behind the workspace drawer');
           assert.equal(await page.evaluate(() => document.activeElement.id), 'motor-search', 'drawer opens at the search field');
           const lastButton = page.locator('#motor-sidebar .motor-item').last(); await lastButton.focus(); await page.keyboard.press('Tab');
           assert.equal(await page.evaluate(() => document.activeElement.id), 'close-sidebar', 'Tab wraps inside the drawer');
@@ -61,7 +67,7 @@ const { _electron: electron } = require('playwright');
           assert.equal(await page.locator('#toggle-sidebar').getAttribute('aria-expanded'), 'false');
         }
       }
-      await page.locator('[data-tab="fleet"]').focus(); await page.keyboard.press('ArrowRight');
+      await page.locator('[data-tab="fleet"]').focus(); await page.keyboard.press(width < 1180 ? 'ArrowRight' : 'ArrowDown');
       assert.equal(await page.locator('[data-tab="monitor"]').getAttribute('aria-selected'), 'true', 'keyboard navigation continues to work on every layout');
       if (width === 768) {
         await page.locator('[data-tab="analysis"]').click(); await page.locator('#toggle-sidebar').click();

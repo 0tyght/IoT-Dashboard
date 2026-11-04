@@ -64,6 +64,7 @@ function setTab(tab) {
   if (tab === 'fleet') renderFlow();
   document.querySelectorAll('.view').forEach(view => { view.hidden = view.id !== `${tab}-view`; });
   document.querySelectorAll('[data-tab]').forEach(button => { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
+  if (innerWidth < 1180) $(`tab-${tab}`)?.scrollIntoView({block:'nearest',inline:'nearest'});
   document.querySelector('main').scrollTop = 0;
   if (tab === 'history') {
     void refreshRecordedDays();
@@ -488,8 +489,9 @@ document.querySelectorAll('[data-tab]').forEach((button, index, tabs) => {
   const panel = $(`${button.dataset.tab}-view`); panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', button.id);
   button.onclick = () => setTab(button.dataset.tab);
   button.onkeydown = event => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    if (['ArrowUp','ArrowDown'].includes(event.key) && innerWidth < 1180) return;
+    event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (['ArrowRight','ArrowDown'].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
     setTab(tabs[next].dataset.tab); tabs[next].focus();
   };
 });

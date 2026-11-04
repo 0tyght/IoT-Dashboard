@@ -7,7 +7,7 @@ function syncSidebarDrawer(focusInside = false) {
   shell.classList.toggle('sidebar-drawer-open', open);
   $('toggle-sidebar').setAttribute('aria-expanded', String(!shell.classList.contains('sidebar-collapsed')));
   const backdrop = $('sidebar-backdrop'); if (backdrop) backdrop.hidden = !open;
-  for (const element of document.querySelectorAll('main, .commandbar, .recording-strip, .statusbar, .appbar-end')) element.inert = open;
+  for (const element of document.querySelectorAll('main, .app-nav, .commandbar, .recording-strip, .statusbar, .appbar-end')) element.inert = open;
   if (open) { sidebar.setAttribute('role', 'dialog'); sidebar.setAttribute('aria-modal', 'true'); sidebar.setAttribute('aria-labelledby', 'motor-registry-title'); }
   else { sidebar.removeAttribute('role'); sidebar.removeAttribute('aria-modal'); sidebar.removeAttribute('aria-labelledby'); }
   if (open && focusInside) ($('motor-search').closest('label').hidden ? sidebar.querySelector('.sidebar-group-add:not(:disabled)') || $('close-sidebar') : $('motor-search')).focus();
@@ -45,6 +45,7 @@ function updateWorkbenchLayout() {
   const shell = document.querySelector('.shell'), monitor = currentTab === 'monitor', narrow = innerWidth < 1180;
   if (workbenchTab !== currentTab) closeWorkbenchPopovers();
   shell.classList.toggle('monitor-workspace', monitor);
+  document.querySelector('.app-nav').setAttribute('aria-orientation', narrow?'horizontal':'vertical');
   if (narrow && !workbenchNarrow) { desktopSidebarCollapsed = shell.classList.contains('sidebar-collapsed'); shell.classList.add('sidebar-collapsed'); }
   else if (!narrow && workbenchNarrow) shell.classList.toggle('sidebar-collapsed', desktopSidebarCollapsed);
   if (narrow && workbenchTab !== currentTab) shell.classList.add('sidebar-collapsed');
@@ -99,6 +100,7 @@ function setupWorkbench() {
     }
   });
   document.addEventListener('keydown', event => {
+    if (document.querySelector('dialog:modal')) return;
     if (document.querySelector('.shell').classList.contains('sidebar-drawer-open')) {
       if (event.key === 'Escape' && !document.querySelector('#group-context-menu:popover-open')) { event.preventDefault(); event.stopPropagation(); closeSidebarDrawer(true); return; }
       if (event.key === 'Tab') {

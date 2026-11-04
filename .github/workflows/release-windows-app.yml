@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Create or select a workspace, add devices, and connect their Modbus bus before starting acquisition. The active workspace defines all devices in the run. The connection map, sensor readings, and electrical view follow that selection. Existing device profiles remain available for assignment from the registry."
+            --notes "Windows x64 release. Adds a compact navigation rail, light workspace and device list, and right-aligned settings panels with persistent actions. Narrow windows use a horizontal navigation strip and an on-demand workspace drawer. Modbus acquisition and recorded data remain available through the existing workflow."
