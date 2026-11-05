@@ -16,7 +16,7 @@ function normalizeGroups(raw) {
     const meters = item.meters.map(rawMeter => {
       const meterId = String(rawMeter.id || '').trim();
       if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,23}$/.test(meterId)) throw new Error('รหัส Power Meter ต้องมี 1–24 ตัว และใช้ตัวอักษรอังกฤษ ตัวเลข _ หรือ -');
-      if (meterIds.has(meterId.toUpperCase())) throw new Error(`รหัส Power Meter ${meterId} ซ้ำในพื้นที่งาน ${name}`);
+      if (meterIds.has(meterId.toUpperCase())) throw new Error(`รหัสอุปกรณ์ ${meterId} ซ้ำในพื้นที่งาน ${name}`);
       meterIds.add(meterId.toUpperCase());
       const base = normalizeConfig({ ...rawMeter, points:undefined, motorId:meterId, sensorModel:'custom', registerAddress:3017, dataType:'float32', byteOrder:'ABCD', scale:1, unit:'V' });
       const byteOrder = rawMeter.byteOrder || 'unconfirmed';
@@ -27,7 +27,7 @@ function normalizeGroups(raw) {
       const motorId=String(rawMeter.motorId || '');if(motorId && !motorIds.some(id=>id.toUpperCase()===motorId.toUpperCase()))throw new Error('มอเตอร์ที่ผูกกับมิเตอร์ต้องอยู่ในชุดเดียวกัน');
       const model = rawMeter.model ?? 'pm2200';
       if (!['pm2200','pm2230'].includes(model)) throw new Error('รุ่น Power Meter ไม่ถูกต้อง');
-      const result={ model, id:meterId, name:String(rawMeter.name || meterId).slice(0,80), point, motorId, path:base.path, slaveId:base.slaveId, baudRate:base.baudRate, parity:base.parity, stopBits:base.stopBits, timeout:base.timeout, pollInterval:base.pollInterval, registerType:base.registerType, byteOrder, offsetAdjust };
+      const result={ enabled:rawMeter.enabled!==false, model, id:meterId, name:String(rawMeter.name || meterId).slice(0,80), point, motorId, path:base.path, slaveId:base.slaveId, baudRate:base.baudRate, parity:base.parity, stopBits:base.stopBits, timeout:base.timeout, pollInterval:base.pollInterval, registerType:base.registerType, byteOrder, offsetAdjust };
       if(Array.isArray(rawMeter.points)&&rawMeter.points.length)result.points=normalizePoints(rawMeter.points);
       return result;
     });

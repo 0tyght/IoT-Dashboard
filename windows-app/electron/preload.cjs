@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   initialize: () => ipcRenderer.invoke('app:initialize'),
   listPorts: () => ipcRenderer.invoke('sensor:list-ports'),
   saveProfiles: profiles => ipcRenderer.invoke('profiles:save', profiles),
+  saveTemplates: templates => ipcRenderer.invoke('templates:save', templates),
+  testPowerConfig: config => ipcRenderer.invoke('power:test-config', config),
   testConnection: config => ipcRenderer.invoke('sensor:test', config),
   testPowerMeter: (groupId, meterId, options) => ipcRenderer.invoke('power:test-meter',groupId,meterId,options),
   connect: (configs,groupId) => ipcRenderer.invoke('sensor:connect', configs,groupId),
@@ -39,5 +41,6 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   importProfiles: () => ipcRenderer.invoke('profiles:import'),
   onReading: subscribe('sensor:reading'),
   onStatus: subscribe('sensor:status'),
+  onDeviceStatus: subscribe('device:status'),
   onRecording: subscribe('recording:state')
 });

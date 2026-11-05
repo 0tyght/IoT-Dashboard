@@ -152,6 +152,14 @@ class DataStore {
   }
   runDataPath(runId) { return runDataPath(this.dataPath(), runId); }
   profilesPath() { return path.join(this.directory, 'motors.json'); }
+  loadTemplates() {
+    try { return require('./device-templates.cjs').normalizeTemplates(JSON.parse(fs.readFileSync(path.join(this.directory,'device-templates.json'),'utf8'))); }
+    catch(error) { if(error.code==='ENOENT')return []; throw new Error(`อ่านแม่แบบ Register ไม่ได้: ${error.message}`); }
+  }
+  saveTemplates(raw) {
+    const templates=require('./device-templates.cjs').normalizeTemplates(raw),file=path.join(this.directory,'device-templates.json');
+    fs.mkdirSync(this.directory,{recursive:true});fs.writeFileSync(`${file}.tmp`,JSON.stringify(templates,null,2),'utf8');fs.renameSync(`${file}.tmp`,file);return templates;
+  }
   normalizeBuses(raw) {
     if (!Array.isArray(raw) || raw.length > 64) throw new Error('บัสต้องมีไม่เกิน 64 พอร์ต');
     const seen=new Set();return raw.map(item=>{const c=normalizeConfig({...item,motorId:'BUS',sensorModel:'custom'});if(c.path.toUpperCase().startsWith('UNBOUND:'))throw new Error('ชื่อพอร์ตไม่ถูกต้อง');const key=c.path.toUpperCase();if(seen.has(key))throw new Error('COM Port ซ้ำ');seen.add(key);return {path:c.path,baudRate:c.baudRate,parity:c.parity,stopBits:c.stopBits};});

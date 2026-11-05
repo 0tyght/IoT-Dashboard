@@ -23,7 +23,7 @@ function paceReads(client, baudRate) {
   const frameGapMs = baudRate > 19200 ? 2 : Math.ceil(3.5 * 12 * 1000 / baudRate);
   let nextAllowedAt = 0;
   let tail = Promise.resolve();
-  pacedReads.set(client, (type, address, count, cancelled) => {
+  pacedReads.set(client, (type, address, count, cancelled, onRequest) => {
     const task = tail.then(async () => {
       let waitMs = nextAllowedAt - performance.now();
       while (waitMs > 0) {
@@ -33,6 +33,7 @@ function paceReads(client, baudRate) {
       checkCancelled(cancelled);
       let gapMs = frameGapMs;
       try {
+        onRequest?.();
         return await (type === 'input' ? client.readInputRegisters(address, count) : client.readHoldingRegisters(address, count));
       } catch (error) {
         // Give a late reply a short window to clear the line before the next request.
@@ -54,7 +55,8 @@ async function readRegisters(client, config, type, address, count, cancelled, tr
   const functionCode = type === 'input' ? 'FC04' : 'FC03';
   let failure;
   try {
-    if (paced) return await paced(type, address, count, cancelled);
+    if (paced) return await paced(type, address, count, cancelled, trace?.onRequest);
+    trace?.onRequest?.();
     return await (type === 'input' ? client.readInputRegisters(address, count) : client.readHoldingRegisters(address, count));
   } catch (error) {
     failure = error;
@@ -62,7 +64,7 @@ async function readRegisters(client, config, type, address, count, cancelled, tr
     const message = `Timeout ${config.timeout} ms · ${config.path} · Slave ID ${config.slaveId} · ${functionCode} · Register ${address} (${count} คำ)`;
     throw Object.assign(new Error(message, {cause: error}), {code: 'ETIMEDOUT'});
   } finally {
-    trace?.push({ functionCode, address, count, startedAt: new Date(start).toISOString(), elapsedMs: Math.round(performance.now() - clock),
+    trace?.push({ functionCode, address, count, startedAt: new Date(start).toISOString(), endedAt:new Date().toISOString(), elapsedMs: Math.round(performance.now() - clock),
       outcome: readOutcome(failure), ...(failure ? { message: failure.message, exceptionCode: failure.modbusCode } : {}) });
   }
 }
@@ -182,19 +184,26 @@ function setNextPoll(bus, key, due, error) {
 }
 
 class FleetService {
-  constructor({ onReading = () => {}, onPower = () => {}, onStatus = () => {}, onAttempt = () => {}, clientFactory = () => new ModbusRTU() } = {}) {
+  constructor({ onReading = () => {}, onPower = () => {}, onStatus = () => {}, onAttempt = () => {}, onDeviceStatus = () => {}, clientFactory = () => new ModbusRTU() } = {}) {
     this.onReading = onReading; this.onPower = onPower; this.onStatus = onStatus; this.onAttempt = onAttempt; this.clientFactory = clientFactory;
     this.buses = []; this.generation = 0;
     this.attemptSequence = 0;
+    this.onDeviceStatus = onDeviceStatus;
   }
 
   beginAttempt(config, phase, started, scheduled = null) {
     const power = config.deviceType === 'power';
-    return { attemptId: ++this.attemptSequence, phase, deviceId: power ? config.id : config.motorId,
+    const attempt = { attemptId: ++this.attemptSequence, phase, deviceId: power ? config.id : config.motorId,
       deviceType: power ? 'power' : 'sensor', port: config.path, slaveId: config.slaveId,
       pollIntervalMs: config.pollInterval, timeoutMs: config.timeout,
       scheduledAt: scheduled === null ? null : new Date(scheduled).toISOString(), startedAt: new Date(started).toISOString(),
       queueDelayMs: scheduled === null ? null : Math.max(0, started - scheduled), clock: performance.now(), frames: [] };
+    attempt.frames.onRequest=()=>{
+      if(attempt.sentAt)return;
+      attempt.sentAt=new Date().toISOString();
+      this.onDeviceStatus({deviceId:attempt.deviceId,deviceType:attempt.deviceType,state:'waiting',attemptId:attempt.attemptId,sentAt:attempt.sentAt,port:config.path,slaveId:config.slaveId});
+    };
+    return attempt;
   }
 
   finishAttempt(attempt, snapshot, error, nextDue) {
@@ -204,6 +213,11 @@ class FleetService {
     const noData = Array.isArray(snapshot?.points) && !snapshot.values && !enabled.some(point => point.status === 'ok');
     const partial = snapshot?.presetError || ['unsupported', 'read-error', 'invalid'].includes(snapshot?.frequencyStatus) || enabled.some(point => point.status === 'read-error');
     const outcome = error ? readOutcome(error) : noData ? badFrame?.outcome || 'read-error' : partial ? 'partial' : 'ok';
+    const endedAt=new Date().toISOString();
+    this.onDeviceStatus({deviceId:attempt.deviceId,deviceType:attempt.deviceType,attemptId:attempt.attemptId,
+      state:outcome==='cancelled'?'offline':error||noData||badFrame?'fault':'online',sentAt:attempt.sentAt||null,
+      receivedAt:attempt.frames.filter(frame=>frame.outcome==='ok').at(-1)?.endedAt||null,endedAt,
+      message:error?.message||badFrame?.message||snapshot?.presetError||snapshot?.frequencyMessage||'',port:attempt.port,slaveId:attempt.slaveId});
     this.onAttempt({ ...details, outcome, endedAt: new Date().toISOString(), elapsedMs: Math.round(performance.now() - clock),
       nextScheduledAt: Number.isFinite(nextDue) ? new Date(nextDue).toISOString() : null,
       message: error?.message || badFrame?.message || snapshot?.presetError || snapshot?.frequencyMessage || '',
@@ -248,6 +262,7 @@ class FleetService {
   }
 
   async connect(rawConfigs, meters = []) {
+    meters=meters.filter(item=>item.enabled!==false);
     const configs = rawConfigs.length ? normalizeFleet(rawConfigs).filter(config => config.enabled) : [];
     if (!configs.length && !meters.length) throw new Error('ไม่มีอุปกรณ์ที่เปิดใช้งาน');
     if ([...configs,...meters].some(config=>String(config.path).toUpperCase().startsWith('UNBOUND:'))) throw new Error('มีอุปกรณ์ที่ยังไม่เชื่อมกับบัส Modbus');

@@ -85,81 +85,17 @@ function renderFlow(){
   cancelAnimationFrame(flowFrame);flowFrame=requestAnimationFrame(redraw);if(window.flowResizeObserver)window.flowResizeObserver.disconnect();window.flowResizeObserver=new ResizeObserver(()=>requestAnimationFrame(redraw));window.flowResizeObserver.observe(canvas);refreshFlowStatus();
 }
 function refreshFlowStatus(){
-  for(const ref of flowItems){let text='หยุดอ่าน',kind='idle';
-    if(ref.item.missing){text='ไม่พบในทะเบียน';kind='fault';}
-    else if(String(ref.item.path||'').toUpperCase().startsWith('UNBOUND:')){text='ยังไม่เชื่อมบัส';kind='idle';}
-    else if(ref.type==='sensor'){const status=fleetStatus(ref.item,stateFor(ref.item.motorId));text=status.text;kind=status.kind;}
-    else if(mode==='live'){const reading=powerStates.get(ref.item.id);if(!reading)text='รอข้อมูล';else if(reading.state==='receiving'){if(reading.presetError||reading.points?.some(point=>point.status==='read-error')){text='บางจุดอ่านไม่สำเร็จ';kind='fault';}else{text='รับข้อมูล';kind='online';}}else{text='ขัดข้อง';kind='fault';}}
-    ref.status.textContent=text;ref.status.dataset.status=kind;
-  }
+  for(const ref of flowItems){const signal=ref.item.missing?{state:'fault',label:'ไม่พบอุปกรณ์'}:deviceSignal(ref.type,ref.item);ref.status.textContent=signal.label;ref.status.dataset.status=signal.state;ref.status.title=signal.detail||'';}
 }
 function openFlowBus(bus){
   const dialog=node('dialog',null,'flow-dialog'),header=node('div',null,'dialog-header'),heading=node('div');heading.append(node('h2',`พอร์ต ${bus.path}`),node('p',bus.items.length?'ตั้งค่าการสื่อสารร่วมของอุปกรณ์บนบัสนี้':'บัสที่เพิ่มไว้ ยังไม่มีอุปกรณ์เชื่อม'));const close=node('button','ปิด');close.onclick=()=>dialog.close();header.append(heading,close);dialog.append(header);
-  const body=node('div',null,'flow-dialog-body');const configure=node('button','ตั้งค่าการสื่อสารบัส');configure.type='button';configure.disabled=!bus.config&&!bus.items.some(entry=>entry.item.path);configure.onclick=()=>{dialog.close();openFlowNewBus(new Map(),bus);};body.append(configure);if(!bus.items.length){const config=bus.config;body.append(node('p',`${config.baudRate} baud · ${config.parity} · ${config.stopBits} stop bit`));const remove=node('button','ลบบัสที่ยังไม่ใช้งาน');remove.onclick=async()=>{try{savedFlowBuses=check(await api.saveBuses(flowSavedBuses().filter(item=>item.path.toUpperCase()!==bus.key))).buses;dialog.close();renderFlow();}catch(error){toast(`ลบบัสไม่สำเร็จ: ${error.message}`);}};body.append(remove);}for(const {item,type} of bus.items){const button=node('button',`${type==='sensor'?'เซ็นเซอร์':'Power Meter'} · ${item.name||item.motorId||item.id} · ID ${item.slaveId??'—'} →`);button.onclick=()=>{dialog.close();if(type==='sensor'){if(item.missing)toast('ไม่พบอุปกรณ์ในทะเบียน');else openEditor(profiles.find(p=>p.motorId===item.motorId));}else openFlowMeterEditor(item.id);};body.append(button);}dialog.append(body);dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();
+  const body=node('div',null,'flow-dialog-body');const configure=node('button','ตั้งค่าการสื่อสารบัส');configure.type='button';configure.disabled=!bus.config&&!bus.items.some(entry=>entry.item.path);configure.onclick=()=>{dialog.close();openFlowNewBus(new Map(),bus);};body.append(configure);if(!bus.items.length){const config=bus.config;body.append(node('p',`${config.baudRate} baud · ${config.parity} · ${config.stopBits} stop bit`));const remove=node('button','ลบบัสที่ยังไม่ใช้งาน');remove.onclick=async()=>{try{savedFlowBuses=check(await api.saveBuses(flowSavedBuses().filter(item=>item.path.toUpperCase()!==bus.key))).buses;dialog.close();renderFlow();}catch(error){toast(`ลบบัสไม่สำเร็จ: ${error.message}`);}};body.append(remove);}for(const {item,type} of bus.items){const button=node('button',`อุปกรณ์ · ${item.name||item.motorId||item.id} · ID ${item.slaveId??'—'} →`);button.onclick=()=>{dialog.close();if(type==='sensor'){if(item.missing)toast('ไม่พบอุปกรณ์ในทะเบียน');else openEditor(profiles.find(p=>p.motorId===item.motorId));}else openFlowMeterEditor(item.id);};body.append(button);}dialog.append(body);dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();
 }
 
 function openFlowAddDevice(){
-  if (busy) return;
-  if (mode !== 'offline') return stopBeforeChange(openFlowAddDevice);
-  const group = activeWorkspace();
-  if (!group) return measurementGroups.length ? showWorkspacePicker() : createWorkspace();
-
-  const dialog = node('dialog', null, 'flow-dialog');
-  const header = node('div', null, 'dialog-header');
-  header.append(node('h2', 'เพิ่มอุปกรณ์ในพื้นที่งาน'));
-  const close = node('button', 'ปิด');
-  close.onclick = () => dialog.close();
-  header.append(close);
-  dialog.append(header);
-
-  const body = node('div', null, 'flow-dialog-body flow-device-choices');
-  const error = node('p', null, 'message error');
-  error.setAttribute('role', 'alert');
-  error.hidden = true;
-  body.append(error, node('p', 'เลือกการตั้งค่าที่บันทึกไว้ หรือเพิ่มอุปกรณ์ใหม่ตามรุ่นเพื่อใช้ผัง Register ที่ตรงกัน'));
-  const choose = (title, description, action) => {
-    const button = node('button', null, 'flow-choice');
-    button.type = 'button';
-    button.append(node('strong', title), node('span', description));
-    button.onclick = action;
-    body.append(button);
-  };
-  const reuse = async (device, sourceGroup) => {
-    try {
-      const ownerInWorkspace = group.motorIds.some(id => id.toUpperCase() === device.motorId?.toUpperCase());
-      const copiedMeter = sourceGroup && !ownerInWorkspace ? {...device, motorId: ''} : device;
-      const proposed = measurementGroups.map(item => item.id !== group.id ? item : sourceGroup
-        ? {...item, meters: [...item.meters, copiedMeter]}
-        : {...item, motorIds: [...item.motorIds, device.motorId]});
-      measurementGroups = check(await api.saveGroups(proposed)).groups;
-      if (sourceGroup) selectedMeterId = device.id;
-      else { selected = device.motorId; selectedMeterId = ''; }
-      renderGroupOptions();
-      renderProfiles();
-      renderSelected();
-      updateControls();
-      dialog.close();
-      toast(`เพิ่ม ${device.name || device.motorId || device.id} ใน ${group.name} แล้ว${sourceGroup && device.motorId && !ownerInWorkspace ? ' · เลือกอุปกรณ์ที่เกี่ยวข้องใหม่ในโหนดมิเตอร์' : ''}`);
-    } catch (reason) {
-      error.textContent = `เพิ่มอุปกรณ์ไม่ได้: ${reason.message}`;
-      error.hidden = false;
-    }
-  };
-  const sensors = profiles.filter(profile => !group.motorIds.some(id => id.toUpperCase() === profile.motorId.toUpperCase()));
-  const meters = measurementGroups.filter(item => item.id !== group.id).flatMap(item =>
-    item.meters.filter(meter => !group.meters.some(existing => existing.id.toUpperCase() === meter.id.toUpperCase()))
-      .map(meter => ({meter, group: item})));
-  if (sensors.length || meters.length) {
-    body.append(node('h3', 'ใช้การตั้งค่าที่บันทึกไว้'));
-    for (const profile of sensors) choose(profile.name || profile.motorId, `${profile.motorId} · ${profile.sensorModel === MODEL ? 'VemSee' : 'กำหนด Register เอง'} · ${portLabel(profile.path)}`, () => reuse(profile));
-    for (const item of meters) choose(item.meter.name || item.meter.id, `${item.meter.id} · ${PowerRegisters.label(item.meter.model)} · จาก ${item.group.name}`, () => reuse(item.meter, item.group));
-  }
-  body.append(node('h3', 'ตั้งค่าอุปกรณ์ใหม่'));
-  choose('VemSee SN-3001-WZ3A-N01','เซ็นเซอร์ความสั่น 3 แกน · ใช้ Register จากคู่มือ',async()=>{dialog.close();flowAddingSensorGroup=selectedMeasurementGroup;await openEditor(undefined,'__UNBOUND__');});
-  choose('Schneider Electric PM2230','Power Meter · กระแส แรงดัน กำลังไฟฟ้า และความถี่ไฟฟ้า',()=>{dialog.close();openFlowNewMeter('pm2230');});
-  choose('Schneider PM2200','Power Meter · ผังแรงดันและกระแสไม่สมดุลเดิม',()=>{dialog.close();openFlowNewMeter('pm2200');});
-  choose('กำหนดอุปกรณ์เอง','อุปกรณ์ Modbus รุ่นอื่น · เพิ่มจุดวัดและ Register เอง',async()=>{dialog.close();flowAddingSensorGroup=selectedMeasurementGroup;await openEditor(undefined,'__UNBOUND__');form.elements.sensorModel.value='custom';$('points-enabled').checked=true;if(!$('points-body').children.length)addPointRow({});presetVisibility();editorBaseline=JSON.stringify(configFromForm());});
-  dialog.append(body);dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();
+  if(busy)return;if(mode!=='offline')return stopBeforeChange(openFlowAddDevice);
+  if(!activeWorkspace())return showWorkspacePicker();
+  flowAddingSensorGroup=selectedMeasurementGroup;void openEditor(undefined,'__UNBOUND__');
 }
 function openFlowRelink(type,item,buses){
   if(busy)return;if(mode!=='offline')return stopBeforeChange(()=>openFlowRelink(type,item,buses));

@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 diagnostic release based on 0.30.2. Acquisition runs store scheduled and actual read times, register results and storage outcomes with a shared attempt ID. The Read Quality dialog shows per-device counts and opens the diagnostics folder. Device CSV output keeps the same format."
+            --notes "Windows x64. All device models use one settings drawer and identical sidebar rows. One register-template library stores decoding and addresses without Slave ID, bus or device identity. Per-device gray/amber/green/red indicators follow actual request, response and communication failures. Existing acquisition diagnostics and per-run device CSVs are retained."

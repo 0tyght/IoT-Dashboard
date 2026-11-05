@@ -33,10 +33,10 @@ function renderSelectedPower() {
   powerLive.replaceChildren();
   powerLive.hidden=!entry; preview.hidden=Boolean(entry);
   if (!entry) {
-    preview.querySelector('.power-preview').textContent=!meter?'เลือกอุปกรณ์':meter.path.startsWith('UNBOUND:')?'ยังไม่เชื่อมบัส · เปิดแผนผังเพื่อเชื่อมอุปกรณ์':mode==='live'?'กำลังรอข้อมูลจากมิเตอร์':'กดเริ่มอ่านเพื่อรับค่าจากมิเตอร์';
+    preview.querySelector('.power-preview').textContent=!meter?'เลือกอุปกรณ์':meter.path.startsWith('UNBOUND:')?'ยังไม่เชื่อมบัส · เปิดแผนผังเพื่อเชื่อมอุปกรณ์':mode==='live'?'กำลังรอข้อมูลจากมิเตอร์':'กดเริ่มอ่านเพื่อรับค่าที่อ่าน';
     return;
   }
-  powerLive.append(node('h2','ค่าจากมิเตอร์'));
+  powerLive.append(node('h2','ค่าที่อ่าน'));
   const box=document.createElement('div');box.className='power-live-meter';
   const status=node('p',null,'footnote');
   if(entry.state!=='receiving'){
@@ -52,7 +52,7 @@ function renderSelectedPower() {
     const name = node('span', label);
     name.title = `Address RTU ${address + (entry.offsetAdjust || 0)}`;
     const valid = Number.isFinite(value);
-    const unavailable = entry.quality === 'unconfirmed' ? 'รอยืนยันลำดับ Float' : words ? 'ค่าจากมิเตอร์ใช้ไม่ได้' : 'ยังไม่มีข้อมูล Register';
+    const unavailable = entry.quality === 'unconfirmed' ? 'รอยืนยันลำดับ Float' : words ? 'ค่าที่อ่านใช้ไม่ได้' : 'ยังไม่มีข้อมูล Register';
     const out = node('strong', valid ? `${Number(value.toPrecision(6))} ${unit}` : key === 'currentG' ? unavailable : '—');
     if (!valid) out.title = unavailable;
     row.append(name, out);

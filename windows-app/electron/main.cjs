@@ -71,7 +71,7 @@ app.whenReady().then(() => {
   }, 750);
   fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)),
     onPower: reading => void recordPower(reading), onStatus: status => send('sensor:status', status),
-    onAttempt: attempt => diagnostics?.attempt(attempt) });
+    onAttempt: attempt => diagnostics?.attempt(attempt), onDeviceStatus: status => send('device:status',status) });
   const available = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
     width: Math.min(1440, available.width), height: Math.min(940, available.height), minWidth: Math.min(768, available.width), minHeight: Math.min(680, available.height), backgroundColor: '#f7f8fb', show: false, autoHideMenuBar: true,
@@ -89,7 +89,7 @@ app.whenReady().then(() => {
       try { return await action(...args); } catch (error) { return { ok: false, message: error.message }; }
     });
   }
-  handle('app:initialize', () => { recording.configure(store.loadRecording());const buses=store.loadBuses(); return { ok: true, profiles: store.loadProfiles().map(item=>applyBus(item,buses)), groups:store.loadGroups().map(item=>applyGroupBuses(item,buses)), selectedGroup:store.loadSelectedGroup(), buses, dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('app:initialize', () => { recording.configure(store.loadRecording());const buses=store.loadBuses(); return { ok: true, profiles: store.loadProfiles().map(item=>applyBus(item,buses)), groups:store.loadGroups().map(item=>applyGroupBuses(item,buses)), selectedGroup:store.loadSelectedGroup(), templates:store.loadTemplates(), buses, dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
   handle('group-selection:save', id => {if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนเปลี่ยนชุด');return {ok:true,id:store.saveSelectedGroup(id)};});
   handle('buses:save', raw => {
     if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขบัส');
@@ -118,6 +118,13 @@ app.whenReady().then(() => {
     return { ok: true, profiles: store.saveProfiles(raw.map(item=>applyBus(item,store.loadBuses()))) };
   }
   handle('profiles:save', saveProfilesChecked);
+  handle('templates:save', raw => ({ok:true,templates:store.saveTemplates(raw)}));
+  handle('power:test-config', raw => exclusive(() => {
+    const meter=normalizeGroups([{id:'TEST',name:'Test',motorIds:[],meters:[{...raw,motorId:''}]}])[0].meters[0];
+    const field=require('../src/power-registers.js').preset(meter.model).fields[0];
+    return fleet.testPower({...applyBus(meter,store.loadBuses()),motorId:meter.id,sensorModel:'custom',byteOrder:'ABCD',registerAddress:0,dataType:'float32',scale:1,unit:field.unit},
+      {address:field.address+meter.offsetAdjust,slaveId:meter.slaveId,registerType:meter.registerType,meterConfig:true});
+  }));
   handle('sensor:test', config => exclusive(() => fleet.test(applyBus(config,store.loadBuses()))));
   handle('power:test-meter', (groupId,meterId,options) => exclusive(() => {
     const group=store.loadGroups().find(item=>item.id===groupId),meter=group?.meters.find(item=>item.id===meterId);
