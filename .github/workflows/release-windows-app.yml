@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64. All device models use one settings drawer and identical sidebar rows. One register-template library stores decoding and addresses without Slave ID, bus or device identity. Per-device gray/amber/green/red indicators follow actual request, response and communication failures. Existing acquisition diagnostics and per-run device CSVs are retained."
+            --notes "Windows x64. Shared-COM reads bind Slave ID and timeout at dispatch. A configurable 400 ms device-switch guard and idle/receive-buffer recovery after timeout reduce rapid-turnaround and stale-frame risks. Diagnostics include actual TX, matched RX, raw receive chunks and queue/response times. Existing CSV measurements and register settings are retained. Physical-bus recovery must be confirmed on the target setup."

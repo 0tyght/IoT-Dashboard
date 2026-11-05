@@ -46,6 +46,7 @@ function normalizeConfig(input = {}) {
     parity,
     dataBits: 8,
     stopBits,
+    deviceGapMs:numberInRange(input.deviceGapMs??400,'พักระหว่างอุปกรณ์',0,5000,true),
     slaveId: numberInRange(input.slaveId ?? 1, 'Slave ID', 1, sensorModel === 'vemsee-sn3001-wz3a-n01' ? 254 : 247, true),
     sensorModel,
     registerType,

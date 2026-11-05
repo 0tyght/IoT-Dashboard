@@ -299,7 +299,8 @@ function configFromForm() {
   const raw = Object.fromEntries(new FormData(form));
   raw.sensorModel=deviceModel();
   if (raw.path === '__UNBOUND__') raw.path = `UNBOUND:DEVICE:${raw.motorId.trim()}`;
-  const sharedBus=savedFlowBuses.find(bus=>bus.path.toUpperCase()===String(raw.path).toUpperCase());if(sharedBus)Object.assign(raw,{baudRate:sharedBus.baudRate,parity:sharedBus.parity,stopBits:sharedBus.stopBits});
+  const sharedBus=savedFlowBuses.find(bus=>bus.path.toUpperCase()===String(raw.path).toUpperCase());if(sharedBus)Object.assign(raw,{baudRate:sharedBus.baudRate,parity:sharedBus.parity,stopBits:sharedBus.stopBits,deviceGapMs:sharedBus.deviceGapMs??400});
+  raw.deviceGapMs=sharedBus?.deviceGapMs??(editorDeviceKind==='meter'?activeWorkspace()?.meters.find(item=>item.id===editing):profiles.find(item=>item.motorId===editing))?.deviceGapMs??400;
   raw.enabled = editing ? profiles.find(profile => profile.motorId === editing)?.enabled !== false : true;
   for (const key of ['baudRate', 'stopBits', 'slaveId', 'registerAddress', 'scale', 'pollInterval', 'timeout']) raw[key] = Number(raw[key]);
   if ((raw.sensorModel === 'custom'||DeviceTemplates.isPower(raw.sensorModel)) && $('points-enabled').checked) raw.points=pointRows();
@@ -326,7 +327,7 @@ function renderPorts(selectedPath = form.elements.path.value) {
   select.value = selectedPath;
   const bus=savedFlowBuses.find(item=>item.path.toUpperCase()===String(selectedPath).toUpperCase());
   for(const key of ['baudRate','parity','stopBits']){const input=form.elements.namedItem(key);input.closest('label').hidden=Boolean(bus);if(bus)input.value=String(bus[key]);}
-  let note=$('shared-bus-note');if(!note){note=node('p',null,'footnote');note.id='shared-bus-note';select.closest('fieldset').append(note);}note.hidden=!bus;note.textContent=bus?`ใช้ค่าบัส ${bus.path}: ${bus.baudRate} baud · ${bus.parity} · ${bus.stopBits} stop bit · แก้ได้ที่โหนดบัส`:'';
+  let note=$('shared-bus-note');if(!note){note=node('p',null,'footnote');note.id='shared-bus-note';select.closest('fieldset').append(note);}note.hidden=!bus;note.textContent=bus?`ใช้ค่าบัส ${bus.path}: ${bus.baudRate} baud · ${bus.parity} · ${bus.stopBits} stop bit · พักสลับอุปกรณ์ ${bus.deviceGapMs??400} ms · แก้ได้ที่โหนดบัส`:'';
   $('port-summary').textContent = `พบ ${ports.length} พอร์ต`;
   if (!ports.length) list.append(node('p', 'ยังไม่พบพอร์ต ตรวจ USB และไดรเวอร์แล้วกดสแกน', 'empty-ports'));
 }

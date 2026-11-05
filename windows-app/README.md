@@ -4,6 +4,9 @@ An independent Windows application for local RS485 / Modbus RTU device monitorin
 
 ## Features
 
+- Shared RTU buses use a configurable device-switch turnaround guard (400 ms by default, 0–5,000 ms at the bus node). One queue binds Slave ID and Timeout at dispatch. After Timeout or a malformed frame it waits for quiet, flushes the receive buffers, and then starts the next request. The configured poll period is measured from actual request dispatch; busy shared buses can take longer.
+- Per-frame diagnostics include dispatch time, queue wait, response time, actual TX and matched RX frames, bounded raw RX chunks, idle/late RX evidence and recovery/discard counts. Raw capture is explicitly unavailable for transports that do not expose the serial stream. Software parser tests and simulated turnaround tests do not establish recovery on the target physical bus.
+
 - One device settings drawer and one register-template library for VemSee, Schneider PM2230/PM2200 and custom instruments. Templates retain register addresses, decoding, units and formulas; each device keeps its own identity, bus and Slave ID. Save/update/rename/delete templates from the editor or More → Register Templates. Updating a template does not alter existing device configurations.
 - Identical device rows show gray (stopped), amber (request dispatched and awaiting response), green (reply received) and red (communication failure). Request/reply timestamps and contextual errors are in the row tooltip. This describes communication, not instrument calibration or machine health.
 

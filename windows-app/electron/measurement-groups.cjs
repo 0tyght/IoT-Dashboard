@@ -27,7 +27,7 @@ function normalizeGroups(raw) {
       const motorId=String(rawMeter.motorId || '');if(motorId && !motorIds.some(id=>id.toUpperCase()===motorId.toUpperCase()))throw new Error('มอเตอร์ที่ผูกกับมิเตอร์ต้องอยู่ในชุดเดียวกัน');
       const model = rawMeter.model ?? 'pm2200';
       if (!['pm2200','pm2230'].includes(model)) throw new Error('รุ่น Power Meter ไม่ถูกต้อง');
-      const result={ enabled:rawMeter.enabled!==false, model, id:meterId, name:String(rawMeter.name || meterId).slice(0,80), point, motorId, path:base.path, slaveId:base.slaveId, baudRate:base.baudRate, parity:base.parity, stopBits:base.stopBits, timeout:base.timeout, pollInterval:base.pollInterval, registerType:base.registerType, byteOrder, offsetAdjust };
+      const result={ enabled:rawMeter.enabled!==false, model, id:meterId, name:String(rawMeter.name || meterId).slice(0,80), point, motorId, path:base.path, slaveId:base.slaveId, baudRate:base.baudRate, parity:base.parity, stopBits:base.stopBits, deviceGapMs:base.deviceGapMs, timeout:base.timeout, pollInterval:base.pollInterval, registerType:base.registerType, byteOrder, offsetAdjust };
       if(Array.isArray(rawMeter.points)&&rawMeter.points.length)result.points=normalizePoints(rawMeter.points);
       return result;
     });

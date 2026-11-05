@@ -24,6 +24,7 @@ const exploratory=Trend.prepare(higherJitter,{timing:'linear30'});
 assert(exploratory.maxJitterPercent>25&&exploratory.maxJitterPercent<30);
 assert.equal(exploratory.timingMode,'linear30');assert.equal(exploratory.timingSource,'linear-resampled-pc-receive');assert.equal(JSON.stringify(higherJitter),originalHigh);
 assert.throws(()=>Trend.prepare(rows(256,2000,i=>i===100?700:0),{timing:'linear30'}),/เกิน 30%/);
+assert.throws(()=>Trend.prepare(rows(256,2000,i=>i===100?700:0)),error=>/เกิน 20%/.test(error.message)&&!error.message.includes('เลือกโหมดประมาณ ≤30%'),'do not recommend a 30% mode when the measured jitter exceeds it');
 const gapHigh=[...rows(80,2000,i=>i%2?500:0),...rows(100,2000,i=>i%2?500:0).map(row=>({...row,timestamp:new Date(Date.parse(row.timestamp)+400000).toISOString()}))];
 assert.equal(Trend.prepare(gapHigh,{timing:'linear30'}).originalSampleCount,100,'exploratory mode never interpolates across a gap');
 assert.throws(()=>Trend.prepare(rows(100).map(r=>({...r,frequencyStatus:'unconfirmed'})),{metric:'frequency'}),/ไม่มีช่วงข้อมูล/);

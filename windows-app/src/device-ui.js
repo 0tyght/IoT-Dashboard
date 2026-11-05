@@ -38,7 +38,7 @@ function meterFromDeviceForm(){
   const raw=configFromForm();
   return {enabled:editing?activeWorkspace()?.meters.find(item=>item.id===editing)?.enabled!==false:true,id:raw.motorId,name:raw.name,model:deviceModel(),point:raw.powerPoint||'motor-input',motorId:raw.powerOwner||'',
     path:raw.path,baudRate:raw.baudRate,parity:raw.parity,stopBits:raw.stopBits,slaveId:raw.slaveId,
-    pollInterval:raw.pollInterval,timeout:raw.timeout,registerType:raw.registerType,
+    pollInterval:raw.pollInterval,deviceGapMs:raw.deviceGapMs,timeout:raw.timeout,registerType:raw.registerType,
     byteOrder:raw.powerByteOrder||'unconfirmed',offsetAdjust:Number(raw.powerOffset||0),points:$('points-enabled').checked?pointRows():[]};
 }
 async function openDeviceMeter(meter,model='pm2230'){

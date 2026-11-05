@@ -31,7 +31,7 @@
     const localSteps=points.slice(1).map((point,i)=>point.stamp-points[i].stamp),dt=(points.at(-1).stamp-points[0].stamp)/(points.length-1);
     const maxJitter=localSteps.reduce((max,step)=>Math.max(max,Math.abs(step-dt)/dt),0);
     if(timing==='strict'&&maxJitter>.001+1e-12)throw new Error(`เวลารับไม่สม่ำเสมอ (jitter ${(maxJitter*100).toFixed(2)}%) · เลือกปรับ jitter แบบเชิงเส้น หรือเลือกช่วงอื่น`);
-    if(timing!=='strict'&&maxJitter>(timing==='linear30'?.3:.2)+1e-12)throw new Error(`jitter ${(maxJitter*100).toFixed(2)}% เกิน ${timing==='linear30'?'30':'20'}% · ${timing==='linear'?'เลือกโหมดประมาณ ≤30% เพื่อดูแนวโน้ม หรือเลือกช่วงอื่น':'เลือกช่วงอื่นหรือแก้รอบรับข้อมูล'}`);
+    if(timing!=='strict'&&maxJitter>(timing==='linear30'?.3:.2)+1e-12)throw new Error(`jitter ${(maxJitter*100).toFixed(2)}% เกิน ${timing==='linear30'?'30':'20'}% · ${timing==='linear'&&maxJitter<=.3+1e-12?'เลือกโหมดประมาณ ≤30% เพื่อดูแนวโน้ม หรือเลือกช่วงอื่น':'เลือกช่วงอื่นหรือแก้รอบรับข้อมูล'}`);
     const start=points[0].stamp,span=points.at(-1).stamp-start,samples=[];
     if(timing==='strict')points.forEach(point=>samples.push(point.value));
     else{

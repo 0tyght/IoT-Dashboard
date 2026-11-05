@@ -162,7 +162,7 @@ class DataStore {
   }
   normalizeBuses(raw) {
     if (!Array.isArray(raw) || raw.length > 64) throw new Error('บัสต้องมีไม่เกิน 64 พอร์ต');
-    const seen=new Set();return raw.map(item=>{const c=normalizeConfig({...item,motorId:'BUS',sensorModel:'custom'});if(c.path.toUpperCase().startsWith('UNBOUND:'))throw new Error('ชื่อพอร์ตไม่ถูกต้อง');const key=c.path.toUpperCase();if(seen.has(key))throw new Error('COM Port ซ้ำ');seen.add(key);return {path:c.path,baudRate:c.baudRate,parity:c.parity,stopBits:c.stopBits};});
+    const seen=new Set();return raw.map(item=>{const c=normalizeConfig({...item,motorId:'BUS',sensorModel:'custom'});if(c.path.toUpperCase().startsWith('UNBOUND:'))throw new Error('ชื่อพอร์ตไม่ถูกต้อง');const key=c.path.toUpperCase();if(seen.has(key))throw new Error('COM Port ซ้ำ');seen.add(key);return {path:c.path,baudRate:c.baudRate,parity:c.parity,stopBits:c.stopBits,deviceGapMs:c.deviceGapMs};});
   }
   loadBuses() { try{return this.normalizeBuses(JSON.parse(fs.readFileSync(path.join(this.directory,'modbus-buses.json'),'utf8')));}catch(error){if(error.code==='ENOENT')return [];throw new Error(`อ่านบัส Modbus ไม่ได้: ${error.message}`);} }
   saveBuses(raw) { const buses=this.normalizeBuses(raw),file=path.join(this.directory,'modbus-buses.json');fs.mkdirSync(this.directory,{recursive:true});fs.writeFileSync(`${file}.tmp`,JSON.stringify(buses,null,2),'utf8');fs.renameSync(`${file}.tmp`,file);return buses; }

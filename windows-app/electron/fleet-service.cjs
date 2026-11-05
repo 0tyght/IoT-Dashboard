@@ -6,6 +6,7 @@ const { decodePowerMeter } = require('./power-meter-codec.cjs');
 const { preset: powerPreset } = require('../src/power-registers.js');
 const frequencyFailures = new WeakMap();
 const pacedReads = new WeakMap();
+const {createRtuQueue}=require('./rtu-queue.cjs');
 
 const isTimeout = error => error?.code === 'ETIMEDOUT' || error?.errno === 'ETIMEDOUT';
 
@@ -18,54 +19,25 @@ function readOutcome(error) {
   return 'read-error';
 }
 
-function paceReads(client, baudRate) {
-  // RTU frames need at least 3.5 character times of silence between requests.
-  const frameGapMs = baudRate > 19200 ? 2 : Math.ceil(3.5 * 12 * 1000 / baudRate);
-  let nextAllowedAt = 0;
-  let tail = Promise.resolve();
-  pacedReads.set(client, (type, address, count, cancelled, onRequest) => {
-    const task = tail.then(async () => {
-      let waitMs = nextAllowedAt - performance.now();
-      while (waitMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, Math.ceil(waitMs)));
-        waitMs = nextAllowedAt - performance.now();
-      }
-      checkCancelled(cancelled);
-      let gapMs = frameGapMs;
-      try {
-        onRequest?.();
-        return await (type === 'input' ? client.readInputRegisters(address, count) : client.readHoldingRegisters(address, count));
-      } catch (error) {
-        // Give a late reply a short window to clear the line before the next request.
-        if (isTimeout(error)) gapMs = Math.max(frameGapMs, 50);
-        throw error;
-      } finally {
-        nextAllowedAt = performance.now() + gapMs;
-      }
-    });
-    tail = task.catch(() => {});
-    return task;
-  });
-}
-
 async function readRegisters(client, config, type, address, count, cancelled, trace) {
   const paced = pacedReads.get(client);
   checkCancelled(cancelled);
   const start = Date.now(), clock = performance.now();
   const functionCode = type === 'input' ? 'FC04' : 'FC03';
-  let failure;
+  let failure,transfer;
   try {
-    if (paced) return await paced(type, address, count, cancelled, trace?.onRequest);
+    if(paced){const result=await paced.read(config,type,address,count,cancelled,trace?.onRequest);transfer=result.transfer;return result.response;}
+    client.setID(config.slaveId);client.setTimeout(config.timeout);
     trace?.onRequest?.();
     return await (type === 'input' ? client.readInputRegisters(address, count) : client.readHoldingRegisters(address, count));
   } catch (error) {
-    failure = error;
+    failure = error;transfer=error.rtuTransfer;
     if (!isTimeout(error)) throw error;
     const message = `Timeout ${config.timeout} ms · ${config.path} · Slave ID ${config.slaveId} · ${functionCode} · Register ${address} (${count} คำ)`;
     throw Object.assign(new Error(message, {cause: error}), {code: 'ETIMEDOUT'});
   } finally {
     trace?.push({ functionCode, address, count, startedAt: new Date(start).toISOString(), endedAt:new Date().toISOString(), elapsedMs: Math.round(performance.now() - clock),
-      outcome: readOutcome(failure), ...(failure ? { message: failure.message, exceptionCode: failure.modbusCode } : {}) });
+      ...transfer, outcome: readOutcome(failure), ...(failure ? { message: failure.message, exceptionCode: failure.modbusCode } : {}) });
   }
 }
 
@@ -95,8 +67,6 @@ async function closeClient(client) {
 
 function checkCancelled(cancelled) { if (cancelled()) { const error=new Error('หยุดการอ่านแล้ว'); error.code='CANCELLED'; throw error; } }
 async function readSnapshot(client, config, cancelled=()=>false, trace) {
-  client.setID(config.slaveId);
-  client.setTimeout(config.timeout);
   const read = async (address, count) => {
     checkCancelled(cancelled);
     const reply = await readRegisters(client, config, config.registerType, address, count, cancelled, trace);
@@ -152,7 +122,6 @@ async function readSnapshot(client, config, cancelled=()=>false, trace) {
   return { value: decodeRegisters(registers, config), unit: config.unit, rawRegisters: registers, channels: null };
 }
 async function readPowerSnapshot(client, meter, cancelled=()=>false, trace) {
-  client.setID(meter.slaveId); client.setTimeout(meter.timeout);
   const read = async (address,count) => {
     checkCancelled(cancelled);
     const response = await readRegisters(client,meter,meter.registerType,address,count,cancelled,trace);
@@ -214,6 +183,7 @@ class FleetService {
     const partial = snapshot?.presetError || ['unsupported', 'read-error', 'invalid'].includes(snapshot?.frequencyStatus) || enabled.some(point => point.status === 'read-error');
     const outcome = error ? readOutcome(error) : noData ? badFrame?.outcome || 'read-error' : partial ? 'partial' : 'ok';
     const endedAt=new Date().toISOString();
+    if(attempt.sentAt&&details.scheduledAt)details.queueDelayMs=Math.max(0,Date.parse(attempt.sentAt)-Date.parse(details.scheduledAt));
     this.onDeviceStatus({deviceId:attempt.deviceId,deviceType:attempt.deviceType,attemptId:attempt.attemptId,
       state:outcome==='cancelled'?'offline':error||noData||badFrame?'fault':'online',sentAt:attempt.sentAt||null,
       receivedAt:attempt.frames.filter(frame=>frame.outcome==='ok').at(-1)?.endedAt||null,endedAt,
@@ -230,7 +200,7 @@ class FleetService {
     const client = this.clientFactory();
     try {
       await client.connectRTUBuffered(config.path, { baudRate: config.baudRate, parity: config.parity, dataBits: 8, stopBits: config.stopBits });
-      paceReads(client, config.baudRate);
+      pacedReads.set(client,createRtuQueue(client,config));
       return client;
     } catch (error) { await closeClient(client); throw error; }
   }
@@ -242,7 +212,7 @@ class FleetService {
     try {
       client = await this.open(config);
       return { ok: true, config, ...await readSnapshot(client, config) };
-    } finally { await closeClient(client); }
+    } finally { await closeClient(client);pacedReads.get(client)?.dispose(); }
   }
 
   async testPower(rawConfig, { address = 3019, slaveId = 3, registerType = 'holding', meterConfig = false } = {}) {
@@ -258,7 +228,7 @@ class FleetService {
       const response = await readRegisters(client, {...base, slaveId}, registerType, address, 2, () => false);
       if (!Array.isArray(response.data) || response.data.length !== 2 || response.data.some(value => !Number.isInteger(value) || value < 0 || value > 65535)) throw new Error('ได้รับ Register ไม่ครบ');
       return { ok:true, path:base.path, slaveId, address, registerType, raw:response.data };
-    } finally { await closeClient(client); }
+    } finally { await closeClient(client);pacedReads.get(client)?.dispose(); }
   }
 
   async connect(rawConfigs, meters = []) {
@@ -359,7 +329,6 @@ class FleetService {
       const started = Date.now();
       const scheduled = bus.nextDue.get(key) ?? started;
       if (scheduled > started) continue;
-      const due = started + config.pollInterval;
       const attempt = this.beginAttempt(config, 'poll', started, scheduled);
       let snapshot, failure;
       try {
@@ -380,13 +349,13 @@ class FleetService {
         this.onStatus({ state: noData?'read-error':'receiving', motorId: config.motorId, path: config.path, ...(noData?{message:'จุดวัดทั้งหมดไม่ตอบกลับ'}:{}) });
         }
         // Start-to-start requested period; slow devices/shared buses may run longer.
-        setNextPoll(bus, key, due);
+        setNextPoll(bus,key,Date.parse(attempt.sentAt||new Date(started).toISOString())+config.pollInterval);
       } catch (error) {
         failure = error;
         if (generation !== this.generation) return;
         if(config.deviceType==='power')this.onPower({state:'read-error',meterId:config.id,model:config.model,name:config.name,point:config.point,path:config.path,slaveId:config.slaveId,message:error.message});
         else this.onStatus({ state: 'read-error', motorId: config.motorId, path: config.path, message: error.message });
-        setNextPoll(bus, key, due, error);
+        setNextPoll(bus,key,Date.parse(attempt.sentAt||new Date(started).toISOString())+config.pollInterval,error);
       } finally {
         this.finishAttempt(attempt, snapshot, generation !== this.generation ? { code: 'CANCELLED' } : failure, bus.nextDue.get(key));
       }
@@ -402,6 +371,7 @@ class FleetService {
     await Promise.all(buses.map(async bus => {
       if (bus.work) await bus.work.catch(() => {});
       await closeClient(bus.client);
+      pacedReads.get(bus.client)?.dispose();
     }));
   }
 }

@@ -140,7 +140,7 @@ async function checkMixedBusTimeoutRecovery() {
   await assert.rejects(service.test(config), /หยุดการอ่าน/);
   await assert.rejects(service.testPower(config, {slaveId:3,address:3019}), /หยุดการอ่าน/);
   failSlave = 2;
-  await new Promise(resolve => setTimeout(resolve, 350));
+  await waitUntil(()=>readings.some(reading=>reading.motorId==='MTR-01')&&statuses.some(status=>status.motorId==='MTR-02'&&status.state==='read-error'),'shared-bus reads and failure after turnaround');
   assert(readings.some(reading => reading.motorId === 'MTR-01'));
   assert(readings.some(reading => reading.pollIntervalMs === 250 && reading.actualIntervalMs >= 240), 'measure actual receive period separately from configured request period');
   assert(statuses.some(status => status.motorId === 'MTR-02' && status.state === 'read-error'));
