@@ -52,7 +52,7 @@ function setupAnalysisWorkspace() {
     select.onchange=()=>{$(original).value=select.value;$(original).dispatchEvent(new Event('change'));};
   }
   controls.prepend(dayWrap);
-  const actions=node('div',null,'analysis-history-actions'),tableButton=node('button','ดูตารางประวัติ'),folderButton=node('button','ผลสรุปรอบนี้');
+  const actions=node('div',null,'analysis-history-actions'),tableButton=node('button','ดูตารางประวัติ'),folderButton=node('button','CSV รอบนี้');
   tableButton.type=folderButton.type='button';folderButton.id='analysis-history-open-folder';
   tableButton.onclick=()=>setTab('history');folderButton.onclick=()=>{if(!$('open-run-folder').disabled)$('open-run-folder').click();};actions.append(tableButton,folderButton);range.querySelector('.panel-heading').append(actions);
   const open=node('button','เปิดกราฟในหน้าวิเคราะห์');open.id='history-open-analysis';open.type='button';open.onclick=()=>{setAnalysisSource('history');setTab('analysis');};$('history-view').querySelector('.section-toolbar .inline-controls').append(open);

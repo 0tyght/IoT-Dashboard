@@ -55,7 +55,7 @@
       row.push(field.trim()); field = ''; closedQuote = false;
       // Recognize our full 32-column recording header before the waveform
       // column guard. Otherwise users receive a misleading column-count error.
-      if (!rows.length && aggregateHeader.test(headerName(row.at(-1)))) fail(recordMessage);
+      if (!rows.length && (aggregateHeader.test(headerName(row.at(-1))) || row.at(-1).trim() === 'เวลา (+07:00)')) fail(recordMessage);
       if (row.length > 16) fail('CSV มีคอลัมน์มากเกินไปสำหรับข้อมูล waveform');
     }
     function line() {

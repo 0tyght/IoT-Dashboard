@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const readline = require('node:readline');
 const { normalizeFleet } = require('./fleet-service.cjs');
@@ -227,11 +228,14 @@ class DataStore {
   }
   async appendPointJournal(reading) {
     const points = reading.points?.filter(point => point.enabled && point.record) || [];
+    if (!points.length) return;
+    const sampleId = randomUUID();
     const byDay = new Map();
     for (const point of points) {
       const timestamp = point.timestamp || reading.timestamp;
       const row = {
-        timestamp, timestampBangkok: localTimestamp(timestamp), groupId: reading.groupId || '', groupName: reading.groupName || '',
+        timestamp, timestampBangkok: localTimestamp(timestamp), sampleId, sampleTimestamp: reading.timestamp,
+        groupId: reading.groupId || '', groupName: reading.groupName || '',
         runId: reading.runId || '', runName: reading.runName || '', runNote: reading.runNote || '', recordingId: reading.recordingId || '',
         deviceId: reading.motorId, deviceName: reading.name || '', port: reading.port, slaveId: reading.slaveId,
         pointId: point.id, name: point.name, unit: point.unit, status: point.status, value: point.value, raw: point.raw,

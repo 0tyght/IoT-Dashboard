@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Recording now produces one output folder per run and one ready-to-read summary CSV per recorded sensor or power meter. Reports include the latest, minimum, maximum and mean decoded readings and their units and counts. Individual readings remain available in History and Analysis."
+            --notes "Windows x64 release. Output CSVs use one row per recorded sample and one column per decoded measurement, with units in the headers and Bangkok timestamps. Each run keeps one folder and one CSV per recorded device."

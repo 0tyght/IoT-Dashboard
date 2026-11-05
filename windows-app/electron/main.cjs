@@ -36,7 +36,7 @@ app.whenReady().then(() => {
     onChange: state => send('recording:state', state),
     onError: (motorId, message) => send('sensor:status', { state: 'storage-error', motorId, message }),
     onStop: runId => {
-      void store.generateRunReport(runId).catch(error => send('sensor:status', { state: 'storage-error', motorId: '', message: `สร้างผลสรุปรอบไม่สำเร็จ: ${error.message}` }));
+      void store.generateRunReport(runId).catch(error => send('sensor:status', { state: 'storage-error', motorId: '', message: `สร้าง CSV ของรอบไม่สำเร็จ: ${error.message}` }));
     }
   });
   recordingTimer = setInterval(() => recording.tick(), 250);
@@ -130,7 +130,7 @@ app.whenReady().then(() => {
   });
   handle('data:open-run-folder', async runId => {
     const { directory } = await store.generateRunReport(runId);
-    if (!directory) throw new Error('รอบนี้ยังไม่มีข้อมูลที่บันทึกสำหรับสร้างผลสรุป');
+    if (!directory) throw new Error('รอบนี้ยังไม่มีข้อมูลที่บันทึกสำหรับสร้าง CSV');
     const error = await shell.openPath(directory); return { ok: !error, message: error };
   });
   handle('analysis:import-waveform', async () => {

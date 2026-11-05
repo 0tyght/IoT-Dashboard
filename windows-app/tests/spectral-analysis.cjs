@@ -82,6 +82,7 @@ assert.throws(() => Spectral.parseCSV('time_s,x\n0,1\n.001,2', { sampleRateHz: 1
 assert.throws(() => Spectral.parseCSV('sample,value\n0,1\n2,2', { sampleRateHz: 1000 }), /ไม่ต่อเนื่อง/);
 assert.throws(() => Spectral.parseCSV('sample,value\n0,1\n1,2'), /Sample rate/);
 assert.throws(() => Spectral.parseCSV('timestamp,motorId,velocityX,velocityY,velocityZ\n2026-10-21,M1,1,2,3', { sampleRateHz: 5000 }), /overall\/record/);
+assert.throws(() => Spectral.parseCSV('"เวลา (+07:00)","ความเร็วการสั่น X (mm/s)"\n"2026-10-21T00:00:00.000+07:00","1.2"'), /overall\/record/);
 assert.throws(() => Spectral.parseCSV('schema_version,record_type,value\n3,snapshot,1', { sampleRateHz: 5000 }), /overall\/record/);
 const recordedCSV = '\uFEFF' + CSV_KEYS.join(',') + '\r\n' + csvRow({ timestamp: '2026-10-22T00:00:00.000Z', motorId: 'MTR-01', value: 2.4, unit: 'mm/s', channels: { velocityX: 1, velocityY: 2.4, velocityZ: 1.5 } });
 assert(CSV_KEYS.length > 16, 'regression uses the real wide recording schema');

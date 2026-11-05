@@ -10,6 +10,7 @@ const { DataStore, CSV_KEYS, csvRow, dayKey } = require('../electron/data-store.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const identityKeys = ['schemaVersion', 'runId', 'runStartedAt', 'recordingId', 'recordingStartedAt'];
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+const parseFixtureCsv = csv => csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n').map(line => line.split(',').map(cell => cell.slice(1, -1)));
 
 (async () => {
   const scientific = csvRow({ value: -1e-7, motorId: '=1+1', unit: '-1e-7' });
@@ -91,15 +92,39 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
     assert(fs.readdirSync(store.dataPath()).every(name => !name.endsWith('.csv')), 'there are no automatic daily time-series CSVs');
     const reportCsv = name => fs.readFileSync(path.join(completeReport.directory, name), 'utf8');
     const sensor = reportCsv('sensor-MTR-01.csv');
-    assert(sensor.startsWith('\uFEFF') && sensor.includes('ทดสอบ') && sensor.includes('+07:00'));
-    assert.match(sensor, /"ค่าที่วัด","mm\/s","3","0","1.2","1.4","1.3","1.4"/);
-    assert(!sensor.includes(fourth.runId));
-    assert.match(reportCsv('sensor-MTR-02.csv'), /"ความถี่การสั่น X","Hz","0","1","","","",""/);
+    assert(sensor.startsWith('\uFEFF'));
+    assert.deepEqual(parseFixtureCsv(sensor), [
+      ['เวลา (+07:00)', 'ค่าที่วัด (mm/s)'],
+      ['2026-10-20T23:59:59.000+07:00', '1.2'],
+      ['2026-10-21T00:00:00.000+07:00', '1.3'],
+      ['2026-10-21T00:00:01.000+07:00', '1.4']
+    ]);
+    assert.deepEqual(parseFixtureCsv(reportCsv('sensor-MTR-02.csv')), [
+      ['เวลา (+07:00)', 'ความเร็วการสั่น X (mm/s)', 'ความถี่การสั่น X (Hz)', 'อุณหภูมิ (°C)'],
+      ['2026-10-21T00:00:01.000+07:00', '8', '', '40']
+    ]);
     const meter = reportCsv('meter-MTR-01.csv');
-    assert.match(meter, /"กระแส A","A","1","0","2.5","2.5","2.5","2.5"/);
-    assert.match(meter, /"กระแสเสริม","A","1","0","0","0","0","0"/);
-    assert(!meter.includes('54321'), 'decoded summaries exclude raw register words');
+    const [meterHeader, meterReading, ...extraRows] = parseFixtureCsv(meter);
+    assert.equal(extraRows.length, 0, 'meter custom points belong to the same sample');
+    assert.equal(meterReading[meterHeader.indexOf('กระแส A (A)')], '2.5');
+    assert.equal(meterReading[meterHeader.indexOf('กระแสเสริม [amps] (A)')], '0');
+    assert(!meter.includes('54321'), 'decoded exports exclude raw register words');
     assert.equal((await new DataStore(path.join(directory, 'recording')).generateRunReport(first.runId)).directory, completeReport.directory);
+
+    const pointRun = randomUUID();
+    const pointRead = { runId: pointRun, runStartedAt: first.timestamp, motorId: 'ENV', timestamp: second.timestamp };
+    const tempPoint = { ...extraPoint, id: 'temp', name: 'อุณหภูมิ', unit: '°C', value: 21, timestamp: first.timestamp };
+    const rhPoint = { ...extraPoint, id: 'rh', name: 'ความชื้น', unit: '%', value: 50, timestamp: second.timestamp };
+    await store.append({ ...pointRead, points: [tempPoint, rhPoint] });
+    await store.append({ ...pointRead, timestamp: third.timestamp, points: [
+      { ...tempPoint, value: 22, timestamp: third.timestamp }, { ...rhPoint, status: 'read-error', value: 999, timestamp: third.timestamp }
+    ] });
+    const pointReport = await store.generateRunReport(pointRun);
+    assert.deepEqual(parseFixtureCsv(fs.readFileSync(path.join(pointReport.directory, 'sensor-ENV.csv'), 'utf8')), [
+      ['เวลา (+07:00)', 'อุณหภูมิ [temp] (°C)', 'ความชื้น [rh] (%)'],
+      ['2026-10-21T00:00:00.000+07:00', '21', '50'],
+      ['2026-10-21T00:00:01.000+07:00', '22', '']
+    ]);
     const savedRows = (await store.history({ date: firstDate, endDate: secondDate })).rows;
     assert.equal(savedRows.length, 5, 'reports do not duplicate history records');
     assert(savedRows.every(row => row.schemaVersion === 4 && UUID.test(row.runId) && UUID.test(row.recordingId)), 'identities are persisted before append rather than only added to UI readings');
@@ -186,7 +211,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
       assert.equal(service.snapshot().count, 1);
       service.disconnect();
     }
-    console.log('PASS: run/recording identities, per-device summary CSVs, legacy/run history filters and late-write session races');
+    console.log('PASS: per-device time-series CSVs, custom point samples, run/recording identities and late-write session races');
   } finally {
     assert.equal(path.dirname(path.resolve(directory)), tempRoot);
     assert(path.basename(directory).startsWith('vectra-run-recording-'));

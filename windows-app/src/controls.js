@@ -21,7 +21,7 @@ function controlLabel(button, label, icon) { button.replaceChildren(controlIcon(
 function setupControls() {
   const labels = {
     disconnect: ['หยุดอ่านและบันทึก', 'stop'], 'new-motor': ['เพิ่มอุปกรณ์', 'plus'], 'edit-motor': ['ตั้งค่าอุปกรณ์', 'settings'],
-    'open-data': ['โฟลเดอร์ผลสรุป', 'folder'], 'help-button': ['คู่มือ', 'help'],
+    'open-data': ['โฟลเดอร์ผลลัพธ์', 'folder'], 'help-button': ['คู่มือ', 'help'],
     'fleet-empty-add': ['เพิ่มอุปกรณ์', 'plus'],
     'load-history': ['โหลดข้อมูล', 'refresh'], 'export-csv': ['ส่งออกประวัติรายค่า', 'download']
   };
