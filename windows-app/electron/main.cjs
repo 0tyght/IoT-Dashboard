@@ -2,15 +2,19 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const { SerialPort } = require('serialport');
 const { FleetService } = require('./fleet-service.cjs');
 const { DataStore } = require('./data-store.cjs');
 const { RecordingService } = require('./recording-service.cjs');
+const { RunDiagnostics } = require('./run-diagnostics.cjs');
 const { normalizeGroups, resolveGroup } = require('./measurement-groups.cjs');
 const { applyBus, applyGroupBuses } = require('./bus-config.cjs');
 
 if (process.env.VECTRA_TEST_DATA) app.setPath('userData', process.env.VECTRA_TEST_DATA);
 let mainWindow, fleet, store, recording, recordingTimer, busy = false, quitting = false, activeGroup = null;
+let diagnostics, diagnosticTimer;
+const pendingReadings = new Set();
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => { if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
 const send = (channel, payload) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload); };
@@ -19,13 +23,34 @@ async function exclusive(action) {
   busy = true;
   try { return await action(); } finally { busy = false; }
 }
-async function record(reading) {
-  const group=activeGroup; return recording.accept({...reading,groupId:group?.id||'',groupName:group?.name||''}, store);
+function record(reading, power = false, phase = 'poll') {
+  const current = diagnostics, group = activeGroup, started = performance.now();
+  const tagged = { ...reading, groupId: group?.id || '', groupName: group?.name || '' };
+  const options = { preflight: phase === 'startup' };
+  const write = power ? recording.acceptPower(tagged, store, options) : recording.accept(tagged, store, options);
+  const task = write.then(result => {
+    current?.storage({ attemptId: reading.attemptId, deviceId: power ? reading.meterId : reading.motorId,
+      deviceType: power ? 'power' : 'sensor', phase, timestamp: new Date().toISOString(), elapsedMs: Math.round(performance.now() - started),
+      outcome: result.recordingState, recordingId: result.recordingId, message: result.storageError || '' });
+    return result;
+  }).finally(() => pendingReadings.delete(task));
+  pendingReadings.add(task);
+  return task;
 }
-async function recordPower(reading) {
+async function recordPower(reading, phase = 'poll') {
   if(reading.state!=='receiving') { send('power:reading',reading); return reading; }
-  const group=activeGroup, result=await recording.acceptPower({...reading,groupId:group?.id||'',groupName:group?.name||''},store);
+  const result = await record(reading, true, phase);
   send('power:reading',result); return result;
+}
+
+function publishDiagnostics() {
+  if (diagnostics) send('diagnostics:state', diagnostics.snapshot());
+}
+
+async function finishDiagnostics(reason) {
+  await Promise.allSettled(pendingReadings);
+  await diagnostics?.finish(reason);
+  publishDiagnostics();
 }
 
 app.whenReady().then(() => {
@@ -39,7 +64,14 @@ app.whenReady().then(() => {
     }
   });
   recordingTimer = setInterval(() => recording.tick(), 250);
-  fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)), onPower: reading => void recordPower(reading), onStatus: status => send('sensor:status', status) });
+  diagnosticTimer = setInterval(() => {
+    if (!diagnostics || diagnostics.finished) return;
+    void diagnostics.flush();
+    publishDiagnostics();
+  }, 750);
+  fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)),
+    onPower: reading => void recordPower(reading), onStatus: status => send('sensor:status', status),
+    onAttempt: attempt => diagnostics?.attempt(attempt) });
   const available = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
     width: Math.min(1440, available.width), height: Math.min(940, available.height), minWidth: Math.min(768, available.width), minHeight: Math.min(680, available.height), backgroundColor: '#f7f8fb', show: false, autoHideMenuBar: true,
@@ -100,19 +132,43 @@ app.whenReady().then(() => {
     if (!group) throw new Error('ไม่พบพื้นที่งานที่เลือก');
     const buses = store.loadBuses();
     const selection = resolveGroup(applyGroupBuses(group, buses), store.loadProfiles().map(item => applyBus(item, buses)), {allowDisabled:true});
+    const runId = randomUUID();
+    diagnostics = new RunDiagnostics(path.join(store.runDataPath(runId), 'diagnostics'), {
+      schemaVersion: 1, runId, appVersion: app.getVersion(), startedAt: new Date().toISOString(),
+      group: { id: group.id, name: group.name }, recordingMode: recording.settings.startMode,
+      sensors: selection.motors.filter(profile => profile.enabled !== false), meters: selection.meters
+    });
+    publishDiagnostics();
     activeGroup = group;
     try {
       const result = await fleet.connect(selection.motors,selection.meters);
-      recording.connect(group);
-      return { ...result, readings: await Promise.all(result.readings.map(record)), powerReadings:await Promise.all(result.powerReadings.map(recordPower)), recording: recording.snapshot() };
+      recording.connect(group, runId);
+      return { ...result, readings: await Promise.all(result.readings.map(reading => record(reading, false, 'startup'))),
+        powerReadings: await Promise.all(result.powerReadings.map(reading => recordPower(reading, 'startup'))), recording: recording.snapshot() };
     } catch (error) {
       recording.disconnect();
       await fleet.disconnect();
+      if (!quitting) await finishDiagnostics('startup-error');
       activeGroup=null;
       throw error;
     }
   }));
-  handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; await store.reportQueue; activeGroup=null; return { ok: true, recording: recording.snapshot() }; }));
+  handle('sensor:disconnect', () => exclusive(async () => {
+    recording.disconnect();
+    await fleet.disconnect();
+    await store.queue;
+    await finishDiagnostics('disconnected');
+    await store.reportQueue;
+    activeGroup = null;
+    return { ok: true, recording: recording.snapshot() };
+  }));
+  handle('diagnostics:open-folder', async () => {
+    const current = diagnostics;
+    await current?.flush();
+    if (!current?.initialized) throw new Error('ยังไม่มีไฟล์วินิจฉัยของรอบนี้');
+    const error = await shell.openPath(current.directory);
+    return { ok: !error, message: error };
+  });
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
   handle('data:recorded-days', async () => ({ ok: true, days: await store.recordedDays() }));
   handle('data:point-days', async () => ({ok:true,days:await store.pointDays()}));
@@ -167,7 +223,7 @@ app.whenReady().then(() => {
 app.on('before-quit', event => {
   if (quitting) return;
   event.preventDefault(); quitting = true;
-  clearInterval(recordingTimer); recording?.disconnect();
-  Promise.resolve().then(() => fleet?.disconnect()).then(() => store?.queue).then(() => store?.reportQueue).finally(() => app.quit());
+  clearInterval(recordingTimer); clearInterval(diagnosticTimer); recording?.disconnect();
+  Promise.resolve().then(() => fleet?.disconnect()).then(() => store?.queue).then(() => finishDiagnostics('app-closed')).then(() => store?.reportQueue).finally(() => app.quit());
 });
 app.on('window-all-closed', () => app.quit());

@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Independent COM ports are checked concurrently and released safely when startup is canceled. Recording resumes after an incomplete journal line, and history export replaces the destination only after writing succeeds. CSV folders can now be opened from Power Meter and Custom Register history."
+            --notes "Windows x64 diagnostic release based on 0.30.2. Acquisition runs store scheduled and actual read times, register results and storage outcomes with a shared attempt ID. The Read Quality dialog shows per-device counts and opens the diagnostics folder. Device CSV output keeps the same format."

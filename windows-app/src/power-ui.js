@@ -47,7 +47,18 @@ function renderSelectedPower() {
   status.textContent=[point,timestamp(entry.timestamp),entry.presetError?`อ่านบาง Register ไม่สำเร็จ ${entry.presetError}`:entry.quality==='unconfirmed'?'รอยืนยัน Float32':null,entry.storageError?`บันทึกไม่สำเร็จ ${entry.storageError}`:entry.recorded?'บันทึกแล้ว':''].filter(Boolean).join(' · ');
   box.append(status);
   const list=document.createElement('div');list.className='power-live-values';
-  for(const {key,label,unit,address} of PowerRegisters.preset(meter.model).fields){const row=document.createElement('div'),value=entry.values?.[key],words=entry.raw?.[key];const name=document.createElement('span');name.textContent=label;name.title=`Address RTU ${address+(entry.offsetAdjust||0)}`;const out=document.createElement('strong');out.textContent=Number.isFinite(value)?`${Number(value.toPrecision(6))} ${unit}`:'—';row.append(name,out);if(words){const raw=document.createElement('small');raw.textContent=`Raw ${words.map(word=>'0x'+word.toString(16).toUpperCase().padStart(4,'0')).join(' ')}`;row.append(raw);}list.append(row);}
+  for (const {key, label, unit, address} of PowerRegisters.preset(meter.model).fields) {
+    const row = node('div'), value = entry.values?.[key], words = entry.raw?.[key];
+    const name = node('span', label);
+    name.title = `Address RTU ${address + (entry.offsetAdjust || 0)}`;
+    const valid = Number.isFinite(value);
+    const unavailable = entry.quality === 'unconfirmed' ? 'รอยืนยันลำดับ Float' : words ? 'ค่าจากมิเตอร์ใช้ไม่ได้' : 'ยังไม่มีข้อมูล Register';
+    const out = node('strong', valid ? `${Number(value.toPrecision(6))} ${unit}` : key === 'currentG' ? unavailable : '—');
+    if (!valid) out.title = unavailable;
+    row.append(name, out);
+    if (words) row.append(node('small', `Raw ${words.map(word => '0x' + word.toString(16).toUpperCase().padStart(4, '0')).join(' ')}`));
+    list.append(row);
+  }
   for(const point of entry.points||[]){const row=document.createElement('div'),name=document.createElement('span'),out=document.createElement('strong'),detail=document.createElement('small');name.textContent=point.name;out.textContent=point.status==='disabled'?'พักอ่าน':point.status==='ok'?`${point.value} ${point.unit}`:'อ่านไม่สำเร็จ';detail.textContent=point.status==='ok'?`Raw ${point.raw.join(' / ')} · × ${point.scale} + ${point.offset}`:(point.message||'');row.append(name,out,detail);list.append(row);}
   box.append(list);powerLive.append(box);
 }

@@ -185,6 +185,59 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
       assert(layout.pageOverflow <= 1 && layout.mainHorizontal <= 1 && layout.mainVertical <= 1 && layout.scrollTop === 0 && layout.runInsideViewport, `${width}×${height}: run status and monitor fit a single viewport: ${JSON.stringify(layout)}`);
       if (width === 960) await page.screenshot({ path: path.join(artifacts, 'monitor-run-status.png'), animations: 'disabled' });
     }
+    // Exercise the real connect/record/stop IPC with a serial stand-in that times out once.
+    await app.evaluate(({ app }) => {
+      const appRequire = process.getBuiltinModule('node:module').createRequire(`${app.getAppPath()}/package.json`);
+      const { FleetService } = appRequire('./electron/fleet-service.cjs');
+      const { DataStore } = appRequire('./electron/data-store.cjs');
+      const append = DataStore.prototype.append;
+      DataStore.prototype.append = function(reading) {
+        if (reading.attemptId === 3) return Promise.reject(new Error('Simulated disk write failure'));
+        return append.call(this, reading);
+      };
+      FleetService.prototype.open = async () => {
+        let reads = 0;
+        return {
+          isOpen: true, setID() {}, setTimeout() {},
+          async readHoldingRegisters() {
+            if (++reads === 2) throw Object.assign(new Error('Timed out'), { errno: 'ETIMEDOUT' });
+            return { data: [20] };
+          },
+          close(done) { this.isOpen = false; done(); }
+        };
+      };
+    });
+    await page.locator('#connect-all').click();
+    await page.locator('#disconnect').waitFor();
+    await page.locator('#session-actions > summary').click();
+    await page.locator('#open-run-diagnostics').click();
+    await page.locator('#diagnostics-devices tr').filter({ hasText: 'Timeout 1' }).waitFor();
+    await page.waitForFunction(() => /^\d+ · เขียนพลาด 1$/.test(document.querySelector('#diagnostics-devices tr td:nth-child(4)')?.textContent || '') &&
+      Number.parseInt(document.querySelector('#diagnostics-devices tr td:nth-child(4)').textContent, 10) >= 1);
+    await page.locator('#close-run-diagnostics').click();
+    await page.locator('#disconnect').click();
+    await page.locator('#disconnect').waitFor({ state: 'hidden' });
+    await page.locator('#session-actions > summary').click();
+    await page.locator('#open-run-diagnostics').click();
+    await page.locator('#open-diagnostics-folder').click();
+    await page.locator('#open-diagnostics-folder:enabled').waitFor();
+    const diagnosticFolder = await app.evaluate(() => globalThis.sessionUIOpenedFolder);
+    assert.equal(path.basename(diagnosticFolder), 'diagnostics');
+    const manifest = JSON.parse(fs.readFileSync(path.join(diagnosticFolder, 'run.json'), 'utf8'));
+    assert.equal(manifest.appVersion, require('../package.json').version);
+    const events = fs.readFileSync(path.join(diagnosticFolder, 'events.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+    const timeout = events.find(event => event.type === 'attempt' && event.outcome === 'timeout');
+    assert.equal(timeout.deviceId, profile.motorId);
+    assert.equal(timeout.frames[0].address, 200);
+    assert.equal(timeout.frames[0].outcome, 'timeout');
+    const saved = events.find(event => event.type === 'storage' && event.phase === 'poll' && event.outcome === 'saved');
+    assert(events.some(event => event.type === 'attempt' && event.attemptId === saved.attemptId && event.outcome === 'ok'));
+    const writeError = events.find(event => event.type === 'storage' && event.outcome === 'error');
+    assert.match(writeError.message, /Simulated disk/);
+    assert(events.some(event => event.type === 'attempt' && event.attemptId === writeError.attemptId && event.outcome === 'ok'));
+    assert(events.some(event => event.type === 'storage' && event.phase === 'startup' && event.outcome === 'before-start'));
+    assert(events.every(event => event.runId === manifest.runId));
+    assert.equal(JSON.parse(fs.readFileSync(path.join(diagnosticFolder, 'quality.json'), 'utf8')).devices[0].timeouts, 1);
     assert.deepEqual(errors, [], 'run selection, export and recording-state updates produce no renderer errors');
     console.log('PASS: saved newest run, shared analysis/table filters, recording columns, per-run folder and filtered CSV export');
   } catch (error) {

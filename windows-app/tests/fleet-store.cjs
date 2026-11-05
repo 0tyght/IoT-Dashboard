@@ -49,7 +49,7 @@ async function checkCancelledStartup() {
 
 async function checkMixedBusTimeoutRecovery() {
   let failFrequency = true, failPrimary = false, failedAt = 0;
-  const requests = [], readings = [], powerReadings = [], statuses = [];
+  const requests = [], readings = [], powerReadings = [], statuses = [], attempts = [];
   class ThreeDeviceClient {
     async connectRTUBuffered() { this.isOpen = true; }
     setID(id) { this.id = id; }
@@ -71,12 +71,17 @@ async function checkMixedBusTimeoutRecovery() {
     clientFactory: () => new ThreeDeviceClient(),
     onReading: reading => readings.push(reading),
     onPower: reading => powerReadings.push(reading),
-    onStatus: status => statuses.push(status)
+    onStatus: status => statuses.push(status),
+    onAttempt: attempt => attempts.push(attempt)
   });
   try {
     const start = await fleet.connect([config, second], group.meters);
     assert.equal(start.readings[0].frequencyStatus, 'read-error');
     assert.match(start.readings[0].frequencyMessage, /COM8 · Slave ID 1 · FC03 · Register 33/);
+    const frequencyTimeout = attempts.find(attempt => attempt.attemptId === start.readings[0].attemptId);
+    assert.equal(frequencyTimeout.phase, 'startup');
+    assert.equal(frequencyTimeout.outcome, 'partial');
+    assert.equal(frequencyTimeout.frames.find(frame => frame.address === 33).outcome, 'timeout');
     assert.equal(start.readings[1].channels.frequencyX, 50);
     assert.equal(start.powerReadings[0].state, 'receiving');
     assert(requests.find(request => request.id === 2).at - failedAt >= 50, 'allow time for a late frame after timeout');
@@ -95,6 +100,10 @@ async function checkMixedBusTimeoutRecovery() {
     await waitUntil(() => requests.some(request => request.id === 1 && request.at > failedAt), 'failing sensor is retried automatically');
     const retry = requests.find(request => request.id === 1 && request.at > failedAt);
     assert(retry.at - failedAt >= 990);
+    const timedOut = attempts.find(attempt => attempt.phase === 'poll' && attempt.deviceId === config.motorId && attempt.outcome === 'timeout');
+    assert.equal(timedOut.frames[0].address, 0);
+    assert.equal(timedOut.frames[0].functionCode, 'FC03');
+    assert(timedOut.queueDelayMs >= 0 && timedOut.nextScheduledAt > timedOut.startedAt);
     await waitUntil(() => readings.some(reading => reading.motorId === config.motorId && reading.channels.frequencyX === 50), 'frequency reading resumes after cooldown', 6500);
   } finally {
     await fleet.disconnect();

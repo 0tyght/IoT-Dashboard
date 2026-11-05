@@ -9,6 +9,15 @@ const pacedReads = new WeakMap();
 
 const isTimeout = error => error?.code === 'ETIMEDOUT' || error?.errno === 'ETIMEDOUT';
 
+function readOutcome(error) {
+  if (!error) return 'ok';
+  if (error.code === 'CANCELLED') return 'cancelled';
+  if (isTimeout(error)) return 'timeout';
+  if (/crc/i.test(error.message || '')) return 'crc-error';
+  if (Number.isInteger(error.modbusCode)) return 'modbus-exception';
+  return 'read-error';
+}
+
 function paceReads(client, baudRate) {
   // RTU frames need at least 3.5 character times of silence between requests.
   const frameGapMs = baudRate > 19200 ? 2 : Math.ceil(3.5 * 12 * 1000 / baudRate);
@@ -38,17 +47,23 @@ function paceReads(client, baudRate) {
   });
 }
 
-async function readRegisters(client, config, type, address, count, cancelled) {
+async function readRegisters(client, config, type, address, count, cancelled, trace) {
   const paced = pacedReads.get(client);
   checkCancelled(cancelled);
+  const start = Date.now(), clock = performance.now();
+  const functionCode = type === 'input' ? 'FC04' : 'FC03';
+  let failure;
   try {
     if (paced) return await paced(type, address, count, cancelled);
     return await (type === 'input' ? client.readInputRegisters(address, count) : client.readHoldingRegisters(address, count));
   } catch (error) {
+    failure = error;
     if (!isTimeout(error)) throw error;
-    const fn = type === 'input' ? 'FC04' : 'FC03';
-    const message = `Timeout ${config.timeout} ms · ${config.path} · Slave ID ${config.slaveId} · ${fn} · Register ${address} (${count} คำ)`;
+    const message = `Timeout ${config.timeout} ms · ${config.path} · Slave ID ${config.slaveId} · ${functionCode} · Register ${address} (${count} คำ)`;
     throw Object.assign(new Error(message, {cause: error}), {code: 'ETIMEDOUT'});
+  } finally {
+    trace?.push({ functionCode, address, count, startedAt: new Date(start).toISOString(), elapsedMs: Math.round(performance.now() - clock),
+      outcome: readOutcome(failure), ...(failure ? { message: failure.message, exceptionCode: failure.modbusCode } : {}) });
   }
 }
 
@@ -77,12 +92,12 @@ async function closeClient(client) {
 }
 
 function checkCancelled(cancelled) { if (cancelled()) { const error=new Error('หยุดการอ่านแล้ว'); error.code='CANCELLED'; throw error; } }
-async function readSnapshot(client, config, cancelled=()=>false) {
+async function readSnapshot(client, config, cancelled=()=>false, trace) {
   client.setID(config.slaveId);
   client.setTimeout(config.timeout);
   const read = async (address, count) => {
     checkCancelled(cancelled);
-    const reply = await readRegisters(client, config, config.registerType, address, count, cancelled);
+    const reply = await readRegisters(client, config, config.registerType, address, count, cancelled, trace);
     if (!Array.isArray(reply.data) || reply.data.length !== count || reply.data.some(value => !Number.isInteger(value) || value < 0 || value > 65535)) throw new Error('ข้อมูล Register ตอบกลับไม่ครบหรือไม่ถูกต้อง');
     return reply.data;
   };
@@ -122,7 +137,7 @@ async function readSnapshot(client, config, cancelled=()=>false) {
       if (!point.enabled) { points.push({...point,status:'disabled',raw:null,value:null,timestamp:null}); continue; }
       if(communicationError){points.push({...point,status:'read-error',raw:null,value:null,timestamp:new Date().toISOString(),message:`ข้ามหลังสื่อสารไม่สำเร็จ: ${communicationError}`});continue;}
       try {
-        const response=await readRegisters(client,config,point.registerType,point.registerAddress,registerCount(point.dataType),cancelled);
+        const response=await readRegisters(client,config,point.registerType,point.registerAddress,registerCount(point.dataType),cancelled,trace);
         const raw=response.data;if(!Array.isArray(raw)||raw.length!==registerCount(point.dataType)||raw.some(word=>!Number.isInteger(word)||word<0||word>65535))throw new Error('ข้อมูล Register ตอบกลับไม่ครบหรือไม่ถูกต้อง');
         const value=decodeRegisters(raw,point)+point.offset;if(!Number.isFinite(value))throw new Error('ค่าหลังแปลงไม่ใช่ตัวเลข');
         points.push({...point,status:'ok',raw,value,timestamp:new Date().toISOString()});
@@ -134,11 +149,11 @@ async function readSnapshot(client, config, cancelled=()=>false) {
   const registers = await read(config.registerAddress, registerCount(config.dataType));
   return { value: decodeRegisters(registers, config), unit: config.unit, rawRegisters: registers, channels: null };
 }
-async function readPowerSnapshot(client, meter, cancelled=()=>false) {
+async function readPowerSnapshot(client, meter, cancelled=()=>false, trace) {
   client.setID(meter.slaveId); client.setTimeout(meter.timeout);
   const read = async (address,count) => {
     checkCancelled(cancelled);
-    const response = await readRegisters(client,meter,meter.registerType,address,count,cancelled);
+    const response = await readRegisters(client,meter,meter.registerType,address,count,cancelled,trace);
     if (!Array.isArray(response.data) || response.data.length!==count || response.data.some(value=>!Number.isInteger(value)||value<0||value>65535)) throw new Error('ข้อมูล Power Meter ตอบกลับไม่ครบ');
     return response.data;
   };
@@ -152,7 +167,7 @@ async function readPowerSnapshot(client, meter, cancelled=()=>false) {
     result = decodePowerMeter(blocks, meter.byteOrder, meter.model);
   }
   catch(error){if(error.code==='CANCELLED'||isTimeout(error)||!meter.points?.length)throw error;result={values:{},raw:{},byteOrder:meter.byteOrder,quality:'read-error',presetError:String(error.message||error)};}
-  if(meter.points?.length){const extra=await readSnapshot(client,{...meter,sensorModel:'custom'},cancelled);result.points=extra.points;if(result.presetError&&!extra.points.some(point=>point.status==='ok'))throw new Error(`อ่านมิเตอร์และจุดวัดเพิ่มเติมไม่สำเร็จ: ${result.presetError}`);}
+  if(meter.points?.length){const extra=await readSnapshot(client,{...meter,sensorModel:'custom'},cancelled,trace);result.points=extra.points;if(result.presetError&&!extra.points.some(point=>point.status==='ok'))throw new Error(`อ่านมิเตอร์และจุดวัดเพิ่มเติมไม่สำเร็จ: ${result.presetError}`);}
   return result;
 }
 
@@ -167,9 +182,33 @@ function setNextPoll(bus, key, due, error) {
 }
 
 class FleetService {
-  constructor({ onReading = () => {}, onPower = () => {}, onStatus = () => {}, clientFactory = () => new ModbusRTU() } = {}) {
-    this.onReading = onReading; this.onPower = onPower; this.onStatus = onStatus; this.clientFactory = clientFactory;
+  constructor({ onReading = () => {}, onPower = () => {}, onStatus = () => {}, onAttempt = () => {}, clientFactory = () => new ModbusRTU() } = {}) {
+    this.onReading = onReading; this.onPower = onPower; this.onStatus = onStatus; this.onAttempt = onAttempt; this.clientFactory = clientFactory;
     this.buses = []; this.generation = 0;
+    this.attemptSequence = 0;
+  }
+
+  beginAttempt(config, phase, started, scheduled = null) {
+    const power = config.deviceType === 'power';
+    return { attemptId: ++this.attemptSequence, phase, deviceId: power ? config.id : config.motorId,
+      deviceType: power ? 'power' : 'sensor', port: config.path, slaveId: config.slaveId,
+      pollIntervalMs: config.pollInterval, timeoutMs: config.timeout,
+      scheduledAt: scheduled === null ? null : new Date(scheduled).toISOString(), startedAt: new Date(started).toISOString(),
+      queueDelayMs: scheduled === null ? null : Math.max(0, started - scheduled), clock: performance.now(), frames: [] };
+  }
+
+  finishAttempt(attempt, snapshot, error, nextDue) {
+    const { clock, ...details } = attempt;
+    const badFrame = details.frames.find(frame => frame.outcome !== 'ok');
+    const enabled = snapshot?.points?.filter(point => point.enabled) || [];
+    const noData = Array.isArray(snapshot?.points) && !snapshot.values && !enabled.some(point => point.status === 'ok');
+    const partial = snapshot?.presetError || ['unsupported', 'read-error', 'invalid'].includes(snapshot?.frequencyStatus) || enabled.some(point => point.status === 'read-error');
+    const outcome = error ? readOutcome(error) : noData ? badFrame?.outcome || 'read-error' : partial ? 'partial' : 'ok';
+    this.onAttempt({ ...details, outcome, endedAt: new Date().toISOString(), elapsedMs: Math.round(performance.now() - clock),
+      nextScheduledAt: Number.isFinite(nextDue) ? new Date(nextDue).toISOString() : null,
+      message: error?.message || badFrame?.message || snapshot?.presetError || snapshot?.frequencyMessage || '',
+      unavailableFields: Object.entries(snapshot?.values || {}).filter(([, value]) => !Number.isFinite(value)).map(([key]) => key),
+      measurementQuality: snapshot?.quality || snapshot?.frequencyStatus || '' });
   }
 
   async open(config) {
@@ -255,27 +294,32 @@ class FleetService {
       const power = config.deviceType === 'power';
       const key = power ? `power:${config.id}` : config.motorId;
       const started = Date.now();
+      const attempt = this.beginAttempt(config, 'startup', started);
+      let snapshot, failure;
       const meter = power ? { meterId: config.id, model: config.model, name: config.name, point: config.point, path: config.path, slaveId: config.slaveId } : null;
       try {
         if (openError) throw openError;
         if (power) {
-          const snapshot = await readPowerSnapshot(bus.client, config, cancelled);
+          snapshot = await readPowerSnapshot(bus.client, config, cancelled, attempt.frames);
           checkCancelled(cancelled);
-          powerReadings.push({ ...meter, state: 'receiving', motorId: config.motorId, registerType: config.registerType,
+          powerReadings.push({ ...meter, attemptId: attempt.attemptId, state: 'receiving', motorId: config.motorId, registerType: config.registerType,
             offsetAdjust: config.offsetAdjust, timestamp: new Date().toISOString(), pollIntervalMs: config.pollInterval, actualIntervalMs: null, ...snapshot });
         } else {
           this.onStatus({ state: 'testing', motorId: config.motorId, path: config.path });
-          const snapshot = await readSnapshot(bus.client, config, cancelled);
+          snapshot = await readSnapshot(bus.client, config, cancelled, attempt.frames);
           checkCancelled(cancelled);
-          readings.push(this.reading(config, snapshot, Date.now() - started));
+          readings.push({ ...this.reading(config, snapshot, Date.now() - started), attemptId: attempt.attemptId });
         }
         bus.lastReceived.set(key, Date.now());
         bus.nextDue.set(key, Date.now() + config.pollInterval);
       } catch (error) {
+        failure = error;
         checkCancelled(cancelled);
         if (power) powerReadings.push({ ...meter, state: 'read-error', message: error.message });
         else initialFailures.push({ motorId: config.motorId, path: config.path, message: error.message });
         setNextPoll(bus, key, Date.now() + config.pollInterval, error);
+      } finally {
+        this.finishAttempt(attempt, snapshot, cancelled() ? { code: 'CANCELLED' } : failure, bus.nextDue.get(key));
       }
     }
     return { readings, powerReadings, initialFailures };
@@ -297,34 +341,40 @@ class FleetService {
     for (const config of bus.configs) {
       if (generation !== this.generation) return;
       const key=config.deviceType==='power'?`power:${config.id}`:config.motorId;
-      if ((bus.nextDue.get(key) || 0) > Date.now()) continue;
       const started = Date.now();
+      const scheduled = bus.nextDue.get(key) ?? started;
+      if (scheduled > started) continue;
       const due = started + config.pollInterval;
+      const attempt = this.beginAttempt(config, 'poll', started, scheduled);
+      let snapshot, failure;
       try {
         if (!bus.client?.isOpen) bus.client = await this.open(config);
         if (config.deviceType === 'power') {
-          const snapshot=await readPowerSnapshot(bus.client,config,()=>generation!==this.generation); if(generation!==this.generation)return;
+          snapshot=await readPowerSnapshot(bus.client,config,()=>generation!==this.generation,attempt.frames); if(generation!==this.generation)return;
           const received=Date.now(),actualIntervalMs=bus.lastReceived.has(key)?received-bus.lastReceived.get(key):null; bus.lastReceived.set(key,received);
-          this.onPower({state:'receiving',meterId:config.id,model:config.model,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date(received).toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs,...snapshot});
+          this.onPower({attemptId:attempt.attemptId,state:'receiving',meterId:config.id,model:config.model,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date(received).toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs,...snapshot});
         } else {
-        const snapshot = await readSnapshot(bus.client, config,()=>generation!==this.generation);
+        snapshot = await readSnapshot(bus.client, config,()=>generation!==this.generation,attempt.frames);
         if (generation !== this.generation) return;
         const received = Date.now(), reading = this.reading(config, snapshot, received - started);
+        reading.attemptId = attempt.attemptId;
         reading.actualIntervalMs = bus.lastReceived.has(config.motorId) ? received - bus.lastReceived.get(config.motorId) : null;
         bus.lastReceived.set(config.motorId, received);
         this.onReading(reading);
         const noData=Array.isArray(snapshot.points)&&!snapshot.points.some(point=>point.status==='ok');
         this.onStatus({ state: noData?'read-error':'receiving', motorId: config.motorId, path: config.path, ...(noData?{message:'จุดวัดทั้งหมดไม่ตอบกลับ'}:{}) });
         }
+        // Start-to-start requested period; slow devices/shared buses may run longer.
+        setNextPoll(bus, key, due);
       } catch (error) {
+        failure = error;
         if (generation !== this.generation) return;
         if(config.deviceType==='power')this.onPower({state:'read-error',meterId:config.id,model:config.model,name:config.name,point:config.point,path:config.path,slaveId:config.slaveId,message:error.message});
         else this.onStatus({ state: 'read-error', motorId: config.motorId, path: config.path, message: error.message });
         setNextPoll(bus, key, due, error);
-        continue;
+      } finally {
+        this.finishAttempt(attempt, snapshot, generation !== this.generation ? { code: 'CANCELLED' } : failure, bus.nextDue.get(key));
       }
-      // Start-to-start requested period; slow devices/shared buses may run longer.
-      setNextPoll(bus, key, due);
     }
     const delay = Math.max(20, Math.min(...bus.configs.map(config => (bus.nextDue.get(config.deviceType==='power'?`power:${config.id}`:config.motorId) || 0) - Date.now())));
     this.schedule(bus, generation, delay);

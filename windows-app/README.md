@@ -66,6 +66,8 @@ Schema v4 adds `runId`, `runStartedAt`, `recordingId` and `recordingStartedAt`. 
 
 Each run with saved readings has CSV files under `data/output/<Bangkok start time>_<runId>/`. A run that crosses midnight or has multiple recording intervals uses the same folder. Files are named `sensor-<id>.csv` and `meter-<id>.csv`. The first column is the actual sample timestamp in UTC+07:00, followed by decoded measurements. Missing cells are blank, and time gaps stay visible. Custom points from the same read share one row. Older custom point journals lack the sample ID and retain their recorded point timestamps.
 
+**เพิ่มเติม → คุณภาพการอ่าน** shows ongoing poll and storage counts for each device. **เปิดโฟลเดอร์วินิจฉัย** opens `data/runs/<runId>/diagnostics/`. `run.json` contains the app version and device settings, `events.ndjson` links register attempts and storage outcomes by `attemptId`, and `quality.json` contains counts at stop. Diagnostic timestamps are UTC. Monitor-only mode saves these diagnostics while leaving measurement recording off. The data CSV layout stays the same.
+
 History obtains the run catalog and filters from the backend's saved records. Historical chart series include run identity so separate acquisition runs are not joined merely because a motor and COM port match. Older records without `runId` remain available in an explicit legacy group (`__legacy__`); the application cannot reconstruct their original acquisition boundaries or recording IDs.
 
 ### Saved XYZ analysis and history table

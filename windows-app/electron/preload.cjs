@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('vectraDesktop', {
   exportData: filter => ipcRenderer.invoke('data:export', filter),
   openDataPath: () => ipcRenderer.invoke('data:open-folder'),
   openRunDataPath: runId => ipcRenderer.invoke('data:open-run-folder', runId),
+  openDiagnostics: () => ipcRenderer.invoke('diagnostics:open-folder'),
+  onDiagnostics: subscribe('diagnostics:state'),
   importWaveform: () => ipcRenderer.invoke('analysis:import-waveform'),
   exportProfiles: () => ipcRenderer.invoke('profiles:export'),
   importProfiles: () => ipcRenderer.invoke('profiles:import'),

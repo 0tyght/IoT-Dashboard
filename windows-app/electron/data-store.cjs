@@ -260,7 +260,7 @@ class DataStore {
     for (const point of points) {
       const timestamp = point.timestamp || reading.timestamp;
       const row = {
-        timestamp, timestampBangkok: localTimestamp(timestamp), sampleId, sampleTimestamp: reading.timestamp,
+        timestamp, timestampBangkok: localTimestamp(timestamp), sampleId, sampleTimestamp: reading.timestamp, attemptId: reading.attemptId,
         groupId: reading.groupId || '', groupName: reading.groupName || '',
         runId: reading.runId || '', runName: reading.runName || '', runNote: reading.runNote || '', recordingId: reading.recordingId || '',
         deviceId: reading.motorId, deviceName: reading.name || '', port: reading.port, slaveId: reading.slaveId,

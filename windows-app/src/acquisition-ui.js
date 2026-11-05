@@ -127,10 +127,11 @@ function recordingModeFields() {
   $('record-duration-label').hidden = value === 'monitor-only';
   $('record-duration-note').hidden = value === 'monitor-only';
   $('record-form-error').hidden = true;
-  $('record-mode-help').textContent = scheduled ? 'กดเริ่มเพื่ออ่านค่ารอไว้ แล้วบันทึกเมื่อถึงเวลา · ต้องเปิดโปรแกรมไว้' : value === 'monitor-only' ? 'อ่านค่าจริงโดยไม่เขียนไฟล์ · เริ่มบันทึกภายหลังได้จากเมนูเพิ่มเติม' : 'กดเริ่มครั้งเดียวเพื่อตรวจอุปกรณ์ อ่านค่า และบันทึกอัตโนมัติ';
+  $('record-mode-help').textContent = scheduled ? 'กดเริ่มเพื่ออ่านค่ารอไว้ แล้วบันทึกเมื่อถึงเวลา · ต้องเปิดโปรแกรมไว้' : value === 'monitor-only' ? 'ไม่บันทึกค่าที่วัด · ยังเก็บบันทึกวินิจฉัยการอ่าน · เริ่มบันทึกค่าภายหลังได้จากเมนูเพิ่มเติม' : 'กดเริ่มครั้งเดียวเพื่อตรวจอุปกรณ์ อ่านค่า และบันทึกอัตโนมัติ';
 }
 function inputLocal(value) { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 19); }
 function setupAcquisitionUI() {
+  setupRunDiagnosticsUI();
   const runLabel = node('span'); runLabel.id = 'recording-run'; runLabel.hidden = true;
   $('recording-status').after(runLabel);
   const historyControls = $('history-view').querySelector('.section-toolbar .inline-controls');
@@ -264,6 +265,50 @@ function setupAcquisitionUI() {
     } catch (error) { if (generation === rangeGeneration) { rangeFrames = []; rangeProfile = null; rangeGapStarts = []; rangeCompleteTotal = 0;trend.clear(error.message);drawHistory(); scatter.draw(); rangePanel.dataset.loaded = 'false'; $('range-summary').textContent = error.message; } }
     finally { if (generation === rangeGeneration) $('load-range').disabled = false; }
   };
+}
+
+function setupRunDiagnosticsUI() {
+  const launch = node('button', 'คุณภาพการอ่าน');
+  launch.id = 'open-run-diagnostics';
+  launch.type = 'button';
+  $('open-data').after(launch);
+  const dialog = node('dialog');
+  dialog.id = 'run-diagnostics-dialog';
+  dialog.setAttribute('aria-labelledby', 'run-diagnostics-title');
+  dialog.style.width = 'min(820px, calc(100vw - 32px))';
+  dialog.innerHTML = `<div class="dialog-header"><div><h2 id="run-diagnostics-title">คุณภาพการอ่าน</h2><p id="diagnostics-description" role="status">เริ่มอ่านอุปกรณ์เพื่อดูสถิติ</p></div><button id="close-run-diagnostics" type="button">ปิด</button></div>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>อุปกรณ์</th><th>อ่านได้ / ครั้ง</th><th>ล้มเหลว</th><th>บันทึก</th><th>ช่วงจริง / ตั้งไว้</th><th>รอคิวสูงสุด</th></tr></thead><tbody id="diagnostics-devices"></tbody></table></div>
+    <div class="dialog-footer"><button id="open-diagnostics-folder" type="button" disabled>เปิดโฟลเดอร์วินิจฉัย</button></div>`;
+  document.body.append(dialog);
+  let current;
+  let opening = false;
+  function render() {
+    const body = $('diagnostics-devices');
+    body.replaceChildren();
+    const ms = value => value == null ? '—' : `${value.toLocaleString()} ms`;
+    if (!current?.devices.length) emptyRow(body, 6, 'ยังไม่มีผลการอ่านต่อเนื่อง');
+    for (const item of current?.devices || []) {
+      const row = node('tr');
+      const name = item.deviceType === 'power' ? `มิเตอร์ ${item.deviceId}` : item.deviceId;
+      row.append(node('td', name), node('td', `${item.ok + item.partial} / ${item.attempts}${item.partial ? ` · บางส่วน ${item.partial}` : ''}`),
+        node('td', `${item.failed}${item.timeouts ? ` · Timeout ${item.timeouts}` : ''}`),
+        node('td', `${item.saved}${item.storageErrors ? ` · เขียนพลาด ${item.storageErrors}` : ''}`),
+        node('td', `${ms(item.lastIntervalMs)} / ${ms(item.pollIntervalMs)}`), node('td', ms(item.maxQueueDelayMs)));
+      body.append(row);
+    }
+    $('diagnostics-description').textContent = !current ? 'เริ่มอ่านอุปกรณ์เพื่อดูสถิติ' : current.lastError || current.lostEvents
+      ? `รอบ ${shortIdentity(current.runId)} · บันทึกวินิจฉัยขาด ${current.lostEvents} เหตุการณ์${current.lastError ? ` · ${current.lastError}` : ''}`
+      : `รอบ ${shortIdentity(current.runId)} · นับรอบอ่านต่อเนื่อง · Timeout อาจเกิดในรอบที่อ่านได้บางส่วน`;
+    $('open-diagnostics-folder').disabled = !current?.available || opening;
+  }
+  launch.onclick = () => { $('session-actions').open = false; render(); dialog.showModal(); };
+  $('close-run-diagnostics').onclick = () => dialog.close();
+  $('open-diagnostics-folder').onclick = () => action(async () => {
+    opening = true; render();
+    try { check(await api.openDiagnostics()); }
+    finally { opening = false; render(); }
+  });
+  api.onDiagnostics(state => { current = state; if (dialog.open) render(); });
 }
 function updateGraphWindow() {
   $('graph-count-label').hidden = $('fleet-window').value !== 'custom';
