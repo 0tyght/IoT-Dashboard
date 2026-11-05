@@ -62,7 +62,7 @@ The readings view follows the selected device. Sensors display charts and their 
 - Waveform and trend analyzers use separate DOM IDs, workers and input state while sharing numerical/plot implementations. Changing filters clears pending trend work and prior results. Units, selected timestamps, timing method, jitter, analyzed/excluded records, FFT size, window, actual sample rate and omitted tail samples remain inspectable. No imported or computed trend is written as a sensor waveform.
 
 Validate empty, receiving, simulated, stopped, paused, fault/stale, recording, monitor-only, storage failure and maintenance states. The all-page layout suite covers eight pages at 768×1024, 960×680, 1366×768 and 1920×1080; the monitor suite covers the seven sizes above. These use isolated software fixtures and simulated serial responses, not physical iPad or hardware commissioning. Visual reference content is style evidence; unsupported fault scores, RMS labels and thresholds in that image are not new measurements or product capabilities.
-## Shared device configuration (0.30.4)
+## Shared device configuration (0.30.5)
 
 The user manages **devices**. Vibration instruments, electrical meters and custom instruments use one add/settings drawer and identical sidebar rows. Model-specific decoding and plots may differ; they do not define separate navigation categories. Workspace membership lists all device kinds together. Existing `motors.json` and workspace meter records remain compatibility storage; do not rewrite recorded identities during this UI consolidation.
 

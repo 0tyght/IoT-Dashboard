@@ -9,7 +9,10 @@
 .device-item .item-value { font-variant-numeric:tabular-nums; padding-top:2px; }
 .sidebar-bottom .legend { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 9px; }
 .sidebar-bottom .legend>span { display:flex;align-items:center;gap:6px;white-space:nowrap; }
-.selection-state.waiting,.flow-node-status[data-status=waiting] { color:#80500a;background:#fff4d6;border-color:#e4c786; }
+.selection-state.waiting { color:#80500a;background:#fff4d6;border-color:#e4c786; }
+.flow-status[data-status=waiting] { color:#80500a; }
+.flow-status[data-status=waiting]::before { color:#b77708; }
+.flow-node.meter .flow-node-kind { color:#5144c5; }
 .selection-state.online { color:#256446;background:#edf8f1;border-color:#afcfbc; }
 .selection-state.fault { color:#a33843;background:#fff1f1;border-color:#e3b4b8; }
 .template-help { grid-column:1/-1;font-size:11px;line-height:1.6;color:#56627a;margin:2px 0 14px; }

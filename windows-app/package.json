@@ -1,6 +1,6 @@
 {
   "name": "vectra-sensor-monitor",
-  "version": "0.30.4",
+  "version": "0.30.5",
   "author": "VECTRA",
   "private": true,
   "description": "Windows desktop application for RS485 Modbus device monitoring",
