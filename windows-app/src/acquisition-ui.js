@@ -38,11 +38,24 @@ function runDateLabel(value) {
   return value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value)) : 'ไม่ระบุเวลาเริ่ม';
 }
 function hasRunFolder(runId) { return typeof runId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(runId); }
-function updateRunFolderButton() {
-  const button = $('open-run-folder'), runId = $('history-run')?.value;
+function updateRunFolderButton(button = $('open-run-folder'), runId = $('history-run')?.value) {
   if (!button) return;
-  button.disabled = !hasRunFolder(runId);
-  button.title = button.disabled ? 'เลือกรอบอ่านเพื่อเปิด CSV รายอุปกรณ์' : `เปิด CSV ของรอบ ${runId}`;
+  const valid = hasRunFolder(runId);
+  button.disabled = !valid || button.dataset.opening === 'true';
+  button.title = valid ? `เปิด CSV ของรอบ ${runId}` : 'เลือกรอบอ่านเพื่อเปิด CSV รายอุปกรณ์';
+}
+function bindRunFolderButton(button, select) {
+  const update = () => updateRunFolderButton(button, select.value);
+  button.onclick = () => action(async () => {
+    const runId = select.value;
+    if (button.disabled || !hasRunFolder(runId)) return;
+    button.dataset.opening = 'true';
+    update();
+    try { check(await api.openRunDataPath(runId)); }
+    finally { delete button.dataset.opening; update(); }
+  });
+  update();
+  return update;
 }
 function renderHistoryRuns(runs = []) {
   const select = $('history-run'); if (!select) return false;
@@ -132,12 +145,7 @@ function setupAcquisitionUI() {
   $('history-motor').after(runSelectLabel);
   const openRunFolder = node('button', 'CSV รอบนี้'); openRunFolder.id = 'open-run-folder'; openRunFolder.type = 'button'; openRunFolder.disabled = true;
   historyControls.append(openRunFolder);
-  openRunFolder.onclick = () => action(async () => {
-    const runId = runSelect.value; if (!hasRunFolder(runId)) return;
-    openRunFolder.disabled = true;
-    try { check(await api.openRunDataPath(runId)); }
-    finally { updateRunFolderButton(); }
-  });
+  bindRunFolderButton(openRunFolder, runSelect);
   const historyHeader = $('history-view').querySelector('.data-table thead tr');
   historyHeader.children[1].before(node('th', 'รอบอ่าน'), node('th', 'รอบบันทึก'));
   const recordingForm = $('recording-form');

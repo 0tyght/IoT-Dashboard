@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Output CSVs use one row per recorded sample and one column per decoded measurement, with units in the headers and Bangkok timestamps. Each run keeps one folder and one CSV per recorded device."
+            --notes "Windows x64 release. Independent COM ports are checked concurrently and released safely when startup is canceled. Recording resumes after an incomplete journal line, and history export replaces the destination only after writing succeeds. CSV folders can now be opened from Power Meter and Custom Register history."

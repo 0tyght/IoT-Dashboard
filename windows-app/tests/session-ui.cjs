@@ -28,6 +28,11 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
   store.saveGroups([{id:'G1',name:'ปั๊มน้ำ',motorIds:[profile.motorId],meters:[]}]);
   store.saveSelectedGroup('G1');
   for (const row of [legacy, ...older, ...newer, ...other]) await store.append(row);
+  const meterRun = randomUUID(), pointRun = randomUUID();
+  await store.appendPower({ runId: meterRun, runStartedAt: stamp(0), timestamp: stamp(0), meterId: 'PM-01', model: 'pm2230', values: { voltageAB: 400 } });
+  await store.append({ runId: pointRun, runStartedAt: stamp(0), timestamp: stamp(0), motorId: 'ENV-01', points: [
+    { id: 'temp', name: 'Temperature', unit: '°C', enabled: true, record: true, status: 'ok', value: 26 }
+  ] });
 
   let app, page;
   const errors = [];
@@ -109,6 +114,19 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     const exported = csv.slice(1).map(line => line.split(',').map(value => value.startsWith('"') ? value.slice(1, -1).replaceAll('""', '"') : value));
     assert.equal(exported.length, 3, 'export applies the selected run filter');
     assert(exported.every(row => row[runColumn] === firstRun && row[motorColumn] === profile.motorId), 'export cannot leak another run or motor');
+    for (const [section, select, button, id, filename] of [
+      ['power-history', 'power-history-run', 'power-run-folder', meterRun, 'meter-PM-01.csv'],
+      ['point-history', 'point-run', 'point-run-folder', pointRun, 'sensor-ENV-01.csv']
+    ]) {
+      await page.locator(`#${section} > summary`).click();
+      await page.locator(`#${select}`).selectOption(id);
+      await page.locator(`#${button}`).click();
+      await page.waitForFunction(button => !document.getElementById(button).disabled, button);
+      const openedFolder = await app.evaluate(() => globalThis.sessionUIOpenedFolder);
+      assert(openedFolder.endsWith(`_${id}`));
+      assert.deepEqual(fs.readdirSync(openedFolder), [filename]);
+      await page.locator(`#${section} > summary`).click();
+    }
     await page.screenshot({ path: path.join(artifacts, 'history-run-filter.png'), animations: 'disabled' });
     await page.locator('#history-open-analysis').click();
     await waitForRange(profile.motorId, 3);

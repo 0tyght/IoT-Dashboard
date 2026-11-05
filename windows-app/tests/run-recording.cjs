@@ -174,6 +174,25 @@ const parseFixtureCsv = csv => csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n'
     assert.equal(legacyRange.series[0].runId, '__legacy__');
     assert.equal(legacyRange.rows[0].value, 9);
 
+    // Reopen an archive after a crash midway through writing the last line.
+    const recoveredStore = new DataStore(path.join(directory, 'recovered'));
+    fs.mkdirSync(recoveredStore.dataPath(), { recursive: true });
+    const recoveredDate = dayKey(new Date(legacy.timestamp));
+    const recoveredJournal = path.join(recoveredStore.dataPath(), `readings-${recoveredDate}.ndjson`);
+    fs.writeFileSync(recoveredJournal, JSON.stringify(legacy) + '\n{"timestamp":', 'utf8');
+    await recoveredStore.append({ ...legacy, value: 10 });
+    const recoveredHistory = await recoveredStore.history({ date: recoveredDate });
+    assert.equal(recoveredHistory.skipped, 1);
+    assert.deepEqual(recoveredHistory.rows.map(row => row.value), [9, 10]);
+
+    const exportFile = path.join(directory, 'history.csv');
+    fs.writeFileSync(exportFile, 'previous contents');
+    await assert.rejects(recoveredStore.exportHistory({ date: 'invalid' }, exportFile), /วันที่/);
+    assert.equal(fs.readFileSync(exportFile, 'utf8'), 'previous contents');
+    assert.equal(await recoveredStore.exportHistory({ date: recoveredDate }, exportFile), 2);
+    assert.equal(fs.readFileSync(exportFile, 'utf8').trim().split('\r\n').length, 3);
+    assert(!fs.readdirSync(directory).some(name => name.startsWith('.vectra-export-')));
+
     // Reject path-shaped/reserved IDs before even creating the daily archive.
     const unsafeStore = new DataStore(path.join(directory, 'unsafe'));
     for (const runId of ['../escape', '..\\escape', 'C:\\outside', '/absolute', 'a/b', 'CON', '__legacy__']) {

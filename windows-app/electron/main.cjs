@@ -2,10 +2,9 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { once } = require('node:events');
 const { SerialPort } = require('serialport');
 const { FleetService } = require('./fleet-service.cjs');
-const { DataStore, CSV_KEYS, csvRow } = require('./data-store.cjs');
+const { DataStore } = require('./data-store.cjs');
 const { RecordingService } = require('./recording-service.cjs');
 const { normalizeGroups, resolveGroup } = require('./measurement-groups.cjs');
 const { applyBus, applyGroupBuses } = require('./bus-config.cjs');
@@ -143,18 +142,8 @@ app.whenReady().then(() => {
   handle('data:export', async filter => {
     const result = await dialog.showSaveDialog(mainWindow, { title: 'ส่งออกประวัติรายค่า CSV', defaultPath: `VECTRA-History-${filter.date}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] });
     if (result.canceled) return { ok: true, canceled: true };
-    const output = fs.createWriteStream(result.filePath, { encoding: 'utf8' });
-    let streamError;
-    output.on('error', error => { streamError = error; });
-    try {
-      output.write('\uFEFF' + CSV_KEYS.join(',') + '\r\n');
-      const summary = await store.history(filter, async reading => {
-        if (streamError) throw streamError;
-        if (!output.write(csvRow(reading))) await once(output, 'drain');
-      });
-      output.end(); await once(output, 'finish');
-      return { ok: true, total: summary.total, filePath: result.filePath };
-    } catch (error) { output.destroy(); throw error; }
+    const total = await store.exportHistory(filter, result.filePath);
+    return { ok: true, total, filePath: result.filePath };
   });
   handle('profiles:export', async () => {
     const result = await dialog.showSaveDialog(mainWindow, { title: 'สำรองรายชื่อมอเตอร์', defaultPath: 'vectra-motors.json', filters: [{ name: 'JSON', extensions: ['json'] }] });

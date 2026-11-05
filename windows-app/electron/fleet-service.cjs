@@ -212,47 +212,73 @@ class FleetService {
     const configs = rawConfigs.length ? normalizeFleet(rawConfigs).filter(config => config.enabled) : [];
     if (!configs.length && !meters.length) throw new Error('ไม่มีอุปกรณ์ที่เปิดใช้งาน');
     if ([...configs,...meters].some(config=>String(config.path).toUpperCase().startsWith('UNBOUND:'))) throw new Error('มีอุปกรณ์ที่ยังไม่เชื่อมกับบัส Modbus');
+    const generation = this.generation + 1;
     await this.disconnect();
-    const generation = this.generation;
+    const cancelled = () => generation !== this.generation;
+    checkCancelled(cancelled);
     const groups = new Map();
     for (const config of [...configs, ...meters.map(meter=>({...meter,deviceType:'power'}))]) {
       const key = config.path.toUpperCase();
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(config);
     }
-    const initialReadings = [], initialPower = [], initialFailures = [];
+    const buses = [...groups.values()].map(entries => ({
+      configs: entries, client: null, timer: null, work: null, nextDue: new Map(), lastReceived: new Map(), timeoutStreaks: new Map()
+    }));
+    this.buses = buses;
     try {
-      for (const entries of groups.values()) {
-        const bus = { configs: entries, client: null, timer: null, work: null, nextDue: new Map(), lastReceived: new Map(), timeoutStreaks: new Map() };
-        this.buses.push(bus);
-        try { bus.client = await this.open(entries[0]); }
-        catch(error) {
-          for(const config of entries){const key=config.deviceType==='power'?`power:${config.id}`:config.motorId;bus.nextDue.set(key,Date.now()+config.pollInterval);if(config.deviceType==='power')initialPower.push({state:'read-error',meterId:config.id,model:config.model,name:config.name,point:config.point,path:config.path,slaveId:config.slaveId,message:error.message});else initialFailures.push({motorId:config.motorId,path:config.path,message:error.message});}
-          continue;
-        }
-        for (const config of entries) {
-          const started = Date.now();
-          if (config.deviceType === 'power') {
-            const key=`power:${config.id}`;
-            try { const snapshot=await readPowerSnapshot(bus.client,config); initialPower.push({state:'receiving',meterId:config.id,model:config.model,name:config.name,point:config.point,motorId:config.motorId,path:config.path,slaveId:config.slaveId,registerType:config.registerType,offsetAdjust:config.offsetAdjust,timestamp:new Date().toISOString(),pollIntervalMs:config.pollInterval,actualIntervalMs:null,...snapshot}); bus.lastReceived.set(key,Date.now()); }
-            catch(error) { initialPower.push({state:'read-error',meterId:config.id,model:config.model,name:config.name,point:config.point,path:config.path,slaveId:config.slaveId,message:error.message}); setNextPoll(bus, key, Date.now() + config.pollInterval, error); continue; }
-            bus.nextDue.set(key,Date.now()+config.pollInterval); continue;
-          }
-          this.onStatus({ state: 'testing', motorId: config.motorId, path: config.path });
-          let snapshot;
-          try { snapshot = await readSnapshot(bus.client, config); }
-          catch (error) { initialFailures.push({motorId:config.motorId,path:config.path,message:error.message});setNextPoll(bus, config.motorId, Date.now() + config.pollInterval, error);continue; }
-          initialReadings.push(this.reading(config, snapshot, Date.now() - started));
-          bus.lastReceived.set(config.motorId, Date.now());
-          bus.nextDue.set(config.motorId, Date.now() + config.pollInterval);
-        }
-      }
-      for (const bus of this.buses) this.schedule(bus, generation, 10);
-      return { ok: true, configs, readings: initialReadings, powerReadings:initialPower,initialFailures };
+      const results = await Promise.all(buses.map(bus => {
+        bus.work = this.probeBus(bus, cancelled);
+        return bus.work;
+      }));
+      checkCancelled(cancelled);
+      for (const bus of buses) this.schedule(bus, generation, 10);
+      return {
+        ok: true, configs,
+        readings: results.flatMap(result => result.readings),
+        powerReadings: results.flatMap(result => result.powerReadings),
+        initialFailures: results.flatMap(result => result.initialFailures)
+      };
     } catch (error) {
-      await this.disconnect();
+      if (!cancelled()) await this.disconnect();
       throw new Error(`ทดสอบก่อนเริ่มอ่านไม่สำเร็จ: ${error.message}`);
     }
+  }
+
+  async probeBus(bus, cancelled) {
+    const readings = [], powerReadings = [], initialFailures = [];
+    let openError;
+    try { bus.client = await this.open(bus.configs[0]); }
+    catch (error) { openError = error; }
+    for (const config of bus.configs) {
+      checkCancelled(cancelled);
+      const power = config.deviceType === 'power';
+      const key = power ? `power:${config.id}` : config.motorId;
+      const started = Date.now();
+      const meter = power ? { meterId: config.id, model: config.model, name: config.name, point: config.point, path: config.path, slaveId: config.slaveId } : null;
+      try {
+        if (openError) throw openError;
+        if (power) {
+          const snapshot = await readPowerSnapshot(bus.client, config, cancelled);
+          checkCancelled(cancelled);
+          powerReadings.push({ ...meter, state: 'receiving', motorId: config.motorId, registerType: config.registerType,
+            offsetAdjust: config.offsetAdjust, timestamp: new Date().toISOString(), pollIntervalMs: config.pollInterval, actualIntervalMs: null, ...snapshot });
+        } else {
+          this.onStatus({ state: 'testing', motorId: config.motorId, path: config.path });
+          const snapshot = await readSnapshot(bus.client, config, cancelled);
+          checkCancelled(cancelled);
+          readings.push(this.reading(config, snapshot, Date.now() - started));
+        }
+        bus.lastReceived.set(key, Date.now());
+        bus.nextDue.set(key, Date.now() + config.pollInterval);
+      } catch (error) {
+        checkCancelled(cancelled);
+        if (power) powerReadings.push({ ...meter, state: 'read-error', message: error.message });
+        else initialFailures.push({ motorId: config.motorId, path: config.path, message: error.message });
+        setNextPoll(bus, key, Date.now() + config.pollInterval, error);
+      }
+    }
+    return { readings, powerReadings, initialFailures };
   }
 
   reading(config, snapshot, elapsedMs) {
@@ -309,7 +335,7 @@ class FleetService {
     const buses = this.buses; this.buses = [];
     for (const bus of buses) clearTimeout(bus.timer);
     await Promise.all(buses.map(async bus => {
-      if (bus.work) await bus.work;
+      if (bus.work) await bus.work.catch(() => {});
       await closeClient(bus.client);
     }));
   }

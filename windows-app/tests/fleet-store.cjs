@@ -17,6 +17,36 @@ async function waitUntil(condition, label, timeout = 4000) {
   }
 }
 
+async function checkCancelledStartup() {
+  let finishRead;
+  const blocked = new Promise(resolve => { finishRead = resolve; });
+  const opened = [], closed = [], requests = [];
+  class StartupClient {
+    async connectRTUBuffered(port) { this.port = port; this.isOpen = true; opened.push(port); }
+    setID() {}
+    setTimeout() {}
+    async readHoldingRegisters(address, count) {
+      requests.push([this.port, address]);
+      if (this.port === 'COM8') await blocked;
+      return { data: Array(count).fill(0) };
+    }
+    close(done) { this.isOpen = false; closed.push(this.port); done(); }
+  }
+  const service = new FleetService({ clientFactory: () => new StartupClient() });
+  const connecting = assert.rejects(service.connect([config, { ...second, path: 'COM9' }]), /หยุดการอ่าน/);
+  try {
+    await waitUntil(() => requests.some(([port]) => port === 'COM8') && requests.some(([port]) => port === 'COM9'), 'independent ports probe concurrently');
+  } finally {
+    const stopping = service.disconnect();
+    finishRead();
+    await Promise.all([stopping, connecting]);
+  }
+  assert.deepEqual(opened.sort(), ['COM8', 'COM9']);
+  assert.deepEqual(closed.sort(), ['COM8', 'COM9']);
+  assert.deepEqual(requests.filter(([port]) => port === 'COM8'), [['COM8', 0]], 'canceling startup prevents another register request');
+  assert.equal(service.buses.length, 0);
+}
+
 async function checkMixedBusTimeoutRecovery() {
   let failFrequency = true, failPrimary = false, failedAt = 0;
   const requests = [], readings = [], powerReadings = [], statuses = [];
@@ -126,6 +156,7 @@ async function checkMixedBusTimeoutRecovery() {
   await service.disconnect();
   await assert.rejects(service.connect([{ ...config, enabled: false }]), /ไม่มีอุปกรณ์/);
   await checkMixedBusTimeoutRecovery();
+  await checkCancelledStartup();
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vectra-store-test-'));
   try {

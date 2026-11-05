@@ -100,7 +100,12 @@ async function visitSnapshot(files, visitor) {
 }
 
 class DataStore {
-  constructor(directory) { this.directory = directory; this.queue = Promise.resolve(); this.reportQueue = Promise.resolve(); }
+  constructor(directory) {
+    this.directory = directory;
+    this.queue = Promise.resolve();
+    this.reportQueue = Promise.resolve();
+    this.checkedJournals = new Set();
+  }
   dataPath() { return path.join(this.directory, 'data'); }
   outputPath() { return path.join(this.dataPath(), 'output'); }
   async recordedDays() {
@@ -226,6 +231,27 @@ class DataStore {
     this.reportQueue = report.catch(() => {});
     return report;
   }
+  async appendJournal(name, body) {
+    const file = path.join(this.dataPath(), name);
+    try {
+      if (this.checkedJournals.has(file)) {
+        await fs.promises.appendFile(file, body, 'utf8');
+        return;
+      }
+      const handle = await fs.promises.open(file, 'a+');
+      try {
+        const { size } = await handle.stat();
+        const last = Buffer.alloc(1);
+        if (size) await handle.read(last, 0, 1, size - 1);
+        // Separate the next valid record from a line left incomplete after a crash.
+        await handle.appendFile((size && last[0] !== 10 ? '\n' : '') + body, 'utf8');
+      } finally { await handle.close(); }
+      this.checkedJournals.add(file);
+    } catch (error) {
+      this.checkedJournals.delete(file);
+      throw error;
+    }
+  }
   async appendPointJournal(reading) {
     const points = reading.points?.filter(point => point.enabled && point.record) || [];
     if (!points.length) return;
@@ -247,7 +273,7 @@ class DataStore {
       byDay.get(day).push(JSON.stringify(row));
     }
     for (const [day, rows] of byDay) {
-      await fs.promises.appendFile(path.join(this.dataPath(), `points-${day}.ndjson`), rows.join('\n') + '\n', 'utf8');
+      await this.appendJournal(`points-${day}.ndjson`, rows.join('\n') + '\n');
     }
   }
   append(reading) {
@@ -261,7 +287,7 @@ class DataStore {
         await this.appendPointJournal(reading);
         return;
       }
-      await fs.promises.appendFile(path.join(this.dataPath(), `readings-${date}.ndjson`), `${JSON.stringify(reading)}\n`, 'utf8');
+      await this.appendJournal(`readings-${date}.ndjson`, `${JSON.stringify(reading)}\n`);
     });
     this.queue = write.catch(() => {});
     return write;
@@ -270,7 +296,7 @@ class DataStore {
     const write=this.queue.then(async()=>{
       const directory=this.runDataPath(reading.runId), date=dayKey(new Date(reading.timestamp));
       await this.writeRunMetadata(directory, reading);
-      await fs.promises.appendFile(path.join(this.dataPath(),`power-${date}.ndjson`),`${JSON.stringify(reading)}\n`,'utf8');
+      await this.appendJournal(`power-${date}.ndjson`, `${JSON.stringify(reading)}\n`);
       await this.appendPointJournal({ ...reading, motorId: `PM:${reading.meterId}`, port: reading.path });
     });
     this.queue=write.catch(()=>{}); return write;
@@ -311,6 +337,26 @@ class DataStore {
     }
     const runs = [...runCatalog.values()].sort((a, b) => Date.parse(b.lastTimestamp) - Date.parse(a.lastTimestamp)).map(run => ({ ...run, recordingIds: [...run.recordingIds].sort(), motorIds: [...run.motorIds].sort() }));
     return { rows, total, skipped, motorIds: [...motorIds].sort(), runs };
+  }
+  async exportHistory(filter, file) {
+    const temporary = path.join(path.dirname(file), `.vectra-export-${randomUUID()}.tmp`);
+    const handle = await fs.promises.open(temporary, 'wx');
+    let summary;
+    try {
+      try {
+        let chunk = '\uFEFF' + CSV_KEYS.join(',') + '\r\n';
+        summary = await this.history(filter, async reading => {
+          chunk += csvRow(reading);
+          if (chunk.length >= 65536) {
+            await handle.writeFile(chunk, 'utf8');
+            chunk = '';
+          }
+        });
+        if (chunk) await handle.writeFile(chunk, 'utf8');
+      } finally { await handle.close(); }
+      await fs.promises.rename(temporary, file);
+      return summary.total;
+    } finally { await fs.promises.rm(temporary, { force: true }); }
   }
   async chartRange({ from, to, motorId, profile, seriesKey, runId = '' }) {
     const start = Date.parse(from), end = Date.parse(to);
