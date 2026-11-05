@@ -7,6 +7,8 @@ const { normalizeFleet } = require('./fleet-service.cjs');
 const { normalizeRecording } = require('./recording-service.cjs');
 const { normalizeGroups } = require('./measurement-groups.cjs');
 const { normalizeConfig } = require('./sensor-codec.cjs');
+const { csvCell, localTimestamp } = require('./csv.cjs');
+const { writeRunReport } = require('./run-report.cjs');
 
 const bangkokDayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' });
 function dayKey(date = new Date()) { return bangkokDayFormatter.format(date); }
@@ -97,8 +99,9 @@ async function visitSnapshot(files, visitor) {
 }
 
 class DataStore {
-  constructor(directory) { this.directory = directory; this.queue = Promise.resolve(); }
+  constructor(directory) { this.directory = directory; this.queue = Promise.resolve(); this.reportQueue = Promise.resolve(); }
   dataPath() { return path.join(this.directory, 'data'); }
+  outputPath() { return path.join(this.dataPath(), 'output'); }
   async recordedDays() {
     await this.queue;
     let names;
@@ -196,28 +199,65 @@ class DataStore {
     await fs.promises.mkdir(directory,{recursive:true});const info={runId:reading.runId,runStartedAt:reading.runStartedAt||'',runName:reading.runName||'',runNote:reading.runNote||'',groupId:reading.groupId||'',groupName:reading.groupName||''};
     try{await fs.promises.writeFile(path.join(directory,'run-metadata.json'),JSON.stringify(info,null,2),{encoding:'utf8',flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw new Error(`บันทึกข้อมูลรอบไม่สำเร็จ: ${error.message}`);}
   }
+  generateRunReport(runId) {
+    const metadataFile = path.join(this.runDataPath(runId), 'run-metadata.json');
+    // Take a snapshot after all pending writes. Report generation can stream it while new readings are saved.
+    const snapshot = this.queue.then(async () => {
+      let info = {};
+      try { info = JSON.parse(await fs.promises.readFile(metadataFile, 'utf8')) || {}; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      let names;
+      try { names = await fs.promises.readdir(this.dataPath()); }
+      catch (error) { if (error.code === 'ENOENT') return { info, journals: [] }; throw error; }
+      const start = Date.parse(info.runStartedAt);
+      const firstDay = Number.isFinite(start) ? dayKey(new Date(start - 86400000)) : '';
+      const journals = [];
+      for (const name of names.sort()) {
+        const match = /^(readings|points|power)-(\d{4}-\d{2}-\d{2})\.ndjson$/.exec(name);
+        if (!match || match[2] < firstDay) continue;
+        const file = path.join(this.dataPath(), name);
+        journals.push({ kind: match[1], file, size: (await fs.promises.stat(file)).size });
+      }
+      return { info, journals };
+    });
+    this.queue = snapshot.catch(() => {});
+    const report = Promise.all([this.reportQueue, snapshot]).then(([, sources]) => writeRunReport(this.outputPath(), runId, sources));
+    this.reportQueue = report.catch(() => {});
+    return report;
+  }
+  async appendPointJournal(reading) {
+    const points = reading.points?.filter(point => point.enabled && point.record) || [];
+    const byDay = new Map();
+    for (const point of points) {
+      const timestamp = point.timestamp || reading.timestamp;
+      const row = {
+        timestamp, timestampBangkok: localTimestamp(timestamp), groupId: reading.groupId || '', groupName: reading.groupName || '',
+        runId: reading.runId || '', runName: reading.runName || '', runNote: reading.runNote || '', recordingId: reading.recordingId || '',
+        deviceId: reading.motorId, deviceName: reading.name || '', port: reading.port, slaveId: reading.slaveId,
+        pointId: point.id, name: point.name, unit: point.unit, status: point.status, value: point.value, raw: point.raw,
+        registerType: point.registerType, registerAddress: point.registerAddress, dataType: point.dataType, byteOrder: point.byteOrder,
+        scale: point.scale, offset: point.offset, pollIntervalMs: reading.pollIntervalMs, message: point.message || ''
+      };
+      const day = dayKey(new Date(timestamp));
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day).push(JSON.stringify(row));
+    }
+    for (const [day, rows] of byDay) {
+      await fs.promises.appendFile(path.join(this.dataPath(), `points-${day}.ndjson`), rows.join('\n') + '\n', 'utf8');
+    }
+  }
   append(reading) {
     const write = this.queue.then(async () => {
       // Validate before writing even the daily file; IDs never become arbitrary paths.
       const runDirectory = reading.runId == null || reading.runId === '' ? null : this.runDataPath(reading.runId);
       const date = dayKey(new Date(reading.timestamp));
       await fs.promises.mkdir(this.dataPath(), { recursive: true });
+      if (runDirectory) await this.writeRunMetadata(runDirectory, reading);
       if (Array.isArray(reading.points)) {
-        const savedPoints=reading.points.filter(point=>point.enabled && point.record);
-        const rows=savedPoints.map(point=>({timestamp:point.timestamp||reading.timestamp,timestampBangkok:localTimestamp(point.timestamp||reading.timestamp),groupId:reading.groupId||'',groupName:reading.groupName||'',runId:reading.runId||'',runName:reading.runName||'',runNote:reading.runNote||'',recordingId:reading.recordingId||'',deviceId:reading.motorId,port:reading.port,slaveId:reading.slaveId,pointId:point.id,name:point.name,unit:point.unit,status:point.status,value:point.value,raw:point.raw,registerType:point.registerType,registerAddress:point.registerAddress,dataType:point.dataType,byteOrder:point.byteOrder,scale:point.scale,offset:point.offset,pollIntervalMs:reading.pollIntervalMs,message:point.message||''}));
-        if (!rows.length) return;
-        const keys=['timestamp','timestampBangkok','groupId','groupName','runId','runName','runNote','recordingId','deviceId','port','slaveId','pointId','name','unit','status','value','raw','registerType','registerAddress','dataType','byteOrder','scale','offset','pollIntervalMs','message'];
-        const appendPoints=async (file,group)=>{try{await fs.promises.writeFile(file,'\uFEFF'+keys.join(',')+'\r\n',{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}await fs.promises.appendFile(file,group.map(row=>keys.map(key=>csvCell(key==='raw'?JSON.stringify(row[key]):row[key])).join(',')+'\r\n').join(''),'utf8');};
-        const byDay=new Map();for(const row of rows){const key=dayKey(new Date(row.timestamp));if(!byDay.has(key))byDay.set(key,[]);byDay.get(key).push(row);}
-        if(runDirectory)await this.writeRunMetadata(runDirectory,reading);
-        for(const [key,group] of byDay){await fs.promises.appendFile(path.join(this.dataPath(),`points-${key}.ndjson`),group.map(row=>JSON.stringify(row)).join('\n')+'\n','utf8');await appendPoints(path.join(this.dataPath(),`points-${key}.csv`),group);if(runDirectory)await appendPoints(path.join(runDirectory,`points-${key}.csv`),group);}
+        await this.appendPointJournal(reading);
         return;
       }
       await fs.promises.appendFile(path.join(this.dataPath(), `readings-${date}.ndjson`), `${JSON.stringify(reading)}\n`, 'utf8');
-      // A distinct schema suffix avoids appending new columns to older CSV files.
-      const name = `readings-${date}-v4.csv`;
-      await appendCsv(path.join(this.dataPath(), name), reading);
-      if (runDirectory) { await this.writeRunMetadata(runDirectory,reading); await appendCsv(path.join(runDirectory, name), reading); }
     });
     this.queue = write.catch(() => {});
     return write;
@@ -225,13 +265,9 @@ class DataStore {
   appendPower(reading) {
     const write=this.queue.then(async()=>{
       const directory=this.runDataPath(reading.runId), date=dayKey(new Date(reading.timestamp));
-      await fs.promises.mkdir(this.dataPath(),{recursive:true});
+      await this.writeRunMetadata(directory, reading);
       await fs.promises.appendFile(path.join(this.dataPath(),`power-${date}.ndjson`),`${JSON.stringify(reading)}\n`,'utf8');
-      const keys=['timestamp','groupId','groupName','runId','recordingId','meterId','name','point','motorId','path','slaveId','registerType','offsetAdjust','byteOrder','quality','pollIntervalMs','actualIntervalMs','raw','values'];
-      const row=keys.map(key=>csvCell(typeof reading[key]==='object'&&reading[key]!==null?JSON.stringify(reading[key]):reading[key])).join(',')+'\r\n';
-      const append=async file=>{try{await fs.promises.writeFile(file,'\uFEFF'+keys.join(',')+'\r\n',{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}await fs.promises.appendFile(file,row,'utf8');};
-      await append(path.join(this.dataPath(),`power-${date}.csv`));
-      await this.writeRunMetadata(directory,reading); await append(path.join(directory,`power-${date}.csv`));
+      await this.appendPointJournal({ ...reading, motorId: `PM:${reading.meterId}`, port: reading.path });
     });
     this.queue=write.catch(()=>{}); return write;
   }
@@ -373,19 +409,6 @@ class DataStore {
   }
 }
 
-function csvCell(value) {
-  let text = value == null ? '' : String(value);
-  // Number.toString() can use exponent notation (e.g. -1e-7). Preserve
-  // genuine measurements as numbers while protecting user-supplied text.
-  if (!(typeof value === 'number' && Number.isFinite(value)) && /^[=+\-@\t\r]/.test(text) && !/^[-+]?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
-  return `"${text.replaceAll('"', '""')}"`;
-}
-async function appendCsv(file, reading) {
-  try { await fs.promises.writeFile(file, '\uFEFF' + CSV_KEYS.join(',') + '\r\n', { flag: 'wx' }); }
-  catch (error) { if (error.code !== 'EEXIST') throw error; }
-  await fs.promises.appendFile(file, csvRow(reading), 'utf8');
-}
-function localTimestamp(value) { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false }).format(new Date(value)).replace(' ', 'T').replace(',', '.') + '+07:00'; }
 const CSV_KEYS = ['timestamp', 'timestampBangkok', 'schemaVersion', 'runId', 'runStartedAt', 'recordingId', 'recordingStartedAt', 'motorId', 'port', 'slaveId', 'value', 'unit', 'velocityX', 'velocityY', 'velocityZ', 'temperature', 'displacementX', 'displacementY', 'displacementZ', 'accelerationX', 'accelerationY', 'accelerationZ', 'frequencyX', 'frequencyY', 'frequencyZ', 'frequencyStatus', 'frequencyByteOrder', 'frequencyMessage', 'elapsedMs', 'pollIntervalMs', 'actualIntervalMs', 'source'];
 function csvRow(record) { return CSV_KEYS.map(key => csvCell(key === 'timestampBangkok' ? record.timestamp ? localTimestamp(record.timestamp) : '' : record[key] ?? record.channels?.[key])).join(',') + '\r\n'; }
 

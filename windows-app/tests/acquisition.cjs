@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { RecordingService, normalizeRecording } = require('../electron/recording-service.cjs');
-const { DataStore, CSV_KEYS, dayKey } = require('../electron/data-store.cjs');
+const { DataStore, dayKey } = require('../electron/data-store.cjs');
 const Measurements = require('../src/measurements.js');
 
 (async () => {
@@ -32,12 +32,18 @@ const Measurements = require('../src/measurements.js');
   try {
     const store = new DataStore(directory); store.saveRecording({ startMode: 'on-connect', durationMinutes: 20 }); assert.equal(store.loadRecording().durationMinutes, 20);
     const autoStore = new DataStore(path.join(directory, 'combined-start'));
-    const autoWriter = new RecordingService({ clock }); autoWriter.connect();
+    let timedReport;
+    const autoWriter = new RecordingService({ clock, settings: { durationMinutes: 1 }, onStop: id => { timedReport = autoStore.generateRunReport(id); } });
+    autoWriter.connect();
     const autoReading = { motorId: 'AUTO', timestamp: new Date(now).toISOString(), value: 1.2, unit: 'mm/s' };
     assert.equal((await autoWriter.accept(autoReading, autoStore)).recorded, true, 'a successful default connection saves without a second start command');
+    now += 60000;
+    autoWriter.tick();
+    assert.equal(autoWriter.snapshot().stopReason, 'duration');
+    const { directory: output } = await timedReport;
+    assert.deepEqual(fs.readdirSync(output), ['sensor-AUTO.csv']);
     autoWriter.disconnect(); await autoStore.queue;
     assert.equal(autoWriter.snapshot().count, 1); assert.equal(autoWriter.snapshot().connected, false);
-    assert(fs.readdirSync(autoStore.dataPath()).some(name => name.endsWith('.csv')));
     const frames = Array.from({ length: 600 }, (_, index) => ({ timestamp: new Date(Date.parse('2026-10-20T16:55:00Z') + index * 1000).toISOString(), motorId: 'MTR-01', value: 2, unit: 'mm/s', channels: Object.fromEntries([...Measurements.keys, 'temperature'].map(key => [key, key === 'accelerationX' && index === 350 ? -99 : key === 'displacementZ' && index === 351 ? 4999 : 2])), pollIntervalMs: 1000, actualIntervalMs: 1004 }));
     const errors = [], writer = new RecordingService({ settings: { startMode: 'monitor-only' }, clock: () => Date.parse(frames[0].timestamp), onError: (_id, error) => errors.push(error) });
     writer.connect();
@@ -55,10 +61,9 @@ const Measurements = require('../src/measurements.js');
     const firstDay = dayKey(new Date(frames[0].timestamp)), lastDay = dayKey(new Date(frames.at(-1).timestamp));
     assert.notEqual(firstDay, lastDay, 'fixture crosses Bangkok midnight');
     for (const date of [firstDay, lastDay]) {
-      const csv = fs.readFileSync(path.join(store.dataPath(), `readings-${date}-v4.csv`), 'utf8');
-      assert.equal(csv.split(CSV_KEYS.join(',')).length - 1, 1, 'one header per daily file despite concurrent appends');
-      assert(csv.includes('+07:00')); assert(csv.includes('"1004"'));
-      assert(csv.includes('frequencyX,frequencyY,frequencyZ,frequencyStatus,frequencyByteOrder'));
+      const journal = fs.readFileSync(path.join(store.dataPath(), `readings-${date}.ndjson`), 'utf8');
+      assert(journal.includes('"actualIntervalMs":1004'));
+      assert(journal.includes('"frequencyX"'));
     }
     const range = await store.chartRange({ from: frames[0].timestamp, to: frames.at(-1).timestamp, motorId: 'MTR-01' });
     assert.equal(range.total, 600); assert(range.rows.some(frame => frame.channels.accelerationX === -99)); assert(range.rows.some(frame => frame.channels.displacementZ === 4999));
@@ -71,5 +76,5 @@ const Measurements = require('../src/measurements.js');
     assert.equal(Measurements.windowFrames(frames, '60s').length, 61);
     assert.equal(Measurements.nearest(frames, Date.parse(frames[300].timestamp)), 300);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
-  console.log('PASS: manual/automatic/scheduled recording, timed stop, daily CSV rotation, timestamps, nine-channel peaks and arbitrary history ranges');
+  console.log('PASS: manual/automatic/scheduled recording, timed reports, daily journals, timestamps, nine-channel peaks and arbitrary history ranges');
 })().catch(error => { console.error(error); process.exit(1); });

@@ -32,7 +32,13 @@ async function recordPower(reading) {
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'light';
   store = new DataStore(app.getPath('userData'));
-  recording = new RecordingService({ onChange: state => send('recording:state', state), onError: (motorId, message) => send('sensor:status', { state: 'storage-error', motorId, message }) });
+  recording = new RecordingService({
+    onChange: state => send('recording:state', state),
+    onError: (motorId, message) => send('sensor:status', { state: 'storage-error', motorId, message }),
+    onStop: runId => {
+      void store.generateRunReport(runId).catch(error => send('sensor:status', { state: 'storage-error', motorId: '', message: `สร้างผลสรุปรอบไม่สำเร็จ: ${error.message}` }));
+    }
+  });
   recordingTimer = setInterval(() => recording.tick(), 250);
   fleet = new FleetService({ onReading: reading => record(reading).then(result => send('sensor:reading', result)), onPower: reading => void recordPower(reading), onStatus: status => send('sensor:status', status) });
   const available = screen.getPrimaryDisplay().workAreaSize;
@@ -71,7 +77,7 @@ app.whenReady().then(() => {
     const settings = store.saveRecording(raw); return { ok: true, recording: recording.configure(settings) };
   });
   handle('recording:start', () => { if (busy) throw new Error('รอการเชื่อมต่อให้เสร็จก่อน'); return { ok: true, recording: recording.start() }; });
-  handle('recording:stop', () => exclusive(async () => { recording.stop(); await store.queue; return { ok: true, recording: recording.snapshot() }; }));
+  handle('recording:stop', () => exclusive(async () => { recording.stop(); await store.queue; await store.reportQueue; return { ok: true, recording: recording.snapshot() }; }));
   handle('sensor:list-ports', async () => ({ ok: true, ports: (await SerialPort.list()).map(port => ({ path: port.path, manufacturer: port.manufacturer || '', vendorId: port.vendorId || '', productId: port.productId || '' })) }));
   function saveProfilesChecked(raw) {
     if (fleet.buses.length || busy) throw new Error('หยุดการอ่านก่อนแก้ไขอุปกรณ์');
@@ -107,7 +113,7 @@ app.whenReady().then(() => {
       throw error;
     }
   }));
-  handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; activeGroup=null; return { ok: true, recording: recording.snapshot() }; }));
+  handle('sensor:disconnect', () => exclusive(async () => { recording.disconnect(); await fleet.disconnect(); await store.queue; await store.reportQueue; activeGroup=null; return { ok: true, recording: recording.snapshot() }; }));
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
   handle('data:recorded-days', async () => ({ ok: true, days: await store.recordedDays() }));
   handle('data:point-days', async () => ({ok:true,days:await store.pointDays()}));
@@ -118,13 +124,13 @@ app.whenReady().then(() => {
   handle('data:scatter-range', async filter => ({ ok: true, ...await store.scatterRange(filter) }));
   handle('data:trend-range', async filter => ({ ok: true, ...await store.trendRange(filter) }));
   handle('data:open-folder', async () => {
-    await fs.promises.mkdir(store.dataPath(), { recursive: true });
-    const error = await shell.openPath(store.dataPath());
+    await fs.promises.mkdir(store.outputPath(), { recursive: true });
+    const error = await shell.openPath(store.outputPath());
     return { ok: !error, message: error };
   });
   handle('data:open-run-folder', async runId => {
-    const directory = store.runDataPath(runId);
-    if (!fs.existsSync(directory)) throw new Error('รอบนี้ยังไม่มีไฟล์ที่บันทึก');
+    const { directory } = await store.generateRunReport(runId);
+    if (!directory) throw new Error('รอบนี้ยังไม่มีข้อมูลที่บันทึกสำหรับสร้างผลสรุป');
     const error = await shell.openPath(directory); return { ok: !error, message: error };
   });
   handle('analysis:import-waveform', async () => {
@@ -135,7 +141,7 @@ app.whenReady().then(() => {
     return { ok: true, fileName: path.basename(file), text: await fs.promises.readFile(file, 'utf8') };
   });
   handle('data:export', async filter => {
-    const result = await dialog.showSaveDialog(mainWindow, { title: 'ส่งออกข้อมูล CSV', defaultPath: `VECTRA-${filter.date}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] });
+    const result = await dialog.showSaveDialog(mainWindow, { title: 'ส่งออกประวัติรายค่า CSV', defaultPath: `VECTRA-History-${filter.date}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] });
     if (result.canceled) return { ok: true, canceled: true };
     const output = fs.createWriteStream(result.filePath, { encoding: 'utf8' });
     let streamError;
@@ -173,6 +179,6 @@ app.on('before-quit', event => {
   if (quitting) return;
   event.preventDefault(); quitting = true;
   clearInterval(recordingTimer); recording?.disconnect();
-  Promise.resolve().then(() => fleet?.disconnect()).then(() => store?.queue).finally(() => app.quit());
+  Promise.resolve().then(() => fleet?.disconnect()).then(() => store?.queue).then(() => store?.reportQueue).finally(() => app.quit());
 });
 app.on('window-all-closed', () => app.quit());

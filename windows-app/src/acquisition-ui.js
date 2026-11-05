@@ -42,7 +42,7 @@ function updateRunFolderButton() {
   const button = $('open-run-folder'), runId = $('history-run')?.value;
   if (!button) return;
   button.disabled = !hasRunFolder(runId);
-  button.title = button.disabled ? 'เลือกรอบอ่านที่มีรหัส เพื่อเปิดโฟลเดอร์ CSV ของรอบนั้น' : `เปิด CSV ของรอบ ${runId}`;
+  button.title = button.disabled ? 'เลือกรอบอ่านเพื่อเปิดผลสรุป CSV รายอุปกรณ์' : `เปิดผลสรุป CSV ของรอบ ${runId}`;
 }
 function renderHistoryRuns(runs = []) {
   const select = $('history-run'); if (!select) return false;
@@ -75,7 +75,7 @@ function storageLabel(last, savedHistory = false) {
   if (last.recordingState === 'before-start') return 'ค่าทดสอบก่อนเริ่มบันทึก';
   if (last.recordingState === 'monitor-only') return 'ดูอย่างเดียว · ไม่บันทึก';
   if (last.recordingState === 'no-recording-points') return 'ไม่ได้เลือกจุดวัดสำหรับบันทึก';
-  return last.recorded === true || last.recordingState === 'saved' ? 'บันทึก CSV แล้ว' : last.recorded === false ? 'บันทึกไม่สำเร็จ' : 'ข้อมูลที่อ่านได้ · ไม่ยืนยันการบันทึก';
+  return last.recorded === true || last.recordingState === 'saved' ? 'บันทึกข้อมูลแล้ว' : last.recorded === false ? 'บันทึกไม่สำเร็จ' : 'ข้อมูลที่อ่านได้ · ไม่ยืนยันการบันทึก';
 }
 function renderRecording(state) {
   if (state) recordingState = state;
@@ -130,7 +130,7 @@ function setupAcquisitionUI() {
   const runSelectLabel = node('label', 'รอบอ่าน', 'history-run-label'), runSelect = node('select');
   runSelect.id = 'history-run'; runSelect.setAttribute('aria-label', 'กรองรอบอ่าน'); runSelect.add(new Option('ทุกรอบ', '')); runSelectLabel.append(runSelect);
   $('history-motor').after(runSelectLabel);
-  const openRunFolder = node('button', 'โฟลเดอร์รอบนี้'); openRunFolder.id = 'open-run-folder'; openRunFolder.type = 'button'; openRunFolder.disabled = true;
+  const openRunFolder = node('button', 'ผลสรุปรอบนี้'); openRunFolder.id = 'open-run-folder'; openRunFolder.type = 'button'; openRunFolder.disabled = true;
   historyControls.append(openRunFolder);
   openRunFolder.onclick = () => action(async () => {
     const runId = runSelect.value; if (!hasRunFolder(runId)) return;

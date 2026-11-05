@@ -17,8 +17,8 @@ function normalizeRecording(input = {}) {
 }
 
 class RecordingService {
-  constructor({ settings = {}, onChange = () => {}, onError = () => {}, clock = Date.now } = {}) {
-    this.settings = normalizeRecording(settings); this.onChange = onChange; this.onError = onError; this.clock = clock;
+  constructor({ settings = {}, onChange = () => {}, onError = () => {}, onStop = () => {}, clock = Date.now } = {}) {
+    this.settings = normalizeRecording(settings); this.onChange = onChange; this.onError = onError; this.onStop = onStop; this.clock = clock;
     this.connected = false; this.active = false; this.startedAt = ''; this.endsAt = ''; this.waiting = false; this.scheduleMissed = false; this.count = 0;
     this.runId = ''; this.runStartedAt = '';this.runName='';this.runNote=''; this.runGroupId=''; this.runGroupName=''; this.recordingId = ''; this.recordingStartedAt = '';
     this.lastSavedAt = ''; this.lastError = ''; this.stopReason = '';
@@ -48,7 +48,12 @@ class RecordingService {
     this.endsAt = this.settings.durationMinutes ? new Date(now + this.settings.durationMinutes * 60000).toISOString() : '';
     return this.emit();
   }
-  stop(reason = 'user') { this.active = false; this.waiting = false; this.endsAt = ''; this.stopReason = reason; return this.emit(); }
+  stop(reason = 'user') {
+    const wasActive = this.active;
+    this.active = false; this.waiting = false; this.endsAt = ''; this.stopReason = reason;
+    if (wasActive) this.onStop(this.runId);
+    return this.emit();
+  }
   disconnect() { this.connected = false; return this.stop('disconnected'); }
   tick() {
     if (!this.connected) return;
@@ -81,7 +86,6 @@ class RecordingService {
     if(!save)return {...tagged,recorded:false,recordingState:'monitor-only'};
     try {
       await store.appendPower(tagged);
-      if(tagged.points?.some(point=>point.enabled&&point.record))await store.append({...tagged,motorId:`PM:${tagged.meterId}`,port:tagged.path});
       if(this.runId===runId&&this.recordingId===recordingId){this.count++;this.lastSavedAt=new Date(this.clock()).toISOString();this.lastError='';this.emit();}
       return {...tagged,recorded:true,recordingState:'saved'};
     } catch(error) {

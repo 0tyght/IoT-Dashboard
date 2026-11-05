@@ -24,7 +24,9 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
   try {
     const store = new DataStore(path.join(directory, 'recording'));
     assert.deepEqual(await store.recordedDays(), [], 'no journal gives an empty date list');
-    const writer = new RecordingService({ settings: { startMode: 'monitor-only',runName:'ทดสอบ',runNote:'โหลด 50%' }, clock });
+    const reports = [];
+    const writer = new RecordingService({ settings: { startMode: 'monitor-only',runName:'ทดสอบ',runNote:'โหลด 50%' }, clock,
+      onStop: runId => reports.push(store.generateRunReport(runId)) });
     const monitoring = writer.connect();
     assert.match(monitoring.runId, UUID, 'even read-only acquisition has a stable run identity');
     assert.equal(monitoring.runStartedAt, new Date(now).toISOString());
@@ -58,6 +60,9 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
     assert.notEqual(resumed.recordingId, firstRecording.recordingId, 'resume starts a separately identifiable recording segment');
     assert.equal(resumed.recordingStartedAt, new Date(now).toISOString());
     const third = await writer.accept(input({ value: 1.4 }), store);
+    const extraPoint = { id: 'amps', name: 'กระแสเสริม', unit: 'A', enabled: true, record: true, status: 'ok', value: 0, raw: [54321] };
+    await writer.accept(input({ motorId: 'MTR-02', value: 8, channels: { velocityX: 8, frequencyX: null, temperature: 40 } }), store);
+    await writer.acceptPower({ meterId: 'MTR-01', name: 'มิเตอร์ 1', model: 'pm2230', timestamp: third.timestamp, values: { currentA: 2.5, activePowerTotal: 0 }, points: [extraPoint] }, store);
     writer.disconnect();
     now += 1000;
     const restarted = writer.connect();
@@ -73,24 +78,30 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
 
     const firstDate = dayKey(new Date(first.timestamp)), secondDate = dayKey(new Date(fourth.timestamp));
     assert.deepEqual(await store.recordedDays(), [secondDate, firstDate], 'saved journal days are listed newest first');
-    assert.notEqual(firstDate, secondDate, 'fixture tests per-run and daily Bangkok midnight rotation');
+    assert.notEqual(firstDate, secondDate, 'fixture crosses Bangkok midnight');
     for (const key of identityKeys) assert(CSV_KEYS.includes(key), `CSV exposes ${key}`);
-    for (const date of [firstDate, secondDate]) {
-      const daily = fs.readFileSync(path.join(store.dataPath(), `readings-${date}-v4.csv`), 'utf8');
-      assert.equal(daily.split(CSV_KEYS.join(',')).length - 1, 1, 'daily file has exactly one v4 header');
-      assert(daily.includes('"4"') && daily.includes(`"${first.runId}"`));
-      assert(daily.includes('+07:00'));
-      const runCsv = fs.readFileSync(path.join(store.dataPath(), 'runs', first.runId, `readings-${date}-v4.csv`), 'utf8');
-      assert.equal(runCsv.split(CSV_KEYS.join(',')).length - 1, 1, 'per-run file has exactly one header');
-      assert(runCsv.includes(`"${first.runId}"`));
-      assert(!runCsv.includes(`"${fourth.runId}"`), 'per-run files cannot contain another run');
-    }
-    const resumedCsv = fs.readFileSync(path.join(store.dataPath(), 'runs', third.runId, `readings-${secondDate}-v4.csv`), 'utf8');
-    assert(resumedCsv.includes(`"${first.recordingId}"`) && resumedCsv.includes(`"${third.recordingId}"`), 'separate recording segments retain their IDs inside a shared run file');
-    assert(fs.existsSync(path.join(store.dataPath(), 'runs', fourth.runId, `readings-${secondDate}-v4.csv`)));
-    for (const runId of [first.runId, fourth.runId]) assert(fs.readdirSync(path.join(store.dataPath(), 'runs', runId)).every(name => name.endsWith('-v4.csv') || name === 'run-metadata.json'), 'NDJSON remains stored only in the daily archive');
+    const [partialReport, completeReport, nextReport] = await Promise.all(reports);
+    assert.equal(partialReport.count, 1);
+    assert.equal(partialReport.directory, completeReport.directory, 'pause and resume use one report folder');
+    assert.equal(completeReport.count, 3);
+    assert.equal(path.basename(completeReport.directory), `2026-10-20_23-59-59_${first.runId}`);
+    assert.deepEqual(fs.readdirSync(completeReport.directory).sort(), ['meter-MTR-01.csv', 'sensor-MTR-01.csv', 'sensor-MTR-02.csv']);
+    assert.notEqual(nextReport.directory, completeReport.directory);
+    assert.deepEqual(fs.readdirSync(nextReport.directory), ['sensor-MTR-01.csv']);
+    assert(fs.readdirSync(store.dataPath()).every(name => !name.endsWith('.csv')), 'there are no automatic daily time-series CSVs');
+    const reportCsv = name => fs.readFileSync(path.join(completeReport.directory, name), 'utf8');
+    const sensor = reportCsv('sensor-MTR-01.csv');
+    assert(sensor.startsWith('\uFEFF') && sensor.includes('ทดสอบ') && sensor.includes('+07:00'));
+    assert.match(sensor, /"ค่าที่วัด","mm\/s","3","0","1.2","1.4","1.3","1.4"/);
+    assert(!sensor.includes(fourth.runId));
+    assert.match(reportCsv('sensor-MTR-02.csv'), /"ความถี่การสั่น X","Hz","0","1","","","",""/);
+    const meter = reportCsv('meter-MTR-01.csv');
+    assert.match(meter, /"กระแส A","A","1","0","2.5","2.5","2.5","2.5"/);
+    assert.match(meter, /"กระแสเสริม","A","1","0","0","0","0","0"/);
+    assert(!meter.includes('54321'), 'decoded summaries exclude raw register words');
+    assert.equal((await new DataStore(path.join(directory, 'recording')).generateRunReport(first.runId)).directory, completeReport.directory);
     const savedRows = (await store.history({ date: firstDate, endDate: secondDate })).rows;
-    assert.equal(savedRows.length, 4, 'per-run copies do not duplicate history records');
+    assert.equal(savedRows.length, 5, 'reports do not duplicate history records');
     assert(savedRows.every(row => row.schemaVersion === 4 && UUID.test(row.runId) && UUID.test(row.recordingId)), 'identities are persisted before append rather than only added to UI readings');
 
     // A date/motor scoped catalog remains complete when one run is selected.
@@ -175,7 +186,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
       assert.equal(service.snapshot().count, 1);
       service.disconnect();
     }
-    console.log('PASS: run/recording identities, isolated v4 CSVs, legacy/run history filters and late-write session races');
+    console.log('PASS: run/recording identities, per-device summary CSVs, legacy/run history filters and late-write session races');
   } finally {
     assert.equal(path.dirname(path.resolve(directory)), tempRoot);
     assert(path.basename(directory).startsWith('vectra-run-recording-'));

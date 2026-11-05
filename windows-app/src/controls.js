@@ -21,9 +21,9 @@ function controlLabel(button, label, icon) { button.replaceChildren(controlIcon(
 function setupControls() {
   const labels = {
     disconnect: ['หยุดอ่านและบันทึก', 'stop'], 'new-motor': ['เพิ่มอุปกรณ์', 'plus'], 'edit-motor': ['ตั้งค่าอุปกรณ์', 'settings'],
-    'open-data': ['โฟลเดอร์ข้อมูล', 'folder'], 'help-button': ['คู่มือ', 'help'],
+    'open-data': ['โฟลเดอร์ผลสรุป', 'folder'], 'help-button': ['คู่มือ', 'help'],
     'fleet-empty-add': ['เพิ่มอุปกรณ์', 'plus'],
-    'load-history': ['โหลดข้อมูล', 'refresh'], 'export-csv': ['ส่งออก CSV', 'download']
+    'load-history': ['โหลดข้อมูล', 'refresh'], 'export-csv': ['ส่งออกประวัติรายค่า', 'download']
   };
   for (const [id, [label, icon]] of Object.entries(labels)) controlLabel(document.getElementById(id), label, icon);
   for (const [key,description] of Object.entries({fleet:'แผนผัง ชุดอุปกรณ์ และการเชื่อมต่ออุปกรณ์',monitor:'ค่าที่อ่านจากอุปกรณ์ที่เลือก',history:'ค้นหาและส่งออกข้อมูลที่บันทึก',analysis:'วิเคราะห์ข้อมูลย้อนหลังหรือคลื่นดิบ',model:'โมเดล 3D',registers:'ค่าดิบจาก Register',motors:'รายการเซ็นเซอร์และมิเตอร์ที่บันทึกไว้',events:'เหตุการณ์ระหว่างทำงาน'})){const tab=document.querySelector(`[data-tab="${key}"]`);if(tab)tab.title=description;}

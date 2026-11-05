@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64 release. Modbus RTU timeouts include the COM port, Slave ID, function and register. A device that times out waits before its next attempt so the shared bus can service the other devices. A VemSee frequency register timeout pauses Hz requests briefly while the main vibration readings continue."
+            --notes "Windows x64 release. Recording now produces one output folder per run and one ready-to-read summary CSV per recorded sensor or power meter. Reports include the latest, minimum, maximum and mean decoded readings and their units and counts. Individual readings remain available in History and Analysis."

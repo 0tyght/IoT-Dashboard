@@ -257,7 +257,7 @@ class FleetService {
 
   reading(config, snapshot, elapsedMs) {
     const decodeConfig = Object.fromEntries(['sensorModel', 'registerType', 'registerAddress', 'dataType', 'byteOrder', 'scale', 'unit'].map(key => [key, config[key]]));
-    return { ...snapshot, decodeConfig, schemaVersion: 3, sensorModel: config.sensorModel, motorId: config.motorId, timestamp: new Date().toISOString(), timestampSource: 'computer-received', source: 'RS485 / Modbus RTU', port: config.path, slaveId: config.slaveId, elapsedMs, pollIntervalMs: config.pollInterval, actualIntervalMs: null };
+    return { ...snapshot, decodeConfig, schemaVersion: 3, sensorModel: config.sensorModel, motorId: config.motorId, name: config.name, timestamp: new Date().toISOString(), timestampSource: 'computer-received', source: 'RS485 / Modbus RTU', port: config.path, slaveId: config.slaveId, elapsedMs, pollIntervalMs: config.pollInterval, actualIntervalMs: null };
   }
 
   schedule(bus, generation, delay) {

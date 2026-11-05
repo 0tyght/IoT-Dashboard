@@ -46,11 +46,10 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     assert.equal(await page.locator('#detail-plots .measurement-plot:visible').count(), 1, 'a saved custom scalar stays a single graph');
     assert(await page.locator('#disconnect').isHidden(), 'restored data does not automatically read the serial port');
 
-    // Suppress shell actions while retaining the actual UI and selected run argument.
-    await app.evaluate(({ ipcMain }) => {
-      globalThis.sessionUIOpenedRun = '';
-      ipcMain.removeHandler('data:open-run-folder');
-      ipcMain.handle('data:open-run-folder', (_event, runId) => { globalThis.sessionUIOpenedRun = runId; return { ok: true }; });
+    // Capture the folder that would open in Explorer after the real report is generated.
+    await app.evaluate(({ shell }) => {
+      globalThis.sessionUIOpenedFolder = '';
+      shell.openPath = async directory => { globalThis.sessionUIOpenedFolder = directory; return ''; };
     });
     await page.locator('[data-tab="history"]').click();
     assert.equal(await page.locator('#history-view .history-range').count(), 0, 'record history no longer embeds a duplicate graph workspace');
@@ -92,7 +91,10 @@ const { normalizeConfig } = require('../electron/sensor-codec.cjs');
     assert.equal((await page.locator('#history-plots .plot-axis-value strong').first().textContent()).trim(), '13.0', 'run filter updates the graph values');
     await page.locator('#analysis-history-open-folder').click();
     await page.waitForFunction(() => !document.querySelector('#open-run-folder').disabled);
-    assert.equal(await app.evaluate(() => globalThis.sessionUIOpenedRun), firstRun, 'folder action receives exactly the selected UUID');
+    const opened = await app.evaluate(() => globalThis.sessionUIOpenedFolder);
+    assert(opened.endsWith(`_${firstRun}`), 'the report folder matches the selected run');
+    assert.equal(path.basename(path.dirname(opened)), 'output');
+    assert.deepEqual(fs.readdirSync(opened), [`sensor-${profile.motorId}.csv`]);
 
     const exportPath = path.join(temporary, 'selected-run.csv');
     await app.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }); }, exportPath);
