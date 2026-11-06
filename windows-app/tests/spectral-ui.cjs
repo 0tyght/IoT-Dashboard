@@ -1,4 +1,5 @@
 'use strict';
+const {openPage}=require('./navigation.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -24,7 +25,7 @@ const { CSV_KEYS, csvRow } = require('../electron/data-store.cjs');
     await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
     await page.waitForFunction(()=>innerWidth===1366&&innerHeight===768);
-    await page.locator('[data-tab="analysis"]').click();
+    await openPage(page, 'analysis');
     await page.locator('#analysis-source-waveform').click();
     assert(await page.locator('#spectral-empty').isVisible());
     assert((await page.locator('#analysis-waveform .spectral-capability').textContent()).includes('ยังทำ FFT สด') || (await page.locator('#analysis-waveform .spectral-capability').textContent()).includes('ยังไม่พบช่องส่งคลื่น'));

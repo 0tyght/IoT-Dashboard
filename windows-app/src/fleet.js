@@ -5,7 +5,7 @@ const fleetVisibility = new IntersectionObserver(entries => {
   for (const entry of entries) {
     const refs = fleetCards.get(entry.target.dataset.fleetId); if (!refs) continue;
     refs.inViewport = entry.isIntersecting;
-    if (entry.isIntersecting && currentTab === 'fleet') { refs.lastKey = ''; refreshFleet(); }
+    if (entry.isIntersecting && currentTab === 'overview') { refs.lastKey = ''; refreshFleet(); }
   }
 }, { root: document.querySelector('main'), rootMargin: '160px' });
 function fleetStatus(profile, state) {
@@ -24,10 +24,10 @@ function buildFleet() {
     const header = node('header', null, 'fleet-card-header'), identity = node('div', null, 'fleet-identity');
     identity.append(node('h2', profile.name || profile.motorId), node('span', `${profile.motorId} · ${profile.area || 'ไม่ระบุพื้นที่'}`));
     const actions = node('div', null, 'fleet-actions');
-    const details = node('button', 'รายละเอียด'), edit = node('button', 'แก้ไข'), toggle = node('button', profile.enabled === false ? 'เปิดอ่าน' : 'พักอ่าน'), remove = node('button', 'ลบ');
+    const details = node('button', 'รายละเอียด'), edit = node('button', 'แก้ไข'), toggle = node('button', profile.enabled === false ? 'เปิดอ่าน' : 'พักอ่าน'), remove = node('button', 'นำออกจากพื้นที่งาน…');
     edit.dataset.edit = profile.motorId; toggle.dataset.edit = profile.motorId; remove.dataset.delete = profile.motorId;
     details.setAttribute('aria-label', `รายละเอียด ${profile.motorId}`); edit.setAttribute('aria-label', `แก้ไข ${profile.motorId}`); remove.setAttribute('aria-label', `ลบ ${profile.motorId}`);
-    details.onclick = () => selectMotor(profile.motorId); edit.onclick = () => openEditor(profile); toggle.onclick = () => toggleMotor(profile); remove.onclick = () => deleteMotor(profile);
+    details.onclick = () => selectMotor(profile.motorId); edit.onclick = () => openEditor(profile); toggle.onclick = () => toggleMotor(profile); remove.onclick = () => removeWorkspaceDevice('sensor',profile.motorId);
     actions.append(details, edit, toggle, remove); header.append(identity, actions);
     const body = node('div', null, 'fleet-card-body'), readings = node('div', null, 'fleet-readings');
     const connection = node('div', null, 'fleet-connection idle'), connectionText = node('strong', 'หยุดอ่าน');
@@ -62,7 +62,7 @@ function buildFleet() {
       coverage.textContent = `${frames.length.toLocaleString()} ค่า${plotStack.frames.length < frames.length ? ` (${plotStack.frames.length} จุด)` : ''}${frames.length ? ` · ${time(frames[0].timestamp)}–${time(frames.at(-1).timestamp)}` : ''}`;
     };
     fleetCards.set(profile.motorId, refs); fleetVisibility.observe(card);
-    refs.resizeObserver = new ResizeObserver(() => { if (currentTab === 'fleet' && refs.inViewport && plotStack.svg.clientWidth > 0) refs.redraw(); }); refs.resizeObserver.observe(chartBox);
+    refs.resizeObserver = new ResizeObserver(() => { if (currentTab === 'overview' && refs.inViewport && plotStack.svg.clientWidth > 0) refs.redraw(); }); refs.resizeObserver.observe(chartBox);
   }
   refreshFleet();
 }
@@ -93,9 +93,10 @@ function refreshFleet() {
     refs.cadence.textContent = `ตั้งอ่านทุก ${profile.pollInterval / 1000} s · รับจริง ${Number.isFinite(actual) ? `${(actual / 1000).toFixed(3)} s` : 'รอสองรอบ'} · ตอบกลับ ${last?.elapsedMs ?? '—'} ms`;
     refs.age.textContent = last ? `${Math.max(0, Math.floor((Date.now() - Date.parse(last.timestamp)) / 1000))} s` : '—';
     const key = `${last?.timestamp}|${$('fleet-window').value}|${$('graph-count').value}|${status.kind}`;
-    if (currentTab === 'fleet' && refs.inViewport && !refs.card.hidden && refs.lastKey !== key) { refs.lastKey = key; refs.redraw(); }
+    if (currentTab === 'overview' && refs.inViewport && !refs.card.hidden && refs.lastKey !== key) { refs.lastKey = key; refs.redraw(); }
   }
   $('fleet-total').textContent = members.length; $('fleet-online').textContent = online; $('fleet-fault').textContent = faults; $('fleet-disabled').textContent = members.filter(profile => profile.enabled === false).length;
   $('fleet-empty').hidden = members.length > 0; $('fleet-no-matches').hidden = !members.length || visible > 0;
   refreshFlowStatus();
+  renderOverviewMeters();
 }

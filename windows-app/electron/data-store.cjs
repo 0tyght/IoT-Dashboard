@@ -102,6 +102,7 @@ async function visitSnapshot(files, visitor) {
 class DataStore {
   constructor(directory) {
     this.directory = directory;
+    require('./settings-backup.cjs').recoverPendingSettings(directory);
     this.queue = Promise.resolve();
     this.reportQueue = Promise.resolve();
     this.checkedJournals = new Set();
@@ -180,7 +181,17 @@ class DataStore {
   }
   saveGroups(raw) {
     const groups=normalizeGroups(raw), file=path.join(this.directory,'measurement-groups.json');
+    const library=require('./meter-library.cjs').mergeMeterLibrary(this.loadMeterLibrary(),[...this.loadGroups(),...groups]);
+    this.saveMeterLibrary(library);
     fs.mkdirSync(this.directory,{recursive:true}); fs.writeFileSync(`${file}.tmp`,JSON.stringify(groups,null,2),'utf8'); fs.renameSync(`${file}.tmp`,file); return groups;
+  }
+  loadMeterLibrary() {
+    try{return require('./meter-library.cjs').normalizeMeterLibrary(JSON.parse(fs.readFileSync(path.join(this.directory,'device-meter-profiles.json'),'utf8')));}
+    catch(error){if(error.code==='ENOENT')return [];throw new Error(`อ่านคลังอุปกรณ์ไม่ได้: ${error.message}`);}
+  }
+  saveMeterLibrary(raw) {
+    const library=require('./meter-library.cjs').normalizeMeterLibrary(raw),file=path.join(this.directory,'device-meter-profiles.json');
+    fs.mkdirSync(this.directory,{recursive:true});fs.writeFileSync(`${file}.tmp`,JSON.stringify(library,null,2),'utf8');fs.renameSync(`${file}.tmp`,file);return library;
   }
   loadRecording() {
     try { return normalizeRecording(JSON.parse(fs.readFileSync(path.join(this.directory, 'recording.json'), 'utf8'))); }

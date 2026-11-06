@@ -31,7 +31,7 @@ function normalizeGroups(raw) {
       if(Array.isArray(rawMeter.points)&&rawMeter.points.length)result.points=normalizePoints(rawMeter.points);
       return result;
     });
-    return {id,name,motorIds,meters};
+    return {id,name,motorIds,meters,...(item.modelEnabled===true?{modelEnabled:true}:{})};
   });
 }
 function resolveGroup(group, profiles, {allowDisabled=false}={}) {

@@ -89,7 +89,7 @@ app.whenReady().then(() => {
       try { return await action(...args); } catch (error) { return { ok: false, message: error.message }; }
     });
   }
-  handle('app:initialize', () => { recording.configure(store.loadRecording());const buses=store.loadBuses(); return { ok: true, profiles: store.loadProfiles().map(item=>applyBus(item,buses)), groups:store.loadGroups().map(item=>applyGroupBuses(item,buses)), selectedGroup:store.loadSelectedGroup(), templates:store.loadTemplates(), buses, dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
+  handle('app:initialize', () => { recording.configure(store.loadRecording());const buses=store.loadBuses(); return { ok: true, profiles: store.loadProfiles().map(item=>applyBus(item,buses)), groups:store.loadGroups().map(item=>applyGroupBuses(item,buses)), meterLibrary:store.loadMeterLibrary(), selectedGroup:store.loadSelectedGroup(), templates:store.loadTemplates(), buses, dataPath: store.dataPath(), version: app.getVersion(), recording: recording.snapshot() }; });
   handle('group-selection:save', id => {if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนเปลี่ยนชุด');return {ok:true,id:store.saveSelectedGroup(id)};});
   handle('buses:save', raw => {
     if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขบัส');
@@ -101,7 +101,20 @@ app.whenReady().then(() => {
     if(fleet.buses.length||busy) throw new Error('หยุดอ่านก่อนแก้ไขชุดการวัด');
     const incoming=normalizeGroups(raw), previous=store.loadGroups(), buses=store.loadBuses(),profiles=store.loadProfiles().map(item=>applyBus(item,buses));
     for(const group of incoming) { const old=previous.find(item=>item.id===group.id); if(!old||JSON.stringify(old)!==JSON.stringify(group)) resolveGroup(applyGroupBuses(group,buses),profiles,{allowDisabled:true}); }
-    return {ok:true,groups:store.saveGroups(incoming.map(group=>applyGroupBuses(group,buses)))};
+    const groups=store.saveGroups(incoming.map(group=>applyGroupBuses(group,buses)));
+    return {ok:true,groups,meterLibrary:store.loadMeterLibrary()};
+  });
+  handle('meter-library:remove', key => {
+    if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขคลังอุปกรณ์');
+    if(store.loadGroups().some(group=>group.meters.some(meter=>`${group.id}:${meter.id}`.toUpperCase()===String(key).toUpperCase())))throw new Error('นำอุปกรณ์ออกจากพื้นที่งานก่อนลบจากคลัง');
+    return {ok:true,meterLibrary:store.saveMeterLibrary(store.loadMeterLibrary().filter(entry=>entry.key!==key))};
+  });
+  handle('meter-library:save', (key,meter) => {
+    if(fleet.buses.length||busy)throw new Error('หยุดอ่านก่อนแก้ไขคลังอุปกรณ์');
+    if(store.loadGroups().some(group=>group.meters.some(item=>`${group.id}:${item.id}`.toUpperCase()===String(key).toUpperCase())))throw new Error('อุปกรณ์นี้ยังใช้ในพื้นที่งาน ตั้งค่าจากอุปกรณ์ในพื้นที่งานนั้น');
+    const entries=store.loadMeterLibrary(),entry=entries.find(item=>item.key===key);if(!entry)throw new Error('ไม่พบอุปกรณ์ในคลัง');
+    const nextKey=`${key.split(':')[0]}:${meter.id}`;
+    return {ok:true,meterLibrary:store.saveMeterLibrary(entries.map(item=>item.key===key?{...entry,key:nextKey,meter:{...meter,motorId:''}}:item))};
   });
   handle('recording:configure', raw => {
     if (fleet.buses.length || busy) throw new Error('หยุดอ่านก่อนเปลี่ยนการบันทึก');
@@ -177,6 +190,29 @@ app.whenReady().then(() => {
     return { ok: !error, message: error };
   });
   handle('data:history', async filter => ({ ok: true, ...await store.history(filter) }));
+  handle('data:runs', async filter => ({ok:true,...await require('./record-library.cjs').listRuns(store,filter)}));
+  handle('data:run-device', async filter => ({ok:true,...await require('./record-library.cjs').deviceRows(store,filter)}));
+  handle('data:run-quality', async runId => ({ok:true,...await require('./record-library.cjs').runQuality(store,runId)}));
+  handle('data:run-events', async filter => ({ok:true,...await require('./record-library.cjs').runEvents(store,filter)}));
+  handle('data:sample-details', async filter => ({ok:true,...await require('./record-library.cjs').sampleDetails(store,filter)}));
+  handle('settings:export', async () => {
+    const backup=require('./settings-backup.cjs');
+    const result=await dialog.showSaveDialog(mainWindow,{title:'สำรองการตั้งค่าทั้งหมด',defaultPath:`VECTRA-Settings-${new Date().toISOString().slice(0,10)}.json`,filters:[{name:'VECTRA settings',extensions:['json']}]});
+    if(result.canceled)return {ok:true,canceled:true};
+    await fs.promises.writeFile(result.filePath,JSON.stringify(backup.snapshot(store),null,2),'utf8');
+    return {ok:true};
+  });
+  handle('settings:import', () => exclusive(async () => {
+    if(fleet.buses.length)throw new Error('หยุดอ่านก่อนกู้คืนการตั้งค่า');
+    const result=await dialog.showOpenDialog(mainWindow,{title:'กู้คืนการตั้งค่าทั้งหมด',properties:['openFile'],filters:[{name:'VECTRA settings',extensions:['json']}]});
+    if(result.canceled)return {ok:true,canceled:true};
+    if((await fs.promises.stat(result.filePaths[0])).size>5*1024*1024)throw new Error('ไฟล์สำรองต้องไม่เกิน 5 MB');
+    const backup=require('./settings-backup.cjs'), raw=JSON.parse(await fs.promises.readFile(result.filePaths[0],'utf8')), next=backup.validate(store,raw);
+    const response=await dialog.showMessageBox(mainWindow,{type:'question',buttons:['ยกเลิก','แทนที่การตั้งค่า'],defaultId:0,cancelId:0,message:'กู้คืนการตั้งค่าจากไฟล์นี้?',detail:`${next.profiles.length} อุปกรณ์ · ${next.groups.length} พื้นที่งาน · ${next.groups.reduce((n,g)=>n+g.meters.length,0)} การตั้งค่ามิเตอร์ · ${next.buses.length} บัส · ${next.templates.length} แม่แบบ\nบันทึกสำเนาการตั้งค่าปัจจุบันก่อนแทนที่ ข้อมูลการวัดเดิมยังอยู่`});
+    if(response.response!==1)return {ok:true,canceled:true};
+    const restored=backup.restore(store,next);recording.configure(restored.settings.recording);
+    return {ok:true,recovery:restored.recovery};
+  }));
   handle('data:recorded-days', async () => ({ ok: true, days: await store.recordedDays() }));
   handle('data:point-days', async () => ({ok:true,days:await store.pointDays()}));
   handle('data:point-history', async filter => ({ok:true,...await store.pointHistory(filter)}));

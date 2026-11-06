@@ -10,6 +10,7 @@ function syncAnalysisHistoryControls() {
   }
   if($('analysis-history-open-folder'))$('analysis-history-open-folder').disabled=!hasRunFolder($('history-run')?.value);
   if($('load-range')&&document.querySelector('.history-range')?.dataset.loaded!=='loading')$('load-range').disabled=!$('history-motor')?.value;
+  if($('navigation-context'))syncProductNavigation();
 }
 async function openHistoryAnalysis() {
   syncAnalysisHistoryControls();
@@ -29,6 +30,7 @@ function setAnalysisSource(source) {
     const button=$(`analysis-source-${value}`);button.setAttribute('aria-selected',String(value===source));button.tabIndex=value===source?0:-1;
   }
   if(analysisHistoryActive())void openHistoryAnalysis();
+  if($('navigation-context'))syncProductNavigation();
 }
 function setupAnalysisWorkspace() {
   const host=$('analysis-view'),waveform=node('div',null,'analysis-source-panel');waveform.id='analysis-waveform';

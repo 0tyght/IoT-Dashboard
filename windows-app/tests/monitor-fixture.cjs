@@ -10,6 +10,7 @@ async function seedMonitor(page) {
       registerType: 'holding', unit: 'mm/s', pollInterval: 1000, timeout: 1500
     }));
     if(!activeWorkspace()) { measurementGroups=[{id:'TEST',name:'Test workspace',motorIds:profiles.map(item=>item.motorId),meters:[]}]; selectedMeasurementGroup='TEST'; renderGroupOptions(); }
+    activeWorkspace().modelEnabled=true;
     cache.clear();
     selected = profiles[0].motorId;
     mode = 'live';

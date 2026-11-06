@@ -45,7 +45,7 @@ function updateWorkbenchLayout() {
   const shell = document.querySelector('.shell'), monitor = currentTab === 'monitor', narrow = innerWidth < 1180;
   if (workbenchTab !== currentTab) closeWorkbenchPopovers();
   shell.classList.toggle('monitor-workspace', monitor);
-  document.querySelector('.app-nav').setAttribute('aria-orientation', narrow?'horizontal':'vertical');
+  document.querySelector('.app-nav').removeAttribute('aria-orientation');
   if (narrow && !workbenchNarrow) { desktopSidebarCollapsed = shell.classList.contains('sidebar-collapsed'); shell.classList.add('sidebar-collapsed'); }
   else if (!narrow && workbenchNarrow) shell.classList.toggle('sidebar-collapsed', desktopSidebarCollapsed);
   if (narrow && workbenchTab !== currentTab) shell.classList.add('sidebar-collapsed');

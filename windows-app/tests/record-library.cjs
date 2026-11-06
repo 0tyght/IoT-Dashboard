@@ -1,0 +1,23 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {DataStore}=require('../electron/data-store.cjs');const {listRuns,deviceRows,runEvents}=require('../electron/record-library.cjs');
+(async()=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),'vectra-record-library-')),store=new DataStore(root);try{
+  fs.mkdirSync(store.dataPath(),{recursive:true});const timestamp='2026-11-05T03:00:00Z',common={runId:'RUN1',timestamp,runName:'Mixed',groupName:'Bench',recorded:true,source:'MODBUS'};
+  const write=(kind,rows)=>fs.writeFileSync(path.join(store.dataPath(),`${kind}-2026-11-05.ndjson`),rows.map(row=>JSON.stringify(row)).join('\n')+'\n');
+  write('readings',[{...common,motorId:'D1',channels:{velocityX:0,velocityY:1,velocityZ:2},value:2,unit:'mm/s'},{...common,runId:'RUN2',motorId:'D1',value:3,unit:'m/s²'},{...common,runId:undefined,motorId:'OLD',value:5,unit:'V'},{...common,motorId:'IGNORED',source:'SIMULATION',value:5}]);
+  write('power',[{...common,meterId:'PM1',model:'pm2230',values:{currentAvg:0,voltageLLAvg:null}}]);
+  write('points',[{...common,deviceId:'C1',pointId:'P1',name:'Temperature',unit:'°C',sampleTimestamp:timestamp,sampleId:'S1',status:'ok',value:25},{...common,deviceId:'C1',pointId:'P2',name:'Humidity',unit:'%',sampleTimestamp:timestamp,sampleId:'S1',status:'ok',value:60},{...common,deviceId:'PM:PM1',pointId:'P1',status:'ok',value:44}]);
+  const first=await listRuns(store),mixed=first.runs.find(run=>run.id==='RUN1');assert.equal(mixed.devices.length,3);assert(mixed.devices.find(device=>device.id==='D1').xyz);assert.equal(mixed.devices.find(device=>device.id==='C1').metrics.length,2);assert(first.runs.some(run=>run.id==='__legacy__'));assert(!mixed.devices.some(device=>device.id==='IGNORED'));
+  assert.strictEqual(await listRuns(store),first,'unchanged files reuse the catalog');
+  const custom=await deviceRows(store,{runId:'RUN1',deviceKey:'C1'});assert.equal(custom.rows.length,1);assert.equal(Object.keys(custom.rows[0].values).length,2);assert.equal(custom.records,2);
+  const power=await deviceRows(store,{runId:'RUN1',deviceKey:'PM:PM1'});assert.equal(power.rows[0].values[JSON.stringify(['currentAvg','A'])],0);assert.equal(power.rows[0].values[JSON.stringify(['voltageLLAvg','V'])],null);
+  assert.equal((await listRuns(store,{from:'2026-11-06',to:'2026-11-06'})).runs.length,0);await assert.rejects(listRuns(store,{from:'wrong'}),/วันที่/);
+  const records=Array.from({length:2500},(_,i)=>({...common,motorId:'D1',timestamp:new Date(Date.parse(timestamp)+i*1000).toISOString(),value:i,unit:'V'}));write('readings',records);
+  const limited=await deviceRows(store,{runId:'RUN1',deviceKey:'D1',limit:100});assert.equal(limited.records,2500);assert.equal(limited.rows.length,100);assert.equal(Object.values(limited.rows[0].values)[0],2400);assert.equal(Object.values(limited.rows.at(-1).values)[0],2499);
+  const runId='6a3b6c20-2bac-4b02-824f-d764d994c01b',directory=path.join(store.runDataPath(runId),'diagnostics');fs.mkdirSync(directory,{recursive:true});
+  const events=Array.from({length:220},(_,i)=>({runId,deviceId:i%2?'D1':'PM1',type:'attempt',outcome:i%3?'ok':'crc-error',timestamp:new Date(i*1000).toISOString(),rawSecret:'not copied',frames:[{address:i,count:2,outcome:'crc-error'}]}));
+  fs.writeFileSync(path.join(directory,'events.ndjson'),events.map(JSON.stringify).join('\n')+'\ninvalid\n'+JSON.stringify({...events[0],runId:'other-run'})+'\n');
+  const recent=await runEvents(store,{runId});assert.equal(recent.events.length,200);assert.equal(recent.matched,220);assert.equal(recent.skipped,1);assert.equal(recent.events[0].frames[0].address,20);assert(!Object.hasOwn(recent.events[0],'rawSecret'));
+  const faults=await runEvents(store,{runId,deviceId:'D1',errorsOnly:true});assert(faults.events.length>0);assert(faults.events.every(row=>row.deviceId==='D1'&&row.outcome==='crc-error'));await assert.rejects(runEvents(store,{runId:'../../invalid'}));
+  console.log('PASS: unified run catalog, cache invalidation, grouped samples, zero/missing values, filters, bounded history and isolated run diagnostics');
+}finally{fs.rmSync(root,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});

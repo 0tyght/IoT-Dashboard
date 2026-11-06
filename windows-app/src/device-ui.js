@@ -1,6 +1,6 @@
 'use strict';
 let connectingDevices=false;
-let registerTemplates=[],editorDeviceKind='sensor',editorDeviceGroup='',editorTemplateId='';
+let registerTemplates=[],editorDeviceKind='sensor',editorDeviceGroup='',editorTemplateId='',editorArchiveKey='';
 const deviceTraffic=new Map();
 const trafficKey=(kind,id)=>`${kind==='meter'||kind==='power'?'power':'sensor'}:${id}`;
 const templateCatalog=()=>[...DeviceTemplates.builtins,...registerTemplates];
@@ -41,13 +41,14 @@ function meterFromDeviceForm(){
     pollInterval:raw.pollInterval,deviceGapMs:raw.deviceGapMs,timeout:raw.timeout,registerType:raw.registerType,
     byteOrder:raw.powerByteOrder||'unconfirmed',offsetAdjust:Number(raw.powerOffset||0),points:$('points-enabled').checked?pointRows():[]};
 }
-async function openDeviceMeter(meter,model='pm2230'){
-  const group=activeWorkspace();if(!group)return showWorkspacePicker();
+async function openDeviceMeter(meter,model='pm2230',archiveKey=''){
+  const group=activeWorkspace();if(!group&&!archiveKey)return showWorkspacePicker();
   const initial=meter?{...meter,motorId:meter.id,sensorModel:meter.model,powerByteOrder:meter.byteOrder,powerOffset:meter.offsetAdjust,powerPoint:meter.point,powerOwner:meter.motorId,byteOrder:meter.byteOrder==='unconfirmed'?'ABCD':meter.byteOrder}:undefined;
-  await openEditor(initial,meter?.path||'__UNBOUND__',{kind:'meter',model,isNew:!meter});
+  await openEditor(initial,meter?.path||'__UNBOUND__',{kind:'meter',model,isNew:!meter,archiveKey});
 }
 async function saveDeviceMeter(){
   if(!form.reportValidity())return;
+  if(editorArchiveKey){const archivedMeter=meterFromDeviceForm();setDialogBusy(true);try{savedMeterLibrary=check(await api.saveMeterProfile(editorArchiveKey,archivedMeter)).meterLibrary;$('connection-dialog').close();renderDeviceRegistry();toast('บันทึกอุปกรณ์ในคลังแล้ว');}catch(error){$('form-error').textContent=error.message;$('form-error').hidden=false;}finally{setDialogBusy(false);}return;}
   const group=measurementGroups.find(item=>item.id===editorDeviceGroup);if(!group)return toast('ไม่พบพื้นที่งานที่กำลังแก้ไข');
   const meter=meterFromDeviceForm();
   if(group.motorIds.some(id=>id.toUpperCase()===meter.id.toUpperCase())||group.meters.some(item=>item.id!==editing&&item.id.toUpperCase()===meter.id.toUpperCase())){
@@ -88,22 +89,31 @@ function setupDeviceUI(){
   });
 }
 function prepareDeviceEditor(profile,context){
+  editorArchiveKey=context.archiveKey||'';
   editorDeviceKind=context.kind||'sensor';editorDeviceGroup=selectedMeasurementGroup;editorTemplateId='';
   renderTemplateOptions(profile?.sensorModel||context.model||MODEL);
   form.elements.powerByteOrder.value=profile?.powerByteOrder||'unconfirmed';form.elements.powerOffset.value=String(profile?.powerOffset||0);form.elements.powerPoint.value=profile?.powerPoint||'motor-input';
   form.elements.powerOwner.replaceChildren(new Option('ไม่ระบุ',''),...workspaceProfiles().map(item=>new Option(item.name||item.motorId,item.motorId)));form.elements.powerOwner.value=profile?.powerOwner||'';
-  if(!profile){applyRegisterTemplate();form.elements.slaveId.value='';}
-  $('remove-editor-device').hidden=!editing||!(editorDeviceKind==='meter'||activeWorkspace()?.motorIds.includes(editing));
+  if(!profile){applyRegisterTemplate();form.elements.slaveId.value='';if(!context.model){form.elements.sensorModel.prepend(new Option('เลือกแม่แบบ Register',''));form.elements.sensorModel.value='';}}
+  form.elements.sensorModel.required=true;
+  const refs=profile&&editorDeviceKind==='sensor'?measurementGroups.filter(group=>group.motorIds.includes(profile.motorId)).map(group=>group.name):[];
+  $('connection-dialog').querySelector('.dialog-header p').textContent=editorArchiveKey?'อุปกรณ์ในคลัง · กำหนดการสื่อสารและ Register':refs.length?`อุปกรณ์นี้ใช้ใน: ${refs.join(' · ')}`:`พื้นที่งาน: ${activeWorkspace()?.name||'คลังอุปกรณ์'} · กำหนดการสื่อสารและ Register`;
+  $('remove-editor-device').hidden=Boolean(editorArchiveKey)||!editing||!(editorDeviceKind==='meter'||activeWorkspace()?.motorIds.includes(editing));
   renderDeviceRegisterMap();
 }
 function removeEditedDevice(){
-  const group=measurementGroups.find(item=>item.id===editorDeviceGroup);if(!group||!editing)return;
-  const id=editing,kind=editorDeviceKind;
-  confirmAction(`นำ ${id} ออกจากพื้นที่งาน?`,'ข้อมูลที่บันทึกและแม่แบบยังอยู่',async()=>{
+  removeWorkspaceDevice(editorDeviceKind,editing,editorDeviceGroup);
+}
+function removeWorkspaceDevice(kind,id,groupId=selectedMeasurementGroup){
+  if(busy)return;if(mode!=='offline')return stopBeforeChange(()=>removeWorkspaceDevice(kind,id,groupId));
+  const group=measurementGroups.find(item=>item.id===groupId);if(!group||!id)return;
+  confirmAction(`นำ ${id} ออกจากพื้นที่งาน ${group.name}?`,'เก็บการตั้งค่าไว้ในคลัง · ข้อมูลที่บันทึกและแม่แบบยังอยู่',async()=>{
     const next=kind==='meter'?{...group,meters:group.meters.filter(item=>item.id!==id)}:{...group,motorIds:group.motorIds.filter(item=>item!==id),meters:group.meters.map(item=>item.motorId===id?{...item,motorId:''}:item)};
     measurementGroups=check(await api.saveGroups(measurementGroups.map(item=>item.id===group.id?next:item))).groups;
-    $('connection-dialog').close();selectedMeterId='';selected=workspaceProfiles()[0]?.motorId||'';renderGroupOptions();renderProfiles();renderSelected();updateControls();
-  });
+    if($('connection-dialog').open&&editing===id)$('connection-dialog').close();
+    if(selectedMeterId===id)selectedMeterId='';if(selected===id)selected=workspaceProfiles()[0]?.motorId||'';
+    renderGroupOptions();renderProfiles();renderSelected();updateControls();
+  },'นำออกจากพื้นที่งาน');
 }
 function openTemplateLibrary(saveCurrent=false){
   const dialog=node('dialog',null,'template-library');dialog.setAttribute('aria-label','แม่แบบ Register');
@@ -137,7 +147,7 @@ function openTemplateLibrary(saveCurrent=false){
       list.append(row);
     }
   };
-  render();dialog.append(body);dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();if(saveCurrent)$('template-name').focus();
+  render();dialog.append(body);dialog.addEventListener('close',()=>{dialog.remove();renderTemplateCatalog();});document.body.append(dialog);dialog.showModal();if(saveCurrent)$('template-name').focus();
 }
 function deviceSignal(kind,item){
   const state=deviceTraffic.get(trafficKey(kind,item.motorId&&kind!=='meter'?item.motorId:item.id));
@@ -173,16 +183,28 @@ function refreshDeviceIndicators(){
 function renderDeviceRegistry(){
   const body=$('motors-body');body.replaceChildren();
   const entries=[...profiles.map(item=>({kind:'sensor',item,id:item.motorId})),...measurementGroups.flatMap(group=>group.meters.map(item=>({kind:'meter',item,id:item.id,group})))];
-  for(const {kind,item,id,group} of entries){
+  const used=new Set(entries.filter(entry=>entry.group).map(entry=>`${entry.group.id}:${entry.id}`.toUpperCase()));
+  entries.push(...savedMeterLibrary.filter(entry=>!used.has(entry.key.toUpperCase())).map(entry=>({kind:'meter',item:entry.meter,id:entry.meter.id,archive:entry})));
+  const query=$('registry-search')?.value.trim().toLocaleLowerCase()||'';
+  for(const {kind,item,id,group,archive} of entries){
+    const refs=kind==='sensor'?measurementGroups.filter(entry=>entry.motorIds.some(value=>value.toUpperCase()===id.toUpperCase())):group?[group]:[];
+    if(!`${id} ${item.name} ${deviceModelLabel(item)} ${refs.map(entry=>entry.name).join(' ')} ${item.area||''}`.toLocaleLowerCase().includes(query))continue;
     const row=node('tr'),title=node('td');title.append(node('strong',id),node('small',item.name||'—'));
-    const actions=node('td'),buttons=node('div',null,'row-actions'),edit=node('button','แก้ไข'),toggle=node('button',item.enabled===false?'เปิดอ่าน':'พักอ่าน'),remove=node('button','ลบ');
-    edit.dataset.edit=id;toggle.dataset.edit=id;remove.dataset.delete=id;
+    const membership=node('td',refs.map(entry=>entry.name).join(' · ')||'เก็บในคลัง','registry-memberships');membership.append(node('small',`ตำแหน่ง: ${item.area||'ไม่ระบุ'}`,'registry-position'));
+    const actions=node('td'),buttons=node('div',null,'registry-device-actions');
     const withGroup=async task=>{if(mode!=='offline')return stopBeforeChange(()=>withGroup(task));if(group&&selectedMeasurementGroup!==group.id&&!await chooseMeasurementGroup(group.id))return;await task();};
-    edit.onclick=()=>kind==='sensor'?openEditor(item):withGroup(()=>openDeviceMeter(item));
-    toggle.onclick=()=>kind==='sensor'?toggleMotor(item):action(async()=>{if(busy)return;if(mode!=='offline')return stopBeforeChange(()=>toggle.click());measurementGroups=check(await api.saveGroups(measurementGroups.map(entry=>entry.id===group.id?{...entry,meters:entry.meters.map(meter=>meter.id===id?{...meter,enabled:meter.enabled===false}:meter)}:entry))).groups;renderProfiles();renderSelected();});
-    remove.onclick=()=>kind==='sensor'?deleteMotor(item):withGroup(async()=>{if(mode!=='offline')return stopBeforeChange(()=>remove.click());await openDeviceMeter(item);removeEditedDevice();});
-    buttons.append(edit,toggle,remove);actions.append(buttons);
-    row.append(title,node('td',group?.name||item.area||'—'),node('td',deviceModelLabel(item)),node('td',`${portLabel(item.path)} · ID ${item.slaveId}`,'mono'),node('td',`${item.baudRate} · 8${item.parity[0].toUpperCase()}${item.stopBits}`,'mono'),actions);body.append(row);
+    const add=()=>action(async()=>{const active=activeWorkspace();if(!active)return showWorkspacePicker();if(mode!=='offline')return stopBeforeChange(add);const duplicate=active.motorIds.some(value=>value.toUpperCase()===id.toUpperCase())||active.meters.some(value=>value.id.toUpperCase()===id.toUpperCase());if(duplicate)return toast('รหัสอุปกรณ์นี้มีในพื้นที่งานแล้ว');const next=kind==='sensor'?{...active,motorIds:[...active.motorIds,id]}:{...active,meters:[...active.meters,{...item,motorId:''}]};measurementGroups=check(await api.saveGroups(measurementGroups.map(entry=>entry.id===active.id?next:entry))).groups;renderGroupOptions();renderProfiles();renderSelected();toast('เพิ่มอุปกรณ์ในพื้นที่งานแล้ว');});
+    {const edit=node('button','แก้ไข');edit.dataset.edit=id;edit.onclick=()=>archive?openDeviceMeter(item,item.model,archive.key):kind==='sensor'?openEditor(item):withGroup(()=>openDeviceMeter(item));buttons.append(edit);}
+    if(refs.length){
+      const active=kind==='meter'?group:refs.find(entry=>entry.id===selectedMeasurementGroup);
+      if(active){const remove=node('button','นำออกจากพื้นที่งาน…');remove.dataset.delete=id;remove.onclick=()=>action(async()=>{if(mode!=='offline')return stopBeforeChange(()=>remove.click());if(selectedMeasurementGroup!==active.id)await chooseMeasurementGroup(active.id);if(kind==='meter')await openDeviceMeter(item);else await openEditor(item);removeEditedDevice();});buttons.append(remove);}
+      else {const see=node('button','เพิ่มในพื้นที่งานนี้');see.onclick=add;buttons.append(see);}
+    }else{
+      const use=node('button','เพิ่มในพื้นที่งาน');use.onclick=add;buttons.append(use);
+      const remove=node('button','ลบจากคลัง…');remove.dataset.delete=id;remove.className='danger-text';remove.onclick=()=>kind==='sensor'?deleteMotor(item):confirmAction(`ลบ ${id} จากคลัง?`,'ลบเฉพาะการตั้งค่าอุปกรณ์ที่ไม่ได้ใช้ ข้อมูลที่บันทึกและแม่แบบยังอยู่',async()=>{savedMeterLibrary=check(await api.removeMeterProfile(archive.key)).meterLibrary;renderDeviceRegistry();},'ลบจากคลัง');buttons.append(remove);
+    }
+    const toggle=node('button',item.enabled===false?'เปิดอ่าน':'พักอ่าน');toggle.dataset.edit=id;toggle.hidden=Boolean(archive);toggle.onclick=()=>kind==='sensor'?toggleMotor(item):action(async()=>{if(mode!=='offline')return stopBeforeChange(()=>toggle.click());measurementGroups=check(await api.saveGroups(measurementGroups.map(entry=>entry.id===group.id?{...entry,meters:entry.meters.map(meter=>meter.id===id?{...meter,enabled:meter.enabled===false}:meter)}:entry))).groups;renderProfiles();renderSelected();});buttons.append(toggle);
+    actions.append(buttons);row.append(title,membership,node('td',deviceModelLabel(item)),node('td',`${portLabel(item.path)} · ID ${item.slaveId}`,'mono'),node('td',`${item.baudRate} · 8${item.parity[0].toUpperCase()}${item.stopBits}`,'mono'),actions);body.append(row);
   }
-  if(!entries.length)emptyRow(body,6,'ยังไม่มีอุปกรณ์ สร้างพื้นที่งานแล้วเพิ่มอุปกรณ์จากหน้าแผนผัง');
+  if(!body.children.length)emptyRow(body,6,query?'ไม่พบอุปกรณ์ตามคำค้น':'ยังไม่มีอุปกรณ์ สร้างพื้นที่งานแล้วเพิ่มอุปกรณ์จากหน้าแผนผัง');
 }

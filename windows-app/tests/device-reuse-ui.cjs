@@ -1,4 +1,5 @@
 'use strict';
+const {openPage}=require('./navigation.cjs');
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -32,7 +33,7 @@ const { DataStore } = require('../electron/data-store.cjs');
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.setViewportSize({ width: 960, height: 680 });
-    await page.locator('[data-tab="fleet"]').click();
+    await openPage(page, 'fleet');
     await page.locator('#groups-quick').click();await page.locator('#groups-edit').click();
     await page.locator('#groups-motors input[value=M2]').check();
     await page.locator('#groups-motors input[value=PM3]').check();
@@ -45,7 +46,7 @@ const { DataStore } = require('../electron/data-store.cjs');
     assert.equal(await page.locator('[name=slaveId]').inputValue(),'','new instances require their own Slave ID');
     await page.screenshot({path:path.join(project,'.artifacts','device-add-unified.png'),animations:'disabled'});
     await page.locator('#close-connection').click();
-    await page.locator('[data-tab="motors"]').click();
+    await openPage(page, 'motors');
     assert.equal(await page.locator('#motors-body tr').count(), 5);
     assert.deepEqual(errors, []);
     console.log('PASS: existing devices join a workspace through one membership list and both appear in registry');

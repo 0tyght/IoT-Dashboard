@@ -1,4 +1,5 @@
 'use strict';
+const {openPage}=require('./navigation.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');const{_electron:electron}=require('playwright');
 const{normalizeConfig}=require('../electron/sensor-codec.cjs');const{dayKey}=require('../electron/data-store.cjs');
 (async()=>{
@@ -10,7 +11,7 @@ const{normalizeConfig}=require('../electron/sensor-codec.cjs');const{dayKey}=req
  try{
   app=await electron.launch({...process.env.ELECTRON_EXECUTABLE?{executablePath:process.env.ELECTRON_EXECUTABLE,args:[]}:{args:['.'],cwd:project},env:{...process.env,TEMP:base,TMP:base,VECTRA_TEST_DATA:root}});page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.waitForLoadState('domcontentloaded');await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));await page.waitForFunction(()=>innerWidth===1366&&innerHeight===768);
-  await page.locator('[data-tab="analysis"]').click();await page.locator('#analysis-history-motor').selectOption(config.motorId);await page.waitForFunction(()=>document.querySelector('.history-range').dataset.loaded==='true');await page.locator('#history-view-trend-fft').click();
+  await openPage(page, 'analysis');await page.locator('#analysis-history-motor').selectOption(config.motorId);await page.waitForFunction(()=>document.querySelector('.history-range').dataset.loaded==='true');await page.locator('#history-view-trend-fft').click();
   await page.waitForFunction(()=>Number.isFinite(Number(document.querySelector('#history-trend-fft').dataset.peakHz))&&document.querySelector('#trendfft-results').hidden===false);
   assert(Math.abs(Number(await page.locator('#history-trend-fft').getAttribute('data-peak-hz'))-.03125)<.001);assert.equal(await page.locator('#history-trend-fft').getAttribute('data-samples'),'1024');assert((await page.locator('#trendfft-status').textContent()).includes('จัดเวลาเชิงเส้น'));assert((await page.locator('#trendfft-peak').textContent()).includes('รอบค่ารวม'));
   assert((await page.locator('.trend-fft-provenance').textContent()).includes('ไม่ใช่ FFT คลื่นสั่นสะเทือน'));assert(await page.locator('#history-scatter-view').isHidden());assert(await page.locator('#history-plots').isHidden());

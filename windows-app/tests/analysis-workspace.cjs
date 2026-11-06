@@ -1,4 +1,5 @@
 'use strict';
+const {openPage}=require('./navigation.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {_electron:electron}=require('playwright');
 const {normalizeConfig}=require('../electron/sensor-codec.cjs');
@@ -25,7 +26,7 @@ const {dayKey}=require('../electron/data-store.cjs');
     const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.waitForLoadState('domcontentloaded');await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
     await page.waitForFunction(()=>innerWidth===1366&&innerHeight===768);
-    await page.locator('[data-tab="analysis"]').click();await page.locator('#analysis-history-motor').selectOption(config.motorId);await page.waitForFunction(()=>document.querySelector('.history-range').dataset.loaded==='true'&&document.querySelector('#history-scatter-canvas').dataset.recordCount==='600');
+    await openPage(page, 'analysis');await page.locator('#analysis-history-motor').selectOption(config.motorId);await page.waitForFunction(()=>document.querySelector('.history-range').dataset.loaded==='true'&&document.querySelector('#history-scatter-canvas').dataset.recordCount==='600');
     assert(await page.locator('#analysis-history').isVisible());assert(await page.locator('#analysis-waveform').isHidden());
     await page.locator(`#analysis-recorded-day option[value="${archivedDate}"]`).waitFor({state:'attached'});
     await page.locator('#analysis-recorded-day').selectOption(archivedDate);
@@ -47,17 +48,11 @@ const {dayKey}=require('../electron/data-store.cjs');
     await page.locator('#analysis-source-waveform').click();assert(await page.locator('#spectral-empty').isVisible());assert(await page.locator('#analysis-history').isHidden());assert(await page.locator('#spectral-results').isHidden(),'scalar history cannot become FFT data');
     await page.locator('#analysis-source-history').click();await page.locator('#history-view-scatter').click();await page.waitForFunction(()=>document.querySelector('.history-range').dataset.loaded==='true');
     for(const[width,height]of[[960,680],[768,1024]]){await app.evaluate(({BrowserWindow},size)=>BrowserWindow.getAllWindows()[0].setContentSize(...size),[width,height]);await page.waitForFunction(size=>innerWidth===size[0]&&innerHeight===size[1],[width,height]);await canvas.scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert(await canvas.evaluate(el=>el.clientWidth>400));if(width===768)await page.screenshot({path:path.join(artifacts,'analysis-scatter-768.png'),animations:'disabled'});}
-    await page.locator('[data-tab="history"]').click();await page.locator('#history-summary').filter({hasText:'602 รายการ'}).waitFor();assert.equal(await page.locator('#history-view canvas').count(),0);
-    await page.locator('#recorded-day').selectOption(archivedDate);await page.locator('#history-summary').filter({hasText:'4 รายการ'}).waitFor();
-    await page.locator('#recorded-day').selectOption(date);await page.locator('#history-summary').filter({hasText:'602 รายการ'}).waitFor();
-    await page.screenshot({path:path.join(artifacts,'history-records-only.png'),animations:'disabled'});
-    const old=dayKey(new Date(start-2*86400000));
-    await page.locator('#history-date').fill(old);await page.locator('#history-date').dispatchEvent('change');await page.locator('#history-end-date').fill(old);await page.locator('#history-end-date').dispatchEvent('change');
-    await page.locator('#history-summary').filter({hasText:'0 รายการ'}).waitFor();assert(await page.locator('#history-body .empty-cell').isVisible());
-    // A read failure must clear rows from the previously selected filter.
-    await page.locator('#history-date').fill(date);await page.locator('#history-date').dispatchEvent('change');await page.locator('#history-end-date').fill(date);await page.locator('#history-end-date').dispatchEvent('change');await page.locator('#history-summary').filter({hasText:'602 รายการ'}).waitFor();
-    await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('data:history');ipcMain.handle('data:history',()=>({ok:false,message:'fixture read error'}));});
-    await page.locator('#load-history').click();await page.locator('#history-summary').filter({hasText:'fixture read error'}).waitFor();assert(await page.locator('#history-body .empty-cell').isVisible());assert(!(await page.locator('#history-body').textContent()).includes('MTR-01'));
+    await openPage(page,'history');await page.locator('#runs-status').filter({hasText:'รอบ'}).waitFor();assert.equal(await page.locator('#history-view canvas').count(),0);
+    await page.locator('#runs-from').fill(archivedDate);await page.locator('#runs-to').fill(archivedDate);await page.locator('#runs-apply').click();await page.locator('#run-catalog').getByRole('button',{name:/เปิดรอบ/}).first().waitFor();
+    await page.locator('#runs-from').fill(date);await page.locator('#runs-to').fill(date);await page.locator('#runs-apply').click();await page.locator('#run-catalog button').first().waitFor();await page.screenshot({path:path.join(artifacts,'history-records-only.png'),animations:'disabled'});
+    const old=dayKey(new Date(start-2*86400000));await page.locator('#runs-from').fill(old);await page.locator('#runs-to').fill(old);await page.locator('#runs-apply').click();await page.locator('#runs-status').filter({hasText:'0 รอบ'}).waitFor();assert.equal(await page.locator('#run-catalog button').filter({hasText:'เปิดรอบ'}).count(),0);
+    await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('data:runs');ipcMain.handle('data:runs',()=>({ok:false,message:'fixture read error'}));});await page.locator('#runs-refresh').click();await page.locator('#runs-status').filter({hasText:'fixture read error'}).waitFor();assert.equal(await page.locator('#run-catalog button').filter({hasText:'เปิดรอบ'}).count(),0);
     assert.deepEqual(errors,[]);console.log('PASS: unified historical analysis/FFT sources, XYZ scatter completeness, shared run filters, time plots, fullscreen, responsive layout, stale-date clearing and read-error recovery');
   }finally{if(app)await app.close();fs.rmSync(temporary,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exit(1);});

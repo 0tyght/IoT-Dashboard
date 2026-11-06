@@ -27,7 +27,7 @@ const {DataStore}=require('../electron/data-store.cjs');const {randomUUID}=requi
     assert(await page.locator('.power-live').isHidden(),'candidate must not be displayed as confirmed measurement');
     await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('power:test-meter');ipcMain.handle('power:test-meter',()=>({ok:false,message:'fixture timeout'}));});
     await page.locator('#power-test-button').click();await page.locator('#power-test-result').filter({hasText:'fixture timeout'}).waitFor();
-    await page.locator('#power-open-history').click();await page.locator('#power-history-status').filter({hasText:'1 รายการ'}).waitFor();assert((await page.locator('#power-history-rows').textContent()).includes('ชุดบันทึก'));assert((await page.locator('#power-history-rows').textContent()).includes('0x42C8'));
+    await page.locator('#power-open-history').click();await page.locator('#run-data-status').filter({hasText:'PM1'}).waitFor();assert((await page.locator('#run-detail-info').textContent()).includes('ชุดบันทึก'));await page.locator('#run-data-table button').first().click();await page.locator('.record-provenance').waitFor();await page.getByText('17096 (0x42C8)',{exact:false}).waitFor();await page.locator('.record-provenance .dialog-header button').click();
     assert(await page.locator('#history-view').isVisible());
     console.log('PASS: read-only power test reports raw words, unconfirmed float candidates and errors');
   }finally{if(app)await app.close();assert.equal(path.dirname(temporary),base);assert(path.basename(temporary).startsWith('power-ui-'));fs.rmSync(temporary,{recursive:true,force:true});}

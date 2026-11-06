@@ -47,11 +47,12 @@ function setupGroupsUI() {
   $g('groups-close').onclick=()=>dialog.close();
   $g('groups-select').onchange=async()=>{if(await chooseMeasurementGroup($g('groups-select').value)){dialog.close();setTab('fleet');}};
   let membershipMeters=[];
+  const modelOption=node('label',null,'workspace-model-option'),modelCheck=node('input');modelCheck.type='checkbox';modelCheck.id='groups-model-enabled';modelOption.append(modelCheck,document.createTextNode('เปิดมุมมองโมเดลชุดเครื่อง 3D อ้างอิง'));$g('groups-name').closest('label').after(modelOption);
   const openEditor=group=>{
     dialog.classList.toggle('workspace-create',!group);
     $g('groups-title').textContent=group?'ตั้งค่าพื้นที่งาน':'สร้างพื้นที่งาน';
     dialog.querySelector('.dialog-header p').textContent=group?'เลือกอุปกรณ์สำหรับรอบอ่านนี้':'ตั้งชื่อชุดอุปกรณ์ที่ต้องการใช้ในรอบเดียวกัน';
-    editGroupId=group?.id||'';$g('groups-name').value=group?.name||'';$g('groups-editor').hidden=false;$g('groups-error').hidden=true;
+    editGroupId=group?.id||'';$g('groups-model-enabled').checked=group?.modelEnabled===true;$g('groups-name').value=group?.name||'';$g('groups-editor').hidden=false;$g('groups-error').hidden=true;
     const list=$g('groups-motors');list.replaceChildren();
     profiles.forEach(profile=>{const label=node('label'),input=node('input');input.type='checkbox';input.dataset.memberKind='sensor';input.value=profile.motorId;input.checked=group?.motorIds.some(id=>id.toUpperCase()===profile.motorId.toUpperCase())||false;label.append(input,node('span',`${profile.name||profile.motorId} · ${portLabel(profile.path)} · ID ${profile.slaveId}`));list.append(label);});
     membershipMeters=[...(group?.meters||[])];
@@ -59,6 +60,7 @@ function setupGroupsUI() {
     $g('workspace-members').hidden=!group&&!profiles.length&&!membershipMeters.length;
     if(!profiles.length&&!membershipMeters.length)list.append(node('p','ยังไม่มีอุปกรณ์ เพิ่มได้จากหน้าแผนผังหลังบันทึก','footnote'));
     for(const meter of membershipMeters){const label=node('label'),input=node('input');input.type='checkbox';input.dataset.memberKind='meter';input.value=meter.id;input.checked=Boolean(group?.meters.some(item=>item.id===meter.id));label.append(input,node('span',`${meter.name||meter.id} · ${portLabel(meter.path)} · ID ${meter.slaveId}`));list.append(label);}
+    for(const entry of savedMeterLibrary)if(!membershipMeters.some(item=>item.id.toUpperCase()===entry.meter.id.toUpperCase())){const meter={...entry.meter,motorId:''};membershipMeters.push(meter);const label=node('label'),input=node('input');input.type='checkbox';input.dataset.memberKind='meter';input.value=meter.id;label.append(input,node('span',`${meter.name||meter.id} · ${portLabel(meter.path)} · ID ${meter.slaveId}`));list.append(label);}
     $g('groups-name').focus();
   };
   $g('groups-new').onclick=()=>openEditor(null);
@@ -97,7 +99,7 @@ function setupGroupsUI() {
       const selectedMeterIds=new Set([...$g('groups-motors').querySelectorAll('input[data-member-kind="meter"]:checked')].map(input=>input.value));
       const meters=membershipMeters.filter(meter=>selectedMeterIds.has(meter.id)).map(meter=>!meter.motorId||motorIds.includes(meter.motorId)?meter:{...meter,motorId:''});
       const id=editGroupId||`G${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
-      const edited={id,name,motorIds,meters};
+      const edited={id,name,motorIds,meters,...($g('groups-model-enabled').checked?{modelEnabled:true}:{})};
       const proposed=editGroupId?measurementGroups.map(group=>group.id===id?edited:group):[...measurementGroups,edited];
       measurementGroups=check(await api.saveGroups(proposed)).groups;selectedMeasurementGroup=id;let selectionWarning='';try{check(await api.selectGroup(id));}catch(error){selectionWarning=`บันทึกพื้นที่งานแล้ว แต่จำตัวเลือกไม่ได้: ${error.message}`;}selected=profiles.find(profile=>motorIds.includes(profile.motorId))?.motorId||'';renderGroupOptions();renderProfiles();renderSelected();$g('groups-editor').hidden=true;updateControls();const showFlow=returnToFlowAfterMeter||!editGroupId;returnToFlowAfterMeter=false;if(showFlow||dialog.classList.contains('meter-focus'))dialog.close();else {$g('groups-title').textContent='พื้นที่งาน';dialog.querySelector('.dialog-header p').textContent='พื้นที่งานคือชุดอุปกรณ์ที่จะอ่านและบันทึกในรอบเดียวกัน';}if(showFlow)setTab('fleet');toast(selectionWarning||'บันทึกแล้ว');
     }catch(error){$g('groups-error').textContent=error.message;$g('groups-error').hidden=false;$g('groups-error').scrollIntoView({block:'nearest',behavior:'instant'});}

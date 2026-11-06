@@ -1,3 +1,7 @@
+# UX/UI implementation — 6 November 2026
+
+0.32.0 implements the pre-v1 navigation and workflow review. See `UXUI-V1-IMPLEMENTATION.md` for the final hierarchy, evidence and remaining field-acceptance tasks, and `UXUI-V1-AUDIT.md` for the original 0.30.7 audit. Historical entries below describe their own versions and do not override current navigation.
+
 # UX/UI review — 25 October 2026
 
 ## 0.18.1 follow-up

@@ -52,4 +52,4 @@ jobs:
             "windows-app/release/VECTRA Sensor Monitor-Setup-$version-x64.exe" `
             "windows-app/release/VECTRA Sensor Monitor-Portable-$version-x64.exe" `
             --title "VECTRA Sensor Monitor $version" `
-            --notes "Windows x64. Shared-COM reads bind Slave ID and timeout at dispatch. A configurable 400 ms device-switch guard and idle/receive-buffer recovery after timeout reduce rapid-turnaround and stale-frame risks. Diagnostics include actual TX, matched RX, raw receive chunks and queue/response times. Existing CSV measurements and register settings are retained. Physical-bus recovery must be confirmed on the target setup."
+            --notes-file "windows-app/RELEASE-NOTES.md"

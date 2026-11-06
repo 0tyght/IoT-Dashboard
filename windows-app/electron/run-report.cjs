@@ -137,4 +137,4 @@ async function writeRunReport(outputPath, runId, { info, journals }) {
   return { directory, count: devices.size, skipped };
 }
 
-module.exports = { writeRunReport };
+module.exports = { writeRunReport, toRecord };

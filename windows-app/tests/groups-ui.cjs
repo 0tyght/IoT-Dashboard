@@ -1,4 +1,5 @@
 'use strict';
+const {openPage}=require('./navigation.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {_electron:electron}=require('playwright');const {DataStore}=require('../electron/data-store.cjs');
 (async()=>{
@@ -7,7 +8,7 @@ const {_electron:electron}=require('playwright');const {DataStore}=require('../e
   store.saveProfiles([{motorId:'M1',path:'COM8',slaveId:1,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'},{motorId:'M2',path:'COM9',slaveId:2,sensorModel:'custom',registerAddress:100,dataType:'uint16',unit:'mm/s'}]);
   store.saveGroups([{id:'G1',name:'ชุดทดสอบ',motorIds:['M1'],meters:[{id:'PM1',model:'pm2230',path:'COM8',slaveId:3,motorId:'M1'},{id:'PM2',model:'pm2230',path:'COM9',slaveId:4}]}]);store.saveSelectedGroup('G1');
   app=await electron.launch({...process.env.ELECTRON_EXECUTABLE?{executablePath:process.env.ELECTRON_EXECUTABLE,args:[]}:{args:['.'],cwd:project},env:{...process.env,TEMP:base,TMP:base,VECTRA_TEST_DATA:root}});
-  const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();await page.locator('[data-tab=fleet]').click();
+  const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.locator('#app-version').filter({hasText:`v${require('../package.json').version}`}).waitFor();await openPage(page, 'fleet');
   assert.equal(await page.locator('[data-node-type=sensor]').count(),1);assert.equal(await page.locator('[data-node-type=meter]').count(),2);assert.equal(await page.locator('[data-node-type=bus]').count(),2);await page.waitForFunction(()=>document.querySelectorAll('.flow-wires path').length===5);
   const drag=async(id,port)=>{await page.evaluate(({id,port})=>{const data=new DataTransfer();document.querySelector(`[data-node-id="${id}"]`).dispatchEvent(new DragEvent('dragstart',{dataTransfer:data,bubbles:true}));document.querySelector(`[data-node-type=bus][data-node-port="${port}"]`).dispatchEvent(new DragEvent('drop',{dataTransfer:data,bubbles:true,cancelable:true}));},{id,port});await page.waitForFunction(({id,port})=>document.querySelector(`[data-node-id="${id}"]`).dataset.nodePort===port,{id,port});};
   await drag('M1','COM9');assert.equal(store.loadProfiles()[0].path,'COM9');await drag('M1','COM8');
